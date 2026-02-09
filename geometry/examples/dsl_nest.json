@@ -1,0 +1,8 @@
+{
+  "nodes": [
+    {"id": "parent", "type": "Box", "x": 80, "y": 80, "z": 80},
+    {"id": "child", "type": "ShellTubsFromThicknesses", "inner_r": 5, "thicknesses": [2, 2, 3], "hz": 20},
+    {"id": "nest", "type": "Nest", "parent": "parent", "child": "child", "clearance": 1}
+  ],
+  "root": "nest"
+}

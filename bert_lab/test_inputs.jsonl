@@ -1,0 +1,8 @@
+{"text": "modules arranged on a circle, 12 units, radius 40 mm, module 8x10x2 mm, clearance 1 mm"}
+{"text": "rectangular array of tiles, module 5x7x2 mm, nx 4, ny 3, pitch_x 6 mm, pitch_y 8 mm, clearance 0.2 mm"}
+{"text": "a box contains a cylinder, parent 60x60x60 mm, child rmax 12 mm, child hz 15 mm, clearance 1 mm"}
+{"text": "three layers stacked along Z, footprint 30x30 mm, t1 2 mm, t2 3 mm, t3 4 mm, stack clearance 0.5 mm, container 40x40x60 mm, nest clearance 1 mm"}
+{"text": "concentric tubular shells, inner radius 5 mm, th1 2 mm, th2 2 mm, th3 3 mm, hz 20 mm, child rmax 8 mm, child hz 10 mm, clearance 1 mm"}
+{"text": "modules on a circular path, count 16, R=45 mm, module 6x6x1 mm, clearance 0.5 mm"}
+{"text": "modules arranged in rows and columns, module 4x4x1 mm, nx 8, ny 8, pitch_x 5 mm, pitch_y 5 mm, clearance 0.1 mm"}
+{"text": "cylinder centered inside a box, parent 80x50x40 mm, child rmax 10 mm, child hz 12 mm, clearance 2 mm"}

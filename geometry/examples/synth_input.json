@@ -1,0 +1,11 @@
+{
+  "structure": "ring",
+  "params": {
+    "module_x": 8,
+    "module_y": 10,
+    "module_z": 2,
+    "n": 12,
+    "radius": 40,
+    "clearance": 1
+  }
+}

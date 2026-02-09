@@ -1,0 +1,5 @@
+id,scenario_text,dsl_json,uncovered_reason,notes
+1,Simple nest example,"{""nodes"": [{""id"": ""parent"", ""type"": ""Box"", ""x"": 50, ""y"": 50, ""z"": 50}, {""id"": ""child"", ""type"": ""Tubs"", ""rmax"": 10, ""hz"": 15}, {""id"": ""nest"", ""type"": ""Nest"", ""parent"": ""parent"", ""child"": ""child"", ""clearance"": 2}], ""root"": ""nest""}",,
+2,Grid of tiles,"{""nodes"": [{""id"": ""tile"", ""type"": ""Box"", ""x"": 5, ""y"": 7, ""z"": 2}, {""id"": ""grid"", ""type"": ""GridXY"", ""module"": ""tile"", ""nx"": 3, ""ny"": 2, ""pitch_x"": 6, ""pitch_y"": 8, ""clearance"": 0.2}], ""root"": ""grid""}",,
+3,Ring modules too tight,"{""nodes"": [{""id"": ""mod"", ""type"": ""Box"", ""x"": 12, ""y"": 12, ""z"": 3}, {""id"": ""ring"", ""type"": ""Ring"", ""module"": ""mod"", ""n"": 8, ""radius"": 10, ""clearance"": 1.0}], ""root"": ""ring""}",,
+4,Uncovered example,,missing_operator,Needs a new operator for skewed placement

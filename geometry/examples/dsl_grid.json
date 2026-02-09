@@ -1,0 +1,7 @@
+{
+  "nodes": [
+    {"id": "module", "type": "Box", "x": 4, "y": 6, "z": 1.5},
+    {"id": "grid", "type": "GridXY", "module": "module", "nx": 4, "ny": 3, "pitch_x": 5, "pitch_y": 7, "clearance": 0.5}
+  ],
+  "root": "grid"
+}

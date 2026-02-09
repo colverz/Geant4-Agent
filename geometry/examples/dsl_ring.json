@@ -1,0 +1,7 @@
+{
+  "nodes": [
+    {"id": "module", "type": "Box", "x": 8, "y": 10, "z": 2},
+    {"id": "ring", "type": "Ring", "module": "module", "n": 12, "radius": 40, "clearance": 1}
+  ],
+  "root": "ring"
+}
