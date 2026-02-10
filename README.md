@@ -52,6 +52,16 @@ Fetch Geant4 NIST material names (official list):
 python knowledge\\tools\\fetch_geant4_materials.py
 ```
 
+## Local Web UI
+
+```powershell
+python llm/web/server.py
+```
+
+Then open:
+
+- http://127.0.0.1:8088
+
 ## Current Limitations
 
 - **No full Geant4 runtime config**: schema exists, but no full generator of G4 macro or C++ config.
@@ -115,6 +125,16 @@ python bert_lab/bert_lab_data.py --out bert_lab/bert_lab_samples.jsonl --n 200 -
 ```powershell
 python knowledge\\tools\\fetch_geant4_materials.py
 ```
+
+## 本地 Web 界面
+
+```powershell
+python llm/web/server.py
+```
+
+然后访问：
+
+- http://127.0.0.1:8088
 
 ## 当前限制
 
