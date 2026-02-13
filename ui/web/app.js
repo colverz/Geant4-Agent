@@ -3,6 +3,7 @@
 const state = {
   sessionId: localStorage.getItem("g4_session_id") || "",
   lang: localStorage.getItem("g4_lang") || "zh",
+  lastMeta: null,
 };
 
 const i18n = {
@@ -16,6 +17,7 @@ const i18n = {
     min_conf: "结构置信度阈值",
     autofix: "自动修正",
     llm_routing: "LLM 参与路由",
+    llm_question: "LLM 生成追问",
     send: "发送",
     reset: "重置对话",
     dialogue: "对话",
@@ -31,6 +33,9 @@ const i18n = {
       source_type: "源类型",
       physics_list: "物理过程",
       output_format: "输出格式",
+      phase: "当前阶段",
+      asked: "本轮追问",
+      complete: "完成状态",
       missing: "未指定",
       unknown: "未确定",
       undefined: "未判定",
@@ -46,6 +51,7 @@ const i18n = {
     min_conf: "Structure confidence threshold",
     autofix: "Auto-fix",
     llm_routing: "LLM routing",
+    llm_question: "LLM question",
     send: "Send",
     reset: "Reset Session",
     dialogue: "Dialogue",
@@ -61,6 +67,9 @@ const i18n = {
       source_type: "Source type",
       physics_list: "Physics list",
       output_format: "Output format",
+      phase: "Phase",
+      asked: "Asked",
+      complete: "Complete",
       missing: "missing",
       unknown: "unknown",
       undefined: "undefined",
@@ -80,8 +89,13 @@ function addMessage(role, text) {
 function summarizeConfig(cfg) {
   if (!cfg) return "No config yet.";
   const t = i18n[state.lang].summary_lines;
+  const meta = state.lastMeta || {};
+  const geomLabel = cfg.geometry?.structure ?? cfg.geometry?.chosen_skeleton ?? t.unknown;
   return [
-    `${t.geometry_structure}: ${cfg.geometry?.structure ?? t.unknown}`,
+    `${t.phase}: ${meta.phase_title ?? t.unknown}`,
+    `${t.complete}: ${meta.is_complete ? "true" : "false"}`,
+    `${t.asked}: ${(meta.asked_fields_friendly || []).join(", ") || t.missing}`,
+    `${t.geometry_structure}: ${geomLabel}`,
     `${t.geometry_feasible}: ${cfg.geometry?.feasible ?? t.undefined}`,
     `${t.materials}: ${(cfg.materials?.selected_materials || []).join(", ") || t.missing}`,
     `${t.source_particle}: ${cfg.source?.particle ?? t.missing}`,
@@ -103,6 +117,7 @@ async function sendStep() {
     min_confidence: Number($("min-conf").value || 0.6),
     autofix: $("autofix").checked,
     llm_router: $("llm-router").checked,
+    llm_question: $("llm-question") ? $("llm-question").checked : true,
     lang: state.lang,
   };
 
@@ -122,6 +137,12 @@ async function sendStep() {
     addMessage("assistant", data.assistant_message);
   }
 
+  state.lastMeta = {
+    phase: data.phase,
+    phase_title: data.phase_title,
+    asked_fields_friendly: data.asked_fields_friendly || [],
+    is_complete: !!data.is_complete,
+  };
   $("summary").textContent = summarizeConfig(data.config);
   $("response").textContent = JSON.stringify(data.config || {}, null, 2);
 }

@@ -12,70 +12,74 @@
       <header class="hero">
         <div class="badge" data-i18n="badge">Local Web Console</div>
         <h1>Geant4-Agent</h1>
-        <p class="subtitle">
-          <span data-i18n="subtitle">通过多轮对话补全需求，生成可用配置。</span>
-        </p>
+        <p class="subtitle"><span data-i18n="subtitle">Multi-turn dialogue to complete requirements and generate configs.</span></p>
       </header>
 
       <section class="card">
-        <h2 data-i18n="input_title">输入</h2>
+        <h2 data-i18n="input_title">Input</h2>
         <label class="field">
-          <span data-i18n="input_label">请描述你的实验设想</span>
-          <textarea id="input-text" rows="4" data-i18n-placeholder="input_placeholder" placeholder="例如：我想用gamma打一个铜立方体，看看能量沉积..."></textarea>
+          <span data-i18n="input_label">Describe your experiment</span>
+          <textarea
+            id="input-text"
+            rows="4"
+            data-i18n-placeholder="input_placeholder"
+            placeholder="e.g., shoot gamma at a copper cube and observe energy deposition..."
+          ></textarea>
         </label>
 
         <div class="grid">
           <label class="field">
             <span data-i18n="lang_label">Language</span>
             <select id="lang-select">
-              <option value="zh" selected>中文</option>
-              <option value="en">English</option>
+              <option value="zh">中文</option>
+              <option value="en" selected>English</option>
             </select>
           </label>
           <label class="field">
-            <span data-i18n="min_conf">结构置信度阈值</span>
+            <span data-i18n="min_conf">Structure confidence threshold</span>
             <input id="min-conf" type="number" min="0" max="1" step="0.05" value="0.6" />
           </label>
           <label class="field toggle">
-            <span data-i18n="autofix">自动修正</span>
+            <span data-i18n="autofix">Auto-fix</span>
             <input id="autofix" type="checkbox" checked />
           </label>
           <label class="field toggle">
-            <span data-i18n="llm_routing">LLM 参与路由</span>
+            <span data-i18n="llm_routing">LLM routing</span>
             <input id="llm-router" type="checkbox" checked />
+          </label>
+          <label class="field toggle">
+            <span data-i18n="llm_question">LLM question</span>
+            <input id="llm-question" type="checkbox" checked />
           </label>
         </div>
 
         <div class="actions">
-          <button id="run-btn" data-i18n="send">发送</button>
-          <button id="reset-btn" class="ghost" data-i18n="reset">重置对话</button>
+          <button id="run-btn" data-i18n="send">Send</button>
+          <button id="reset-btn" class="ghost" data-i18n="reset">Reset Session</button>
         </div>
       </section>
 
       <section class="card">
-        <h2 data-i18n="dialogue">对话</h2>
+        <h2 data-i18n="dialogue">Dialogue</h2>
         <div id="chat" class="chat"></div>
       </section>
 
       <section class="card">
-        <h2 data-i18n="output">输出</h2>
+        <h2 data-i18n="output">Output</h2>
         <div class="columns">
           <div>
-            <h3 data-i18n="summary">摘要</h3>
+            <h3 data-i18n="summary">Summary</h3>
             <pre id="summary"></pre>
           </div>
           <div>
-            <h3 data-i18n="config_json">配置 JSON</h3>
+            <h3 data-i18n="config_json">Config JSON</h3>
             <pre id="response"></pre>
           </div>
         </div>
       </section>
 
-      <footer class="footer">
-        <span data-i18n="footer">本地运行，不依赖外部前端服务。</span>
-      </footer>
+      <footer class="footer"><span data-i18n="footer">Local-only: no external UI dependencies.</span></footer>
     </main>
-
     <script src="app.js"></script>
   </body>
 </html>

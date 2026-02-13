@@ -6,12 +6,16 @@ from typing import Callable, Dict, List, Tuple
 
 from .dsl import (
     Box,
+    Cons,
     Graph,
     GridXY,
     Nest,
     Ring,
     ShellTubsFromThicknesses,
+    Sphere,
     StackZ,
+    Transform,
+    Trd,
     Tubs,
 )
 
@@ -196,25 +200,121 @@ def sample_single_tubs(rng: random.Random) -> Dict[str, float]:
     }
 
 
-SKELETONS: List[Skeleton] = [
+def build_single_sphere(p: Dict[str, float]) -> Graph:
+    nodes = {"sphere": Sphere(id="sphere", rmax=p["child_rmax"])}
+    return Graph(nodes=nodes, root="sphere")
+
+
+def sample_single_sphere(rng: random.Random) -> Dict[str, float]:
+    return {"child_rmax": _sample_uniform(rng, 2.0, 120.0)}
+
+
+def build_single_cons(p: Dict[str, float]) -> Graph:
+    nodes = {"cons": Cons(id="cons", rmax1=p["rmax1"], rmax2=p["rmax2"], hz=p["child_hz"])}
+    return Graph(nodes=nodes, root="cons")
+
+
+def sample_single_cons(rng: random.Random) -> Dict[str, float]:
+    return {
+        "rmax1": _sample_uniform(rng, 2.0, 80.0),
+        "rmax2": _sample_uniform(rng, 2.0, 80.0),
+        "child_hz": _sample_uniform(rng, 2.0, 100.0),
+    }
+
+
+def build_single_trd(p: Dict[str, float]) -> Graph:
+    nodes = {
+        "trd": Trd(
+            id="trd",
+            x1=p["x1"],
+            x2=p["x2"],
+            y1=p["y1"],
+            y2=p["y2"],
+            z=p["module_z"],
+        )
+    }
+    return Graph(nodes=nodes, root="trd")
+
+
+def sample_single_trd(rng: random.Random) -> Dict[str, float]:
+    return {
+        "x1": _sample_uniform(rng, 2.0, 80.0),
+        "x2": _sample_uniform(rng, 2.0, 80.0),
+        "y1": _sample_uniform(rng, 2.0, 80.0),
+        "y2": _sample_uniform(rng, 2.0, 80.0),
+        "module_z": _sample_uniform(rng, 2.0, 120.0),
+    }
+
+
+def build_tilted_box_in_parent(p: Dict[str, float]) -> Graph:
+    nodes = {
+        "parent": Box(id="parent", x=p["parent_x"], y=p["parent_y"], z=p["parent_z"]),
+        "child": Box(id="child", x=p["module_x"], y=p["module_y"], z=p["module_z"]),
+        "placed": Transform(
+            id="placed",
+            target="child",
+            tx=p.get("tx", 0.0),
+            ty=p.get("ty", 0.0),
+            tz=p.get("tz", 0.0),
+            rx=p.get("rx", 0.0),
+            ry=p.get("ry", 0.0),
+            rz=p.get("rz", 30.0),
+        ),
+        "nest": Nest(id="nest", parent="parent", child="placed", clearance=p["clearance"]),
+    }
+    return Graph(nodes=nodes, root="nest")
+
+
+def sample_tilted_box_in_parent(rng: random.Random) -> Dict[str, float]:
+    return {
+        "parent_x": _sample_uniform(rng, 20.0, 120.0),
+        "parent_y": _sample_uniform(rng, 20.0, 120.0),
+        "parent_z": _sample_uniform(rng, 20.0, 120.0),
+        "module_x": _sample_uniform(rng, 5.0, 40.0),
+        "module_y": _sample_uniform(rng, 5.0, 40.0),
+        "module_z": _sample_uniform(rng, 5.0, 40.0),
+        "clearance": _sample_uniform(rng, 0.0, 3.0),
+        "rx": _sample_uniform(rng, 0.0, 30.0),
+        "ry": _sample_uniform(rng, 0.0, 30.0),
+        "rz": _sample_uniform(rng, 0.0, 45.0),
+        "tx": _sample_uniform(rng, -5.0, 5.0),
+        "ty": _sample_uniform(rng, -5.0, 5.0),
+        "tz": _sample_uniform(rng, -5.0, 5.0),
+    }
+
+
+SKELETONS: List[Skeleton] = []
+
+
+def register_skeleton(skeleton: Skeleton) -> None:
+    SKELETONS.append(skeleton)
+
+
+register_skeleton(
     Skeleton(
         name="nest_box_tubs",
         build_fn=build_nest_box_tubs,
         param_sampler=sample_nest_box_tubs,
         param_keys=("parent_x", "parent_y", "parent_z", "child_rmax", "child_hz", "clearance"),
-    ),
+    )
+)
+register_skeleton(
     Skeleton(
         name="grid_modules",
         build_fn=build_grid_modules,
         param_sampler=sample_grid_modules,
         param_keys=("module_x", "module_y", "module_z", "nx", "ny", "pitch_x", "pitch_y", "clearance"),
-    ),
+    )
+)
+register_skeleton(
     Skeleton(
         name="ring_modules",
         build_fn=build_ring_modules,
         param_sampler=sample_ring_modules,
         param_keys=("module_x", "module_y", "module_z", "n", "radius", "clearance"),
-    ),
+    )
+)
+register_skeleton(
     Skeleton(
         name="stack_in_box",
         build_fn=build_stack_in_box,
@@ -231,26 +331,78 @@ SKELETONS: List[Skeleton] = [
             "parent_z",
             "nest_clearance",
         ),
-    ),
+    )
+)
+register_skeleton(
     Skeleton(
         name="shell_nested",
         build_fn=build_shell_nested,
         param_sampler=sample_shell_nested,
         param_keys=("inner_r", "th1", "th2", "th3", "hz", "child_rmax", "child_hz", "clearance"),
-    ),
+    )
+)
+register_skeleton(
     Skeleton(
         name="single_box",
         build_fn=build_single_box,
         param_sampler=sample_single_box,
         param_keys=("module_x", "module_y", "module_z"),
-    ),
+    )
+)
+register_skeleton(
     Skeleton(
         name="single_tubs",
         build_fn=build_single_tubs,
         param_sampler=sample_single_tubs,
         param_keys=("child_rmax", "child_hz"),
-    ),
-]
+    )
+)
+register_skeleton(
+    Skeleton(
+        name="single_sphere",
+        build_fn=build_single_sphere,
+        param_sampler=sample_single_sphere,
+        param_keys=("child_rmax",),
+    )
+)
+register_skeleton(
+    Skeleton(
+        name="single_cons",
+        build_fn=build_single_cons,
+        param_sampler=sample_single_cons,
+        param_keys=("rmax1", "rmax2", "child_hz"),
+    )
+)
+register_skeleton(
+    Skeleton(
+        name="single_trd",
+        build_fn=build_single_trd,
+        param_sampler=sample_single_trd,
+        param_keys=("x1", "x2", "y1", "y2", "module_z"),
+    )
+)
+register_skeleton(
+    Skeleton(
+        name="tilted_box_in_parent",
+        build_fn=build_tilted_box_in_parent,
+        param_sampler=sample_tilted_box_in_parent,
+        param_keys=(
+            "parent_x",
+            "parent_y",
+            "parent_z",
+            "module_x",
+            "module_y",
+            "module_z",
+            "clearance",
+            "rx",
+            "ry",
+            "rz",
+            "tx",
+            "ty",
+            "tz",
+        ),
+    )
+)
 
 
 PARAM_SIGNATURE_KEYS: Tuple[str, ...] = (
@@ -269,6 +421,12 @@ PARAM_SIGNATURE_KEYS: Tuple[str, ...] = (
     "parent_z",
     "child_rmax",
     "child_hz",
+    "rmax1",
+    "rmax2",
+    "x1",
+    "x2",
+    "y1",
+    "y2",
     "inner_r",
     "th1",
     "th2",
@@ -281,6 +439,12 @@ PARAM_SIGNATURE_KEYS: Tuple[str, ...] = (
     "t3",
     "stack_clearance",
     "nest_clearance",
+    "tx",
+    "ty",
+    "tz",
+    "rx",
+    "ry",
+    "rz",
 )
 
 
@@ -302,6 +466,12 @@ def sample_param_signature(rng: random.Random) -> Dict[str, float]:
         "parent_z": _sample_uniform(rng, 20.0, 120.0),
         "child_rmax": _sample_uniform(rng, 2.0, 40.0),
         "child_hz": _sample_uniform(rng, 2.0, 40.0),
+        "rmax1": _sample_uniform(rng, 2.0, 40.0),
+        "rmax2": _sample_uniform(rng, 2.0, 40.0),
+        "x1": _sample_uniform(rng, 2.0, 40.0),
+        "x2": _sample_uniform(rng, 2.0, 40.0),
+        "y1": _sample_uniform(rng, 2.0, 40.0),
+        "y2": _sample_uniform(rng, 2.0, 40.0),
         "inner_r": _sample_uniform(rng, 1.0, 20.0),
         "th1": _sample_uniform(rng, 0.5, 5.0),
         "th2": _sample_uniform(rng, 0.5, 5.0),
@@ -314,5 +484,11 @@ def sample_param_signature(rng: random.Random) -> Dict[str, float]:
         "t3": _sample_uniform(rng, 0.5, 10.0),
         "stack_clearance": _sample_uniform(rng, 0.0, 2.0),
         "nest_clearance": _sample_uniform(rng, 0.0, 2.0),
+        "tx": _sample_uniform(rng, -5.0, 5.0),
+        "ty": _sample_uniform(rng, -5.0, 5.0),
+        "tz": _sample_uniform(rng, -5.0, 5.0),
+        "rx": _sample_uniform(rng, 0.0, 30.0),
+        "ry": _sample_uniform(rng, 0.0, 30.0),
+        "rz": _sample_uniform(rng, 0.0, 45.0),
     }
 

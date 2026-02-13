@@ -120,5 +120,16 @@ dmypy.json
 Thumbs.db
 
 # Project archives
-bert_lab/archive/models/
-bert_lab/archive/data/
+nlu/bert_lab/archive/
+nlu/bert_lab/models/**/checkpoint-*/
+nlu/bert_lab/models/*/checkpoint-*/
+nlu/bert_lab/data/bert_lab_ollama_samples.jsonl
+nlu/bert_lab/data/bert_lab_mix_samples.jsonl
+nlu/bert_lab/models/
+nlu/bert_lab/data/eval/*.json
+nlu/bert_lab/data/eval/*_report.json
+nlu/bert_lab/configs/_tmp.json
+nlu/bert_lab/data/controlled_*.jsonl
+nlu/bert_lab/data/controlled_corpus_summary.json
+nlu/bert_lab/data/audit_report.json
+nlu/bert_lab/data/eval/

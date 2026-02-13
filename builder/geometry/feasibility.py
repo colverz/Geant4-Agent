@@ -7,15 +7,30 @@ from typing import Dict, List, Optional, Tuple
 
 from .dsl import (
     Box,
+    Cons,
+    Transform,
     Graph,
     GridXY,
     Nest,
     Ring,
     ShellTubsFromThicknesses,
+    Sphere,
     StackZ,
+    Trd,
     Tubs,
 )
-from .geom import AABB, aabb_from_box, aabb_from_tubs, aabb_ring, aabb_stackz, aabb_union_xy
+from .geom import (
+    AABB,
+    aabb_apply_transform,
+    aabb_from_box,
+    aabb_from_cons,
+    aabb_from_sphere,
+    aabb_from_trd,
+    aabb_from_tubs,
+    aabb_ring,
+    aabb_stackz,
+    aabb_union_xy,
+)
 
 
 class ErrorCode(str, Enum):
@@ -89,6 +104,24 @@ class FeasibilityChecker:
                 self._error(ErrorCode.E_SOLID_PARAM, node.id, "Tubs rmax and hz must be > 0")
                 self._suggest(node.id, "Set rmax>0 and hz>0")
             aabb = aabb_from_tubs(node.rmax, node.hz)
+
+        elif isinstance(node, Sphere):
+            if node.rmax <= 0:
+                self._error(ErrorCode.E_SOLID_PARAM, node.id, "Sphere rmax must be > 0")
+                self._suggest(node.id, "Set rmax>0")
+            aabb = aabb_from_sphere(node.rmax)
+
+        elif isinstance(node, Cons):
+            if node.rmax1 <= 0 or node.rmax2 <= 0 or node.hz <= 0:
+                self._error(ErrorCode.E_SOLID_PARAM, node.id, "Cons rmax1,rmax2,hz must be > 0")
+                self._suggest(node.id, "Set rmax1>0, rmax2>0, hz>0")
+            aabb = aabb_from_cons(node.rmax1, node.rmax2, node.hz)
+
+        elif isinstance(node, Trd):
+            if node.x1 <= 0 or node.x2 <= 0 or node.y1 <= 0 or node.y2 <= 0 or node.z <= 0:
+                self._error(ErrorCode.E_SOLID_PARAM, node.id, "Trd x1,x2,y1,y2,z must be > 0")
+                self._suggest(node.id, "Set x1,x2,y1,y2,z > 0")
+            aabb = aabb_from_trd(node.x1, node.x2, node.y1, node.y2, node.z)
 
         elif isinstance(node, ShellTubsFromThicknesses):
             if node.inner_r < 0 or node.hz <= 0:
@@ -185,6 +218,16 @@ class FeasibilityChecker:
                     min_radius = needed / (2.0 * math.sin(math.pi / max(node.n, 1)))
                     self._suggest(node.id, f"Increase radius to >= {min_radius:.3f} or reduce module/clearance")
                 aabb = aabb_ring(module_aabb, node.radius)
+        elif isinstance(node, Transform):
+            child = self._eval_node(node.target)
+            if child:
+                if abs(node.rx) > 1e-9 or abs(node.ry) > 1e-9 or abs(node.rz) > 1e-9:
+                    self._warn(
+                        ErrorCode.E_OVERLAP_RISK,
+                        node.id,
+                        "Rotation handled by conservative AABB envelope",
+                    )
+                aabb = aabb_apply_transform(child, node.rx, node.ry, node.rz)
         else:
             self._error(ErrorCode.E_UNKNOWN, node_id, "Unknown node type")
 

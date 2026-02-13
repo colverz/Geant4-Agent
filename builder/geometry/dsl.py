@@ -26,6 +26,27 @@ class Tubs(Part):
 
 
 @dataclass(frozen=True)
+class Sphere(Part):
+    rmax: float
+
+
+@dataclass(frozen=True)
+class Cons(Part):
+    rmax1: float
+    rmax2: float
+    hz: float
+
+
+@dataclass(frozen=True)
+class Trd(Part):
+    x1: float
+    x2: float
+    y1: float
+    y2: float
+    z: float
+
+
+@dataclass(frozen=True)
 class ShellTubsFromThicknesses(Part):
     inner_r: float
     thicknesses: Tuple[float, ...]
@@ -71,13 +92,24 @@ class Ring(Operator):
 
 
 @dataclass(frozen=True)
+class Transform(Operator):
+    target: str
+    tx: float = 0.0
+    ty: float = 0.0
+    tz: float = 0.0
+    rx: float = 0.0
+    ry: float = 0.0
+    rz: float = 0.0
+
+
+@dataclass(frozen=True)
 class Constraint:
     id: str
     kind: str
     params: Dict[str, Any] = field(default_factory=dict)
 
 
-Node = Union[Box, Tubs, ShellTubsFromThicknesses, Nest, StackZ, GridXY, Ring]
+Node = Union[Box, Tubs, Sphere, Cons, Trd, ShellTubsFromThicknesses, Nest, StackZ, GridXY, Ring, Transform]
 
 
 @dataclass
@@ -92,11 +124,15 @@ class Graph:
 _TYPE_MAP = {
     "Box": Box,
     "Tubs": Tubs,
+    "Sphere": Sphere,
+    "Cons": Cons,
+    "Trd": Trd,
     "ShellTubsFromThicknesses": ShellTubsFromThicknesses,
     "Nest": Nest,
     "StackZ": StackZ,
     "GridXY": GridXY,
     "Ring": Ring,
+    "Transform": Transform,
 }
 
 
@@ -120,6 +156,19 @@ def parse_graph(data: Dict[str, Any]) -> Graph:
             node = Box(id=nid, x=float(n["x"]), y=float(n["y"]), z=float(n["z"]))
         elif cls is Tubs:
             node = Tubs(id=nid, rmax=float(n["rmax"]), hz=float(n["hz"]))
+        elif cls is Sphere:
+            node = Sphere(id=nid, rmax=float(n["rmax"]))
+        elif cls is Cons:
+            node = Cons(id=nid, rmax1=float(n["rmax1"]), rmax2=float(n["rmax2"]), hz=float(n["hz"]))
+        elif cls is Trd:
+            node = Trd(
+                id=nid,
+                x1=float(n["x1"]),
+                x2=float(n["x2"]),
+                y1=float(n["y1"]),
+                y2=float(n["y2"]),
+                z=float(n["z"]),
+            )
         elif cls is ShellTubsFromThicknesses:
             node = ShellTubsFromThicknesses(
                 id=nid,
@@ -155,6 +204,17 @@ def parse_graph(data: Dict[str, Any]) -> Graph:
                 radius=float(n["radius"]),
                 clearance=float(n["clearance"]),
             )
+        elif cls is Transform:
+            node = Transform(
+                id=nid,
+                target=n["target"],
+                tx=float(n.get("tx", 0.0)),
+                ty=float(n.get("ty", 0.0)),
+                tz=float(n.get("tz", 0.0)),
+                rx=float(n.get("rx", 0.0)),
+                ry=float(n.get("ry", 0.0)),
+                rz=float(n.get("rz", 0.0)),
+            )
         else:
             raise ValueError(f"Unhandled node type: {n_type}")
         nodes[nid] = node
@@ -184,6 +244,22 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
             out_nodes.append({"id": node.id, "type": "Box", "x": node.x, "y": node.y, "z": node.z})
         elif isinstance(node, Tubs):
             out_nodes.append({"id": node.id, "type": "Tubs", "rmax": node.rmax, "hz": node.hz})
+        elif isinstance(node, Sphere):
+            out_nodes.append({"id": node.id, "type": "Sphere", "rmax": node.rmax})
+        elif isinstance(node, Cons):
+            out_nodes.append({"id": node.id, "type": "Cons", "rmax1": node.rmax1, "rmax2": node.rmax2, "hz": node.hz})
+        elif isinstance(node, Trd):
+            out_nodes.append(
+                {
+                    "id": node.id,
+                    "type": "Trd",
+                    "x1": node.x1,
+                    "x2": node.x2,
+                    "y1": node.y1,
+                    "y2": node.y2,
+                    "z": node.z,
+                }
+            )
         elif isinstance(node, ShellTubsFromThicknesses):
             out_nodes.append(
                 {
@@ -237,6 +313,20 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
                     "n": node.n,
                     "radius": node.radius,
                     "clearance": node.clearance,
+                }
+            )
+        elif isinstance(node, Transform):
+            out_nodes.append(
+                {
+                    "id": node.id,
+                    "type": "Transform",
+                    "target": node.target,
+                    "tx": node.tx,
+                    "ty": node.ty,
+                    "tz": node.tz,
+                    "rx": node.rx,
+                    "ry": node.ry,
+                    "rz": node.rz,
                 }
             )
         else:

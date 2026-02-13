@@ -78,3 +78,24 @@ def build_missing_params_prompt(structure: str, missing: Iterable[str], fmt: str
     return f"[structure={structure}]\n{header}\n{lines}\nReturn a JSON object with these keys."
 
 
+def build_normalization_prompt(user_text: str) -> str:
+    return (
+        "Rewrite the user request into controlled English for downstream BERT parsing.\n"
+        "Output JSON only with keys:\n"
+        "- normalized_text: string\n"
+        "- language_detected: string\n"
+        "- structure_hint: one of [ring, grid, nest, stack, shell, single_box, single_tubs, unknown]\n"
+        "Normalization rules:\n"
+        "- Preserve all numeric values and units exactly (do not convert or round).\n"
+        "- Prefer this compact style in normalized_text:\n"
+        "  geometry_intent: <circular_placement|planar_array|containment_parent_child|z_layer_sequence|coaxial_shells|single_box|single_tubs|unresolved>; ...\n"
+        "- If geometry is ambiguous, use:\n"
+        "  geometry_intent: unresolved; candidate_pattern: <intent_a> | <intent_b>; ...\n"
+        "- Keep text concise and field-like (semicolon-separated clauses), no narrative sentences.\n"
+        "- Include only information present in user text; do not hallucinate values.\n"
+        "- No explanation or markdown.\n"
+        f"User text: {user_text}\n"
+        "JSON:"
+    )
+
+

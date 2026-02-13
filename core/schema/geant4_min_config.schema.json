@@ -7,6 +7,10 @@
       "type": "object",
       "description": "Geometry structure and parameters (Assembly DSL or references)",
       "properties": {
+        "graph_program": {
+          "type": "object",
+          "description": "Primary graph-program representation of geometry (DSL node graph)"
+        },
         "structure": {"type": "string"},
         "params": {"type": "object"},
         "volume_names": {
@@ -15,7 +19,10 @@
           "description": "Optional list of volume names for material mapping"
         }
       },
-      "required": ["structure", "params"],
+      "anyOf": [
+        {"required": ["graph_program"]},
+        {"required": ["structure", "params"]}
+      ],
       "additionalProperties": true
     },
     "materials": {

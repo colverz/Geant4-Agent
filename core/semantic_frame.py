@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class GeometryFrame:
     structure: Optional[str] = None
+    chosen_skeleton: Optional[str] = None
+    graph_program: Optional[Dict[str, Any]] = None
     params: Dict[str, float] = field(default_factory=dict)
 
 

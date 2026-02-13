@@ -31,6 +31,29 @@ def aabb_from_tubs(rmax: float, hz: float) -> AABB:
     return AABB(x=d, y=d, z=2.0 * hz)
 
 
+def aabb_from_sphere(rmax: float) -> AABB:
+    d = 2.0 * rmax
+    return AABB(x=d, y=d, z=d)
+
+
+def aabb_from_cons(rmax1: float, rmax2: float, hz: float) -> AABB:
+    rmax = max(rmax1, rmax2)
+    d = 2.0 * rmax
+    return AABB(x=d, y=d, z=2.0 * hz)
+
+
+def aabb_from_trd(x1: float, x2: float, y1: float, y2: float, z: float) -> AABB:
+    return AABB(x=max(x1, x2), y=max(y1, y2), z=z)
+
+
+def aabb_apply_transform(base: AABB, rx: float, ry: float, rz: float) -> AABB:
+    # Conservative rotation envelope; translation does not change size.
+    if abs(rx) < 1e-9 and abs(ry) < 1e-9 and abs(rz) < 1e-9:
+        return base
+    d = (base.x ** 2 + base.y ** 2 + base.z ** 2) ** 0.5
+    return AABB(x=d, y=d, z=d)
+
+
 def aabb_union_xy(module: AABB, nx: int, ny: int, pitch_x: float, pitch_y: float) -> AABB:
     span_x = (nx - 1) * pitch_x + module.x
     span_y = (ny - 1) * pitch_y + module.y

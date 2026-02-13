@@ -24,6 +24,14 @@ STRUCTURE_ALIASES: Dict[str, Tuple[str, ...]] = {
     "tubs": ("single_tubs",),
     "cylinder": ("single_tubs",),
     "single_tubs": ("single_tubs",),
+    "sphere": ("single_sphere",),
+    "single_sphere": ("single_sphere",),
+    "cons": ("single_cons",),
+    "single_cons": ("single_cons",),
+    "trd": ("single_trd",),
+    "single_trd": ("single_trd",),
+    "tilted_box": ("tilted_box_in_parent",),
+    "tilted_box_in_parent": ("tilted_box_in_parent",),
 }
 
 
