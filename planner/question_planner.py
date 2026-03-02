@@ -1,52 +1,13 @@
 ﻿from __future__ import annotations
 
+from core.config.field_registry import friendly_labels
 from core.orchestrator.types import Phase
 from core.validation.minimal_schema import get_local_required_paths
-
-
-_FRIENDLY = {
-    'en': {
-        'geometry.structure': 'geometry structure',
-        'materials.volume_material_map': 'volume-to-material binding',
-        'source.type': 'source type',
-        'source.particle': 'particle type',
-        'source.energy': 'source energy',
-        'source.position': 'source position',
-        'source.direction': 'source direction',
-        'physics.physics_list': 'physics list',
-        'output.format': 'output format',
-        'output.path': 'output path',
-    },
-    'zh': {
-        'geometry.structure': '\u51e0\u4f55\u7ed3\u6784\u7c7b\u578b',
-        'materials.volume_material_map': '\u4f53\u79ef\u4e0e\u6750\u6599\u7ed1\u5b9a',
-        'source.type': '\u6e90\u7c7b\u578b',
-        'source.particle': '\u7c92\u5b50\u7c7b\u578b',
-        'source.energy': '\u6e90\u80fd\u91cf',
-        'source.position': '\u6e90\u4f4d\u7f6e',
-        'source.direction': '\u6e90\u65b9\u5411',
-        'physics.physics_list': '\u7269\u7406\u5217\u8868',
-        'output.format': '\u8f93\u51fa\u683c\u5f0f',
-        'output.path': '\u8f93\u51fa\u8def\u5f84',
-    },
-}
-
-
-_GEOMETRY_PARAM_ZH = '\u51e0\u4f55\u53c2\u6570'
 _MAX_PRIORITY_ATTEMPTS = 2
 
 
 def to_friendly_labels(paths: list[str], lang: str) -> list[str]:
-    lang_key = 'zh' if lang == 'zh' else 'en'
-    mapping = _FRIENDLY[lang_key]
-    labels: list[str] = []
-    for path in paths:
-        if path.startswith('geometry.params.'):
-            key = path.split('.', 2)[-1]
-            labels.append(f'{_GEOMETRY_PARAM_ZH} {key}' if lang_key == 'zh' else f'geometry parameter {key}')
-            continue
-        labels.append(mapping.get(path, path))
-    return labels
+    return friendly_labels(paths, lang)
 
 
 def advance_question_state(

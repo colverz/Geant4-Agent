@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from builder.geometry.synthesize import synthesize_from_params
 from core.config.defaults import build_legacy_default_config
+from core.config.field_registry import friendly_labels
 from nlu.bert_lab.llm_bridge import build_missing_params_prompt, build_missing_params_schema
 from nlu.bert_lab.ollama_client import chat, extract_json
 from planner.agent import ask_missing
@@ -612,40 +613,7 @@ def _select_phase_fields(missing_fields: List[str]) -> Tuple[str, List[str]]:
 
 
 def _friendly_fields(fields: List[str], lang: str) -> List[str]:
-    if lang == "zh":
-        mapping = {
-            "geometry.structure": "??????",
-            "materials.volume_material_map": "??-????",
-            "source.particle": "????",
-            "source.type": "???",
-            "source.energy_MeV": "?? (MeV)",
-            "source.position": "???",
-            "source.direction": "???",
-            "physics_list.name": "??????",
-            "output.format": "????",
-            "output.path": "????",
-        }
-    else:
-        mapping = {
-            "geometry.structure": "geometry structure",
-            "materials.volume_material_map": "volume-material map",
-            "source.particle": "particle type",
-            "source.type": "source type",
-            "source.energy_MeV": "energy (MeV)",
-            "source.position": "source position",
-            "source.direction": "source direction",
-            "physics_list.name": "physics list",
-            "output.format": "output format",
-            "output.path": "output path",
-        }
-    out: List[str] = []
-    for f in fields:
-        if f.startswith("geometry.params."):
-            key = f.split("geometry.params.", 1)[1]
-            out.append(f"???? {key}" if lang == "zh" else f"geometry param {key}")
-        else:
-            out.append(mapping.get(f, f))
-    return out
+    return friendly_labels(fields, lang)
 
 
 def _is_complete(config: Dict[str, Any], missing_fields: List[str]) -> bool:

@@ -7,6 +7,7 @@ from typing import Any
 
 from core.audit.audit_log import append_audit_entry
 from core.config.defaults import build_strict_default_config
+from core.config.field_registry import missing_field_question
 from core.orchestrator.arbiter import arbitrate_candidates
 from core.orchestrator.candidate_preprocess import (
     drop_updates_shadowed_by_anchor,
@@ -185,20 +186,8 @@ def _enforce_no_implicit_overwrite(
 
 
 def _build_question(missing_required_paths: list[str], lang: str) -> str:
-    if not missing_required_paths:
-        return "配置已完成。" if lang == "zh" else "Configuration complete."
-    first = missing_required_paths[0]
-    if lang == "zh":
-        mapping = {
-            "physics.physics_list": "请提供物理列表名称（例如 FTFP_BERT 或 QBBC）。",
-            "source.energy": "请提供源能量（单位：MeV）。",
-            "source.position": "请提供源位置向量（x, y, z）。",
-            "source.direction": "请提供源方向向量（dx, dy, dz）。",
-            "materials.volume_material_map": "请确认体积到材料的绑定关系（volume -> material）。",
-            "geometry.structure": "请确认几何结构类型（例如 single_box）。",
-        }
-        return mapping.get(first, f"请补充字段：{first}")
-    return f"Please provide: {first}"
+    first = missing_required_paths[0] if missing_required_paths else ""
+    return missing_field_question(first, lang)
 
 
 def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: float = 0.6, lang: str = "zh") -> dict:
