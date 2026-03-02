@@ -10,6 +10,7 @@ from core.config.defaults import build_strict_default_config
 from core.config.phase_registry import phase_title
 from core.dialogue.policy import decide_dialogue_action
 from core.dialogue.renderer import render_dialogue_message
+from core.dialogue.state import sync_dialogue_state
 from core.dialogue.types import build_dialogue_trace
 from core.orchestrator.arbiter import arbitrate_candidates
 from core.orchestrator.candidate_preprocess import (
@@ -449,6 +450,12 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
     )
     state.last_dialogue_action = dialogue_decision.action.value
     state.history.append({"role": "assistant", "content": question})
+    dialogue_summary, raw_dialogue = sync_dialogue_state(
+        state,
+        decision=dialogue_decision,
+        lang=lang,
+        is_complete=is_complete,
+    )
 
     return {
         "session_id": state.session_id,
@@ -456,6 +463,8 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
         "phase_title": phase_title(state.phase.value, lang),
         "dialogue_action": dialogue_decision.action.value,
         "dialogue_trace": dialogue_trace,
+        "dialogue_summary": dialogue_summary,
+        "raw_dialogue": raw_dialogue,
         "is_complete": is_complete,
         "assistant_message": question,
         "missing_fields": final_report.missing_required_paths,

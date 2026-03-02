@@ -100,3 +100,4 @@ class SessionState:
     last_asked_paths: list[str] = field(default_factory=list)
     question_attempts: dict[str, int] = field(default_factory=dict)
     last_dialogue_action: str = ""
+    dialogue_summary: dict[str, Any] = field(default_factory=dict)

@@ -43,6 +43,8 @@ class SmokeNoOllamaTest(unittest.TestCase):
         self.assertIn("phase_title", out)
         self.assertIn("dialogue_action", out)
         self.assertIn("dialogue_trace", out)
+        self.assertIn("dialogue_summary", out)
+        self.assertIn("raw_dialogue", out)
         self.assertIn("asked_fields", out)
         self.assertIn("asked_fields_friendly", out)
         self.assertIn("answered_this_turn", out)
@@ -54,6 +56,8 @@ class SmokeNoOllamaTest(unittest.TestCase):
         self.assertEqual(out.get("inference_backend"), "runtime_semantic")
         self.assertFalse(out.get("is_complete", False))
         self.assertEqual(out.get("dialogue_action"), "ask_clarification")
+        self.assertEqual(out.get("dialogue_summary", {}).get("status"), "pending")
+        self.assertGreaterEqual(len(out.get("raw_dialogue", [])), 2)
 
     def test_schema_closure_progress(self) -> None:
         first = step(
