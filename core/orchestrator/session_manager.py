@@ -8,6 +8,7 @@ from typing import Any
 from core.audit.audit_log import append_audit_entry
 from core.config.defaults import build_strict_default_config
 from core.config.field_registry import missing_field_question
+from core.config.phase_registry import phase_title
 from core.orchestrator.arbiter import arbitrate_candidates
 from core.orchestrator.candidate_preprocess import (
     drop_updates_shadowed_by_anchor,
@@ -450,7 +451,7 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
     return {
         "session_id": state.session_id,
         "phase": state.phase.value,
-        "phase_title": state.phase.value,
+        "phase_title": phase_title(state.phase.value, lang),
         "is_complete": is_complete,
         "assistant_message": question,
         "missing_fields": final_report.missing_required_paths,

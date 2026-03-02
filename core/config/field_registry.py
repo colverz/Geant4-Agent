@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from core.config.path_registry import canonical_field_path
+from core.config.prompt_registry import completion_message, single_field_request
+
 
 _FRIENDLY = {
     "en": {
@@ -52,18 +55,37 @@ _GEOMETRY_PARAM = {
     "zh": "几何参数",
 }
 
-_CANONICAL_ALIASES = {
-    "source.energy_MeV": "source.energy",
-    "physics_list.name": "physics.physics_list",
+_CLARIFICATION = {
+    "en": {
+        "geometry.structure": "geometry structure (for example single_box or single_tubs)",
+        "materials.selected_materials": "materials (for example G4_WATER / G4_Al / G4_Si)",
+        "materials.volume_material_map": "volume-to-material mapping",
+        "source.particle": "particle type (gamma / e- / proton)",
+        "source.type": "source type (point / beam / isotropic)",
+        "source.energy": "source energy (MeV)",
+        "source.position": "source position (x, y, z)",
+        "source.direction": "source direction (dx, dy, dz)",
+        "physics.physics_list": "physics list (for example FTFP_BERT)",
+        "output.format": "output format (root / csv / json)",
+        "output.path": "output path",
+    },
+    "zh": {
+        "geometry.structure": "几何结构类型（例如 single_box 或 single_tubs）",
+        "materials.selected_materials": "材料（例如 G4_WATER / G4_Al / G4_Si）",
+        "materials.volume_material_map": "体积到材料的映射关系",
+        "source.particle": "粒子类型（gamma / e- / proton）",
+        "source.type": "源类型（point / beam / isotropic）",
+        "source.energy": "源能量（MeV）",
+        "source.position": "源位置（x, y, z）",
+        "source.direction": "源方向（dx, dy, dz）",
+        "physics.physics_list": "物理列表（例如 FTFP_BERT）",
+        "output.format": "输出格式（root / csv / json）",
+        "output.path": "输出路径",
+    },
 }
-
 
 def normalize_lang(lang: str) -> str:
     return "zh" if lang == "zh" else "en"
-
-
-def canonical_field_path(path: str) -> str:
-    return _CANONICAL_ALIASES.get(path, path)
 
 
 def friendly_label(path: str, lang: str) -> str:
@@ -79,13 +101,24 @@ def friendly_labels(paths: list[str], lang: str) -> list[str]:
     return [friendly_label(path, lang) for path in paths]
 
 
+def clarification_item(path: str, lang: str) -> str:
+    path = canonical_field_path(path)
+    lang_key = normalize_lang(lang)
+    if path.startswith("geometry.params."):
+        key = path.split(".", 2)[-1]
+        return f"{_GEOMETRY_PARAM[lang_key]} {key}"
+    return _CLARIFICATION[lang_key].get(path, friendly_label(path, lang_key))
+
+
+def clarification_items(paths: list[str], lang: str) -> list[str]:
+    return [clarification_item(path, lang) for path in paths]
+
+
 def missing_field_question(path: str, lang: str) -> str:
     path = canonical_field_path(path)
     lang_key = normalize_lang(lang)
     if not path:
-        return "配置已完成。" if lang_key == "zh" else "Configuration complete."
+        return completion_message(lang_key)
     if path in _QUESTION[lang_key]:
         return _QUESTION[lang_key][path]
-    if lang_key == "zh":
-        return f"请补充字段：{path}"
-    return f"Please provide: {path}"
+    return single_field_request(path, lang_key)

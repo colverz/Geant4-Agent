@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from builder.geometry.synthesize import synthesize_from_params
 from core.config.defaults import build_legacy_default_config
 from core.config.field_registry import friendly_labels
+from core.config.phase_registry import phase_title, select_phase_fields
+from core.config.prompt_registry import clarification_fallback, completion_message
 from nlu.bert_lab.llm_bridge import build_missing_params_prompt, build_missing_params_schema
 from nlu.bert_lab.ollama_client import chat, extract_json
 from planner.agent import ask_missing
@@ -26,28 +28,6 @@ class SessionState:
     config: Dict[str, Any] = field(default_factory=dict)
     missing_fields: List[str] = field(default_factory=list)
     last_question: str = ""
-
-
-PHASE_ORDER = [
-    ("geometry_core", ("geometry.structure",)),
-    ("geometry_params", ("geometry.params.",)),
-    ("materials", ("materials.",)),
-    ("source_core", ("source.particle", "source.type")),
-    ("source_kinematics", ("source.energy_MeV", "source.position", "source.direction")),
-    ("physics", ("physics_list.",)),
-    ("output", ("output.",)),
-]
-
-PHASE_TITLES = {
-    "geometry_core": {"en": "Geometry Structure", "zh": "几何结构"},
-    "geometry_params": {"en": "Geometry Parameters", "zh": "几何参数"},
-    "materials": {"en": "Materials", "zh": "材料"},
-    "source_core": {"en": "Source Core", "zh": "源定义"},
-    "source_kinematics": {"en": "Source Kinematics", "zh": "源运动学"},
-    "physics": {"en": "Physics List", "zh": "物理过程"},
-    "output": {"en": "Output", "zh": "输出"},
-    "complete": {"en": "Complete", "zh": "已完成"},
-}
 
 
 SESSIONS: Dict[str, SessionState] = {}
@@ -595,21 +575,7 @@ def _collect_required_missing(schema: Dict[str, Any], obj: Any, prefix: str = ""
 
 
 def _select_phase_fields(missing_fields: List[str]) -> Tuple[str, List[str]]:
-    for phase, patterns in PHASE_ORDER:
-        selected = []
-        for item in missing_fields:
-            for p in patterns:
-                if p.endswith("."):
-                    if item.startswith(p):
-                        selected.append(item)
-                        break
-                else:
-                    if item == p:
-                        selected.append(item)
-                        break
-        if selected:
-            return phase, selected
-    return "complete", []
+    return select_phase_fields(missing_fields)
 
 
 def _friendly_fields(fields: List[str], lang: str) -> List[str]:
@@ -694,9 +660,7 @@ def _ask_llm(
     if not asked_fields:
         return ""
     if not use_llm:
-        if lang == "zh":
-            return "???????: " + ", ".join(asked_fields_friendly)
-        return "Please provide: " + ", ".join(asked_fields_friendly)
+        return clarification_fallback(asked_fields_friendly, lang)
     return ask_missing(asked_fields, lang, get_ollama_config_path(), temperature=1.0)
 
 
@@ -901,7 +865,7 @@ def legacy_step(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     question = _ask_llm(asked_fields, asked_fields_friendly, state.history, lang, use_llm=llm_question)
     if complete:
-        question = "配置已完成。" if lang == "zh" else "Configuration complete."
+        question = completion_message(lang)
     if question:
         state.history.append({"role": "assistant", "content": question})
         state.last_question = question
@@ -919,9 +883,9 @@ def legacy_step(payload: Dict[str, Any]) -> Dict[str, Any]:
         "normalization": debug.get("normalization", {}),
         "normalization_degraded": bool(debug.get("normalization_degraded", False)),
         "missing_fields": state.missing_fields,
-        "assistant_message": question or "Configuration complete.",
+        "assistant_message": question or completion_message(lang),
         "phase": phase,
-        "phase_title": PHASE_TITLES.get(phase, {}).get(lang, phase),
+        "phase_title": phase_title(phase, lang),
         "asked_fields": asked_fields,
         "asked_fields_friendly": asked_fields_friendly,
         "is_complete": complete,

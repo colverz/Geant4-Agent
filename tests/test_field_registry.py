@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from core.config.field_registry import canonical_field_path, friendly_labels, missing_field_question
+from core.config.field_registry import (
+    canonical_field_path,
+    clarification_items,
+    friendly_labels,
+    missing_field_question,
+)
 
 
 class FieldRegistryTest(unittest.TestCase):
@@ -19,6 +24,10 @@ class FieldRegistryTest(unittest.TestCase):
             missing_field_question("physics_list.name", "zh"),
             "请提供物理列表名称（例如 FTFP_BERT 或 QBBC）。",
         )
+
+    def test_clarification_items_use_canonical_descriptions(self) -> None:
+        items = clarification_items(["source.energy_MeV", "geometry.params.radius"], "en")
+        self.assertEqual(items, ["source energy (MeV)", "geometry parameter radius"])
 
 
 if __name__ == "__main__":
