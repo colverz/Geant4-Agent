@@ -7,8 +7,10 @@ from typing import Any
 
 from core.audit.audit_log import append_audit_entry
 from core.config.defaults import build_strict_default_config
-from core.config.field_registry import missing_field_question
 from core.config.phase_registry import phase_title
+from core.dialogue.policy import decide_dialogue_action
+from core.dialogue.renderer import render_dialogue_message
+from core.dialogue.types import build_dialogue_trace
 from core.orchestrator.arbiter import arbitrate_candidates
 from core.orchestrator.candidate_preprocess import (
     drop_updates_shadowed_by_anchor,
@@ -41,7 +43,6 @@ from planner.question_planner import (
     to_friendly_labels,
     update_question_attempts,
 )
-from planner.question_renderer import render_question
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -184,13 +185,6 @@ def _enforce_no_implicit_overwrite(
             )
         )
     return filtered_candidates, policy_rejected
-
-
-def _build_question(missing_required_paths: list[str], lang: str) -> str:
-    first = missing_required_paths[0] if missing_required_paths else ""
-    return missing_field_question(first, lang)
-
-
 def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: float = 0.6, lang: str = "zh") -> dict:
     text = str(payload.get("text", "")).strip()
     if not text:
@@ -436,22 +430,32 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
         asked_paths=asked_fields,
     )
     asked_fields_friendly = to_friendly_labels(asked_fields, lang)
-
-    if asked_fields and llm_question:
-        question = render_question(
-            asked_fields,
-            lang=lang,
-            ollama_config=ollama_config_path,
-            temperature=user_temperature,
-        )
-    else:
-        question = _build_question(asked_fields, lang=lang)
+    updated_paths = [upd.path for upd in committed_updates]
+    dialogue_decision = decide_dialogue_action(
+        user_intent=user_candidate.intent.value,
+        is_complete=is_complete,
+        asked_fields=asked_fields,
+        missing_fields=final_report.missing_required_paths,
+        updated_paths=updated_paths,
+        answered_this_turn=answered_this_turn,
+    )
+    dialogue_trace = build_dialogue_trace(dialogue_decision)
+    question = render_dialogue_message(
+        dialogue_decision,
+        lang=lang,
+        use_llm_question=llm_question,
+        ollama_config=ollama_config_path,
+        user_temperature=user_temperature,
+    )
+    state.last_dialogue_action = dialogue_decision.action.value
     state.history.append({"role": "assistant", "content": question})
 
     return {
         "session_id": state.session_id,
         "phase": state.phase.value,
         "phase_title": phase_title(state.phase.value, lang),
+        "dialogue_action": dialogue_decision.action.value,
+        "dialogue_trace": dialogue_trace,
         "is_complete": is_complete,
         "assistant_message": question,
         "missing_fields": final_report.missing_required_paths,
