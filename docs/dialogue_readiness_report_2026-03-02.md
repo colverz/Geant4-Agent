@@ -8,7 +8,7 @@
 
 - `slot-first` 仍是主配置链路。
 - 共享规则（默认配置、字段标签、路径别名、phase 规则、提示语、提交后语义同步）已基本从编排层抽离。
-- `strict` 链路已接入 `Dialogue Agent v1` 骨架，但目前只承担**对话动作选择与用户消息渲染**，不改动配置提交权。
+- `strict` 链路已接入 `Dialogue Agent v2` 基础层：仍不改动配置提交权，但已经具备**覆盖确认、选择解释、分域进展总结**。
 
 因此，下一阶段可以在现有架构上继续推进真正的对话代理，而不需要再做一次大规模架构清理。
 
@@ -212,8 +212,9 @@
 - 有更新但未完成时：确认更新并提示剩余缺项
 - 配置已完成时：结束语
 - 没有新更新时：返回状态类消息
-- 回答了上一轮追问后：输出阶段性进展总结（`summarize_progress`）
+- 回答了上一轮追问后：输出阶段性进展总结（`summarize_progress`），并优先按 `geometry / materials / source / physics / output` 分域汇总
 - 尝试覆盖已确认字段时：进入覆盖确认（`confirm_overwrite`）
+- 当存在可解释的选择元数据（如物理列表推荐来源与原因）时：输出选择解释（`explain_choice`）
 
 它当前还不能做：
 
@@ -328,6 +329,7 @@
      - `explain_choice`
      - `summarize_progress`
      - `confirm_overwrite`
+     - `explain_choice`
 
 3. 增加 `dialogue_summary`
    - 在每轮输出中增加：

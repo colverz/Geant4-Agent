@@ -11,7 +11,7 @@ from core.config.field_registry import friendly_label
 from core.config.phase_registry import phase_title
 from core.dialogue.policy import decide_dialogue_action
 from core.dialogue.renderer import render_dialogue_message
-from core.dialogue.state import build_raw_dialogue, sync_dialogue_state
+from core.dialogue.state import build_raw_dialogue, collect_available_explanations, sync_dialogue_state
 from core.dialogue.types import build_dialogue_trace
 from core.orchestrator.arbiter import arbitrate_candidates
 from core.orchestrator.candidate_preprocess import (
@@ -533,6 +533,7 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
         )
     asked_fields_friendly = to_friendly_labels(asked_fields, lang)
     updated_paths = [upd.path for upd in committed_updates]
+    available_explanations = collect_available_explanations(state.config, lang=lang)
     dialogue_decision = decide_dialogue_action(
         user_intent=dialogue_user_intent,
         is_complete=is_complete,
@@ -541,6 +542,7 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
         updated_paths=updated_paths,
         answered_this_turn=answered_this_turn,
         pending_overwrite_preview=staged_pending_overwrite,
+        available_explanations=available_explanations,
         last_dialogue_action=state.last_dialogue_action,
     )
     dialogue_trace = build_dialogue_trace(dialogue_decision)

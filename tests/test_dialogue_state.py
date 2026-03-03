@@ -32,6 +32,8 @@ class DialogueStateTest(unittest.TestCase):
         self.assertEqual(summary["last_action"], "ask_clarification")
         self.assertIn("source energy", summary["pending_fields"])
         self.assertIn("source energy", summary["next_questions"])
+        self.assertIn("source", summary["grouped_status"])
+        self.assertIn("materials", summary["grouped_status"])
 
     def test_sync_dialogue_state_accumulates_memory(self) -> None:
         state = SimpleNamespace(
@@ -39,6 +41,15 @@ class DialogueStateTest(unittest.TestCase):
             dialogue_summary={},
             confirmed_fact_paths=[],
             dialogue_memory=[],
+            config={
+                "materials": {
+                    "selected_materials": ["G4_Cu"],
+                    "selection_source": "explicit_request",
+                    "selection_reasons": ["Material provided explicitly."],
+                },
+                "source": {},
+                "physics": {},
+            },
         )
         decision = DialogueDecision(
             action=DialogueAction.SUMMARIZE_PROGRESS,
@@ -56,6 +67,7 @@ class DialogueStateTest(unittest.TestCase):
         self.assertIn("source energy", summary["recent_confirmed"])
         self.assertEqual(summary["memory_depth"], 1)
         self.assertEqual(len(memory), 1)
+        self.assertIn("materials", summary["available_explanations"])
         self.assertEqual(raw_dialogue, [{"role": "user", "content": "set energy"}])
 
 

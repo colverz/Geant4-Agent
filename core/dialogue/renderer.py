@@ -44,6 +44,76 @@ def _render_overwrite_confirmation(decision: DialogueDecision, *, lang: str) -> 
     return f"An existing confirmed value would be overwritten. Please confirm whether to apply this change: {detail}."
 
 
+def _render_choice_explanation(decision: DialogueDecision, *, lang: str, dialogue_summary: dict | None) -> str:
+    explanation = dict(decision.explanation or {})
+    if not explanation and dialogue_summary:
+        explanation = dict(dialogue_summary.get("available_explanations", {}) or {})
+    if not explanation:
+        return _render_update_status(decision, lang=lang)
+
+    lines: list[str] = []
+    for domain in ("physics", "materials", "source"):
+        item = explanation.get(domain)
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or domain)
+        field = str(item.get("field") or label)
+        source = str(item.get("source") or "unknown")
+        reasons = [str(reason) for reason in item.get("reasons", []) if str(reason)]
+        if lang == "zh":
+            segments = [f"{label}\uff1a{field}\u3002", f"\u6765\u6e90\uff1a{source}\u3002"]
+            if reasons:
+                segments.append(f"\u539f\u56e0\uff1a{'\uff1b'.join(reasons[:2])}\u3002")
+            lines.append("".join(segments))
+        else:
+            segments = [f"{label}: {field}.", f"Source: {source}."]
+            if reasons:
+                segments.append(f"Reason: {'; '.join(reasons[:2])}.")
+            lines.append(" ".join(segments))
+    if lines:
+        return " ".join(lines) if lang != "zh" else "".join(lines)
+    return _render_update_status(decision, lang=lang)
+
+
+def _render_grouped_progress(summary: dict, *, lang: str) -> str:
+    grouped = summary.get("grouped_status", {}) if isinstance(summary, dict) else {}
+    if not isinstance(grouped, dict) or not grouped:
+        return ""
+
+    lines: list[str] = []
+    for domain in ("geometry", "materials", "source", "physics", "output"):
+        item = grouped.get(domain)
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or domain)
+        updated = [str(x) for x in item.get("updated_fields", []) if str(x)]
+        pending = [str(x) for x in item.get("pending_fields", []) if str(x)]
+        confirmed = [str(x) for x in item.get("confirmed_fields", []) if str(x)]
+        if not (updated or pending or confirmed):
+            continue
+        if lang == "zh":
+            segments: list[str] = []
+            if updated:
+                segments.append(f"\u5df2\u540c\u6b65{', '.join(updated)}")
+            elif confirmed:
+                segments.append(f"\u5df2\u786e\u8ba4{', '.join(confirmed[:2])}")
+            if pending:
+                segments.append(f"\u5f85\u8865\u5145{', '.join(pending[:2])}")
+            if segments:
+                lines.append(f"{label}\uff1a{'\uff1b'.join(segments)}\u3002")
+        else:
+            segments = []
+            if updated:
+                segments.append(f"updated {', '.join(updated)}")
+            elif confirmed:
+                segments.append(f"confirmed {', '.join(confirmed[:2])}")
+            if pending:
+                segments.append(f"still needs {', '.join(pending[:2])}")
+            if segments:
+                lines.append(f"{label}: {'; '.join(segments)}.")
+    return "".join(lines) if lang == "zh" else " ".join(lines)
+
+
 def render_dialogue_message(
     decision: DialogueDecision,
     *,
@@ -57,6 +127,8 @@ def render_dialogue_message(
         return completion_message(lang)
     if decision.action == DialogueAction.CONFIRM_OVERWRITE:
         return _render_overwrite_confirmation(decision, lang=lang)
+    if decision.action == DialogueAction.EXPLAIN_CHOICE:
+        return _render_choice_explanation(decision, lang=lang, dialogue_summary=dialogue_summary)
     if decision.action == DialogueAction.ASK_CLARIFICATION:
         if use_llm_question:
             return render_question(
@@ -68,6 +140,9 @@ def render_dialogue_message(
         return clarification_fallback(friendly_labels(decision.asked_fields, lang), lang)
     if decision.action == DialogueAction.SUMMARIZE_PROGRESS:
         summary = dialogue_summary or {}
+        grouped = _render_grouped_progress(summary, lang=lang)
+        if grouped:
+            return grouped
         updated = summary.get("updated_fields") or friendly_labels(decision.updated_paths[:3], lang)
         pending = summary.get("pending_fields") or friendly_labels(decision.missing_fields[:2], lang)
         recent = summary.get("recent_confirmed") or []
