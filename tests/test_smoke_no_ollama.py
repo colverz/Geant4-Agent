@@ -298,6 +298,123 @@ class SmokeNoOllamaTest(unittest.TestCase):
         )
         self.assertEqual(second.get("config", {}).get("output", {}).get("format"), "json")
 
+    def test_pending_overwrite_blocks_only_conflicting_fields(self) -> None:
+        first = step(
+            {
+                "text": "1m x 1m x 1m copper box target with gamma source",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        sid = first["session_id"]
+
+        second = step(
+            {
+                "session_id": sid,
+                "text": "change material to G4_Al",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(second.get("dialogue_action"), "confirm_overwrite")
+        self.assertEqual(second.get("config", {}).get("materials", {}).get("selected_materials", []), ["G4_Cu"])
+
+        third = step(
+            {
+                "session_id": sid,
+                "text": "Output json.",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(third.get("dialogue_action"), "confirm_overwrite")
+        self.assertEqual(third.get("config", {}).get("output", {}).get("format"), "json")
+        self.assertEqual(third.get("config", {}).get("materials", {}).get("selected_materials", []), ["G4_Cu"])
+        self.assertEqual(
+            third.get("dialogue_trace", {}).get("overwrite_preview", [])[0].get("path"),
+            "materials.selected_materials",
+        )
+
+        fourth = step(
+            {
+                "session_id": sid,
+                "text": "confirm",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(fourth.get("config", {}).get("materials", {}).get("selected_materials", []), ["G4_Al"])
+        self.assertEqual(fourth.get("config", {}).get("output", {}).get("format"), "json")
+
+    def test_pending_overwrite_can_refresh_same_field_before_confirmation(self) -> None:
+        first = step(
+            {
+                "text": "1m x 1m x 1m copper box target with gamma source",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        sid = first["session_id"]
+
+        second = step(
+            {
+                "session_id": sid,
+                "text": "change material to G4_Al",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(second.get("dialogue_action"), "confirm_overwrite")
+
+        third = step(
+            {
+                "session_id": sid,
+                "text": "change material to G4_Pb",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(third.get("dialogue_action"), "confirm_overwrite")
+        self.assertEqual(third.get("config", {}).get("materials", {}).get("selected_materials", []), ["G4_Cu"])
+        self.assertEqual(
+            third.get("dialogue_trace", {}).get("overwrite_preview", [])[0].get("new"),
+            ["G4_Pb"],
+        )
+
+        fourth = step(
+            {
+                "session_id": sid,
+                "text": "confirm",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(fourth.get("config", {}).get("materials", {}).get("selected_materials", []), ["G4_Pb"])
+
     def test_llm_slot_first_bridges_into_runtime_extractor(self) -> None:
         sid = "llm-slot-bridge-test"
         reset_session(sid)
