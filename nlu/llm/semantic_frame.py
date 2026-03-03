@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from core.config.llm_prompt_registry import build_strict_semantic_prompt
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 from core.validation.error_codes import (
     E_LLM_FRAME_CALL_FAILED,
@@ -111,28 +112,7 @@ def _clean_response(raw: str) -> str:
 
 
 def _build_prompt(user_text: str, context_summary: str) -> str:
-    return (
-        "Convert user request into a strict semantic frame for a Geant4 config session.\n"
-        "Return JSON only with this schema:\n"
-        "{\n"
-        '  "intent": "SET|MODIFY|REMOVE|CONFIRM|QUESTION|OTHER",\n'
-        '  "target_paths": ["json.path", "..."],\n'
-        '  "normalized_text": "semicolon-separated key:value clauses",\n'
-        '  "structure_hint": "ring|grid|nest|stack|shell|single_box|single_tubs|single_sphere|single_cons|single_trd|single_polycone|single_cuttubs|boolean|unknown",\n'
-        '  "confidence": 0.0,\n'
-        '  "updates": [\n'
-        '    {"path":"source.type","op":"set","value":"point"}\n'
-        "  ]\n"
-        "}\n"
-        "Rules:\n"
-        "- path must start with geometry., materials., source., physics., or output.\n"
-        "- include updates only when user provided or explicitly changed information.\n"
-        "- do not invent values.\n"
-        "- keep normalized_text concise.\n"
-        f"Context: {context_summary}\n"
-        f"User: {user_text}\n"
-        "JSON:"
-    )
+    return build_strict_semantic_prompt(user_text, context_summary)
 
 
 def _intent_from_any(value: Any) -> Intent | None:

@@ -579,8 +579,8 @@
               "source.energy",
               "source.position",
               "source.direction",
-              "output.format",
               "physics.physics_list",
+              "output.format",
               "physics.backup_physics_list",
               "physics.selection_reasons",
               "physics.covered_processes",
@@ -671,16 +671,15 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT",
+              "physics_list": "FTFP_BERT",
               "backup_physics_list": "QGSP_BERT_HP",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
               ],
               "covered_processes": [
-                "Photoelectric effect",
-                "Compton scattering",
-                "Pair production",
-                "Gamma-nuclear interactions"
+                "photonic interactions",
+                "electron bremsstrahlung",
+                "pair production"
               ],
               "selection_source": "llm_recommender"
             },
@@ -703,7 +702,7 @@
             "user_intent": "QUESTION",
             "asked_fields": [],
             "updated_paths": [
-              "physics.backup_physics_list",
+              "physics.selection_reasons",
               "physics.selection_source"
             ],
             "missing_fields": [],
@@ -803,16 +802,15 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT",
+              "physics_list": "FTFP_BERT",
               "backup_physics_list": "QGSP_BERT_HP",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
               ],
               "covered_processes": [
-                "Photoelectric effect",
-                "Compton scattering",
-                "Pair production",
-                "Gamma-nuclear interactions"
+                "photonic interactions",
+                "electron bremsstrahlung",
+                "pair production"
               ],
               "selection_source": "llm_recommender"
             },
@@ -947,8 +945,8 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT_HP",
-              "backup_physics_list": "QGSP_BERT",
+              "physics_list": "QGSP_BERT",
+              "backup_physics_list": "QGSP_BERT_HP",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
               ],
@@ -956,7 +954,7 @@
                 "Photoelectric",
                 "Compton Scattering",
                 "Pair Production",
-                "Bremsstrahlung"
+                "Gamma-Nuclear Reaction"
               ],
               "selection_source": "llm_recommender"
             },
@@ -1080,8 +1078,8 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT_HP",
-              "backup_physics_list": "QGSP_BERT",
+              "physics_list": "QGSP_BERT",
+              "backup_physics_list": "QGSP_BERT_HP",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
               ],
@@ -1089,7 +1087,7 @@
                 "Photoelectric",
                 "Compton Scattering",
                 "Pair Production",
-                "Bremsstrahlung"
+                "Gamma-Nuclear Reaction"
               ],
               "selection_source": "llm_recommender"
             },
@@ -2208,7 +2206,7 @@
           "assistant_message": "配置已完成。",
           "dialogue_trace": {
             "action": "finalize",
-            "user_intent": "CONFIRM",
+            "user_intent": "SET",
             "asked_fields": [],
             "updated_paths": [
               "output.format",

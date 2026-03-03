@@ -9,21 +9,20 @@ from nlu.bert_lab.ollama_client import chat, extract_json
 
 
 _TARGET_HINTS = {
-    "geometry.params.module_x": ["module_x", "x=", "x:", "宽", "x方向"],
-    "geometry.params.module_y": ["module_y", "y=", "y:", "高", "y方向"],
-    "geometry.params.module_z": ["module_z", "z=", "z:", "厚", "z方向"],
+    "geometry.params.module_x": ["module_x", "x=", "x:", "width", "\u5bbd", "\u5bbd\u5ea6", "x\u65b9\u5411"],
+    "geometry.params.module_y": ["module_y", "y=", "y:", "height", "\u9ad8", "\u9ad8\u5ea6", "y\u65b9\u5411"],
+    "geometry.params.module_z": ["module_z", "z=", "z:", "thickness", "\u539a", "\u539a\u5ea6", "z\u65b9\u5411"],
     "geometry.structure": ["structure", "geometry", "box", "cube", "sphere", "cylinder", "cylindrical", "ring", "grid"],
-    "materials.selected_materials": ["material", "铜", "copper", "g4_"],
-    "source.type": ["source type", "point", "beam", "isotropic", "点源", "束流"],
-    "source.particle": ["gamma", "electron", "proton", "particle", "粒子"],
-    "source.energy": ["mev", "gev", "kev", "能量"],
-    "source.position": ["position", "origin", "center", "位置", "原点", "中心"],
-    "source.direction": ["direction", "+z", "-z", "+x", "-x", "+y", "-y", "方向"],
-    "physics.physics_list": ["physics list", "物理列表", "ftfp", "qgsp", "qbbc", "shielding"],
-    "output.format": ["output format", "root", "json", "csv", "输出格式"],
-    "output.path": ["output path", "output/result", "输出路径", "保存到", "写到", "file", "filename"],
+    "materials.selected_materials": ["material", "\u94dc", "copper", "g4_"],
+    "source.type": ["source type", "point", "beam", "isotropic", "\u70b9\u6e90", "\u675f\u6d41"],
+    "source.particle": ["gamma", "electron", "proton", "particle", "\u7c92\u5b50"],
+    "source.energy": ["mev", "gev", "kev", "\u80fd\u91cf"],
+    "source.position": ["position", "origin", "center", "\u4f4d\u7f6e", "\u539f\u70b9", "\u4e2d\u5fc3"],
+    "source.direction": ["direction", "+z", "-z", "+x", "-x", "+y", "-y", "\u65b9\u5411"],
+    "physics.physics_list": ["physics list", "\u7269\u7406\u5217\u8868", "ftfp", "qgsp", "qbbc", "shielding"],
+    "output.format": ["output format", "root", "json", "csv", "\u8f93\u51fa\u683c\u5f0f"],
+    "output.path": ["output path", "output/result", "\u8f93\u51fa\u8def\u5f84", "\u4fdd\u5b58\u5230", "\u5199\u5230", "file", "filename"],
 }
-
 
 _CONFIRM_PATTERNS = [
     r"^\s*(?:yes[, ]*)?(?:confirm|apply it|go ahead|approved?)\s*[.!?]?\s*$",
@@ -47,7 +46,7 @@ _REMOVE_PATTERNS = [
     r"\u6e05\u7a7a",
 ]
 _QUESTION_PATTERNS = [
-    r"[?？]",
+    r"[?\uFF1F]",
     r"\b(?:why|reason|how|what|which|can you|could you|please explain)\b",
     r"\u4e3a\u4ec0\u4e48",
     r"\u7406\u7531",

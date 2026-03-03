@@ -4,6 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+from core.config.llm_prompt_registry import STRICT_SLOT_PROMPT_PROFILE
 from core.slots.slot_mapper import slot_frame_to_candidates
 from nlu.llm.slot_frame import build_llm_slot_frame, parse_slot_payload
 
@@ -158,6 +159,7 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertEqual(result.frame.geometry.size_triplet_mm, [1000.0, 1000.0, 1000.0])
         self.assertEqual(result.frame.materials.primary, "G4_Cu")
         self.assertTrue(result.stage_trace.get("repair_used"))
+        self.assertEqual(result.stage_trace.get("prompt_profile"), STRICT_SLOT_PROMPT_PROFILE)
         self.assertIn("confidence_not_number", result.stage_trace.get("initial_schema_errors", []))
 
     def test_build_llm_slot_frame_cylinder_prompt_backfill(self) -> None:
