@@ -18,16 +18,16 @@ _FRIENDLY = {
         "output.path": "output path",
     },
     "zh": {
-        "geometry.structure": "几何结构类型",
-        "materials.volume_material_map": "体积与材料绑定",
-        "source.type": "源类型",
-        "source.particle": "粒子类型",
-        "source.energy": "源能量",
-        "source.position": "源位置",
-        "source.direction": "源方向",
-        "physics.physics_list": "物理列表",
-        "output.format": "输出格式",
-        "output.path": "输出路径",
+        "geometry.structure": "\u51e0\u4f55\u7ed3\u6784\u7c7b\u578b",
+        "materials.volume_material_map": "\u4f53\u79ef\u4e0e\u6750\u6599\u7ed1\u5b9a",
+        "source.type": "\u6e90\u7c7b\u578b",
+        "source.particle": "\u7c92\u5b50\u7c7b\u578b",
+        "source.energy": "\u6e90\u80fd\u91cf",
+        "source.position": "\u6e90\u4f4d\u7f6e",
+        "source.direction": "\u6e90\u65b9\u5411",
+        "physics.physics_list": "\u7269\u7406\u5217\u8868",
+        "output.format": "\u8f93\u51fa\u683c\u5f0f",
+        "output.path": "\u8f93\u51fa\u8def\u5f84",
     },
 }
 
@@ -41,18 +41,18 @@ _QUESTION = {
         "geometry.structure": "Please confirm the geometry structure type (for example single_box).",
     },
     "zh": {
-        "physics.physics_list": "请提供物理列表名称（例如 FTFP_BERT 或 QBBC）。",
-        "source.energy": "请提供源能量（单位：MeV）。",
-        "source.position": "请提供源位置向量（x, y, z）。",
-        "source.direction": "请提供源方向向量（dx, dy, dz）。",
-        "materials.volume_material_map": "请确认体积到材料的绑定关系（volume -> material）。",
-        "geometry.structure": "请确认几何结构类型（例如 single_box）。",
+        "physics.physics_list": "\u8bf7\u63d0\u4f9b\u7269\u7406\u5217\u8868\u540d\u79f0\uff08\u4f8b\u5982 FTFP_BERT \u6216 QBBC\uff09\u3002",
+        "source.energy": "\u8bf7\u63d0\u4f9b\u6e90\u80fd\u91cf\uff08\u5355\u4f4d\uff1aMeV\uff09\u3002",
+        "source.position": "\u8bf7\u63d0\u4f9b\u6e90\u4f4d\u7f6e\u5411\u91cf\uff08x, y, z\uff09\u3002",
+        "source.direction": "\u8bf7\u63d0\u4f9b\u6e90\u65b9\u5411\u5411\u91cf\uff08dx, dy, dz\uff09\u3002",
+        "materials.volume_material_map": "\u8bf7\u786e\u8ba4\u4f53\u79ef\u5230\u6750\u6599\u7684\u7ed1\u5b9a\u5173\u7cfb\uff08volume -> material\uff09\u3002",
+        "geometry.structure": "\u8bf7\u786e\u8ba4\u51e0\u4f55\u7ed3\u6784\u7c7b\u578b\uff08\u4f8b\u5982 single_box\uff09\u3002",
     },
 }
 
 _GEOMETRY_PARAM = {
     "en": "geometry parameter",
-    "zh": "几何参数",
+    "zh": "\u51e0\u4f55\u53c2\u6570",
 }
 
 _CLARIFICATION = {
@@ -66,23 +66,24 @@ _CLARIFICATION = {
         "source.position": "source position (x, y, z)",
         "source.direction": "source direction (dx, dy, dz)",
         "physics.physics_list": "physics list (for example FTFP_BERT)",
-        "output.format": "output format (root / csv / json)",
+        "output.format": "output format (root / csv / hdf5 / xml / json)",
         "output.path": "output path",
     },
     "zh": {
-        "geometry.structure": "几何结构类型（例如 single_box 或 single_tubs）",
-        "materials.selected_materials": "材料（例如 G4_WATER / G4_Al / G4_Si）",
-        "materials.volume_material_map": "体积到材料的映射关系",
-        "source.particle": "粒子类型（gamma / e- / proton）",
-        "source.type": "源类型（point / beam / isotropic）",
-        "source.energy": "源能量（MeV）",
-        "source.position": "源位置（x, y, z）",
-        "source.direction": "源方向（dx, dy, dz）",
-        "physics.physics_list": "物理列表（例如 FTFP_BERT）",
-        "output.format": "输出格式（root / csv / json）",
-        "output.path": "输出路径",
+        "geometry.structure": "\u51e0\u4f55\u7ed3\u6784\u7c7b\u578b\uff08\u4f8b\u5982 single_box \u6216 single_tubs\uff09",
+        "materials.selected_materials": "\u6750\u6599\uff08\u4f8b\u5982 G4_WATER / G4_Al / G4_Si\uff09",
+        "materials.volume_material_map": "\u4f53\u79ef\u5230\u6750\u6599\u7684\u6620\u5c04\u5173\u7cfb",
+        "source.particle": "\u7c92\u5b50\u7c7b\u578b\uff08gamma / e- / proton\uff09",
+        "source.type": "\u6e90\u7c7b\u578b\uff08point / beam / isotropic\uff09",
+        "source.energy": "\u6e90\u80fd\u91cf\uff08MeV\uff09",
+        "source.position": "\u6e90\u4f4d\u7f6e\uff08x, y, z\uff09",
+        "source.direction": "\u6e90\u65b9\u5411\uff08dx, dy, dz\uff09",
+        "physics.physics_list": "\u7269\u7406\u5217\u8868\uff08\u4f8b\u5982 FTFP_BERT\uff09",
+        "output.format": "\u8f93\u51fa\u683c\u5f0f\uff08root / csv / hdf5 / xml / json\uff09",
+        "output.path": "\u8f93\u51fa\u8def\u5f84",
     },
 }
+
 
 def normalize_lang(lang: str) -> str:
     return "zh" if lang == "zh" else "en"
