@@ -25,14 +25,14 @@
             "user_intent": "SET",
             "asked_fields": [],
             "updated_paths": [
+              "source.type",
+              "source.particle",
+              "physics.physics_list",
               "geometry.structure",
               "geometry.params.module_x",
               "geometry.params.module_y",
               "geometry.params.module_z",
               "materials.selected_materials",
-              "source.type",
-              "source.particle",
-              "physics.physics_list",
               "source.selection_source",
               "source.selection_reasons",
               "geometry.root_name",
@@ -128,13 +128,13 @@
             "output.path"
           ],
           "is_complete": false,
-          "inference_backend": "llm_slot_frame+runtime_semantic"
+          "inference_backend": "llm_semantic_frame+runtime_semantic"
         },
         {
           "user": "Set source energy to 1 MeV.",
           "lang": "en",
           "dialogue_action": "summarize_progress",
-          "assistant_message": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.",
+          "assistant_message": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.",
           "dialogue_trace": {
             "action": "summarize_progress",
             "user_intent": "MODIFY",
@@ -169,7 +169,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             }
           ],
           "config": {
@@ -233,7 +233,7 @@
           "user": "Set source position to (0,0,-100).",
           "lang": "en",
           "dialogue_action": "summarize_progress",
-          "assistant_message": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.",
+          "assistant_message": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.",
           "dialogue_trace": {
             "action": "summarize_progress",
             "user_intent": "MODIFY",
@@ -267,7 +267,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             },
             {
               "role": "user",
@@ -275,7 +275,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             }
           ],
           "config": {
@@ -378,7 +378,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             },
             {
               "role": "user",
@@ -386,7 +386,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             },
             {
               "role": "user",
@@ -502,7 +502,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             },
             {
               "role": "user",
@@ -510,7 +510,7 @@
             },
             {
               "role": "assistant",
-              "content": "Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
+              "content": "Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path."
             },
             {
               "role": "user",
@@ -826,7 +826,7 @@
           "assistant_message": "几何：已确认geometry.root_name。材料：已确认materials.selection_reasons, materials.selection_source。源：已同步源位置；待补充源方向。物理：已确认physics.selection_reasons, physics.selection_source。输出：待补充输出格式, 输出路径。",
           "dialogue_trace": {
             "action": "summarize_progress",
-            "user_intent": "SET",
+            "user_intent": "MODIFY",
             "asked_fields": [],
             "updated_paths": [
               "source.position"
@@ -938,7 +938,7 @@
           "assistant_message": "几何：已确认geometry.root_name。材料：已确认materials.selection_reasons, materials.selection_source。源：已同步源方向。物理：已确认physics.selection_reasons, physics.selection_source。输出：待补充输出格式, 输出路径。",
           "dialogue_trace": {
             "action": "summarize_progress",
-            "user_intent": "SET",
+            "user_intent": "MODIFY",
             "asked_fields": [],
             "updated_paths": [
               "source.direction"
@@ -2175,7 +2175,7 @@
           },
           "missing_fields": [],
           "is_complete": true,
-          "inference_backend": "llm_slot_frame+runtime_semantic+confirmed_pending_overwrite"
+          "inference_backend": "llm_semantic_frame+runtime_semantic+confirmed_pending_overwrite"
         }
       ]
     },
@@ -2197,18 +2197,18 @@
             "user_intent": "SET",
             "asked_fields": [],
             "updated_paths": [
-              "geometry.structure",
-              "geometry.params.module_x",
-              "geometry.params.module_y",
-              "geometry.params.module_z",
-              "materials.selected_materials",
               "source.type",
-              "source.particle",
-              "source.energy",
               "source.position",
               "source.direction",
-              "output.format",
+              "source.energy",
               "physics.physics_list",
+              "output.format",
+              "geometry.params.module_y",
+              "geometry.structure",
+              "geometry.params.module_x",
+              "geometry.params.module_z",
+              "materials.selected_materials",
+              "source.particle",
               "physics.backup_physics_list",
               "physics.selection_reasons",
               "physics.covered_processes",
@@ -2254,8 +2254,8 @@
             "geometry": {
               "structure": "single_box",
               "params": {
-                "module_x": 1000.0,
                 "module_y": 1000.0,
+                "module_x": 1000.0,
                 "module_z": 1000.0
               },
               "feasible": null,
@@ -2277,14 +2277,7 @@
               "type": "point",
               "particle": "gamma",
               "energy": 1.0,
-              "position": {
-                "type": "vector",
-                "value": [
-                  0.0,
-                  0.0,
-                  -100.0
-                ]
-              },
+              "position": "0,0,-100mm",
               "direction": {
                 "type": "vector",
                 "value": [
@@ -2299,7 +2292,7 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT_HP",
+              "physics_list": "QGSP_BIC",
               "backup_physics_list": "QGSP_BERT",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
@@ -2307,7 +2300,9 @@
               "covered_processes": [
                 "Photoelectric effect",
                 "Compton scattering",
-                "Pair production"
+                "Pair production",
+                "Electron bremsstrahlung",
+                "Gamma conversion"
               ],
               "selection_source": "llm_recommender"
             },
@@ -2318,7 +2313,7 @@
           },
           "missing_fields": [],
           "is_complete": true,
-          "inference_backend": "llm_slot_frame+runtime_semantic"
+          "inference_backend": "llm_semantic_frame+runtime_semantic"
         },
         {
           "user": "Why was this physics list selected?",
@@ -2329,10 +2324,7 @@
             "action": "explain_choice",
             "user_intent": "QUESTION",
             "asked_fields": [],
-            "updated_paths": [
-              "physics.backup_physics_list",
-              "physics.selection_source"
-            ],
+            "updated_paths": [],
             "missing_fields": [],
             "answered_this_turn": [],
             "overwrite_preview": [],
@@ -2385,8 +2377,8 @@
             "geometry": {
               "structure": "single_box",
               "params": {
-                "module_x": 1000.0,
                 "module_y": 1000.0,
+                "module_x": 1000.0,
                 "module_z": 1000.0
               },
               "feasible": null,
@@ -2408,14 +2400,7 @@
               "type": "point",
               "particle": "gamma",
               "energy": 1.0,
-              "position": {
-                "type": "vector",
-                "value": [
-                  0.0,
-                  0.0,
-                  -100.0
-                ]
-              },
+              "position": "0,0,-100mm",
               "direction": {
                 "type": "vector",
                 "value": [
@@ -2430,7 +2415,7 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT_HP",
+              "physics_list": "QGSP_BIC",
               "backup_physics_list": "QGSP_BERT",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
@@ -2438,7 +2423,9 @@
               "covered_processes": [
                 "Photoelectric effect",
                 "Compton scattering",
-                "Pair production"
+                "Pair production",
+                "Electron bremsstrahlung",
+                "Gamma conversion"
               ],
               "selection_source": "llm_recommender"
             },
@@ -2573,16 +2560,16 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT_HP",
-              "backup_physics_list": "QGSP_BERT",
+              "physics_list": "QGSP_BERT",
+              "backup_physics_list": "QGSP_BERT_HP",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
               ],
               "covered_processes": [
-                "Photoelectric",
-                "Compton Scattering",
-                "Pair Production",
-                "Bremsstrahlung"
+                "Photoelectric effect",
+                "Compton scattering",
+                "Pair production",
+                "Rayleigh scattering"
               ],
               "selection_source": "llm_recommender"
             },
@@ -2706,16 +2693,16 @@
               ]
             },
             "physics": {
-              "physics_list": "QGSP_BERT_HP",
-              "backup_physics_list": "QGSP_BERT",
+              "physics_list": "QGSP_BERT",
+              "backup_physics_list": "QGSP_BERT_HP",
               "selection_reasons": [
                 "Selected by rule-backed fallback recommender for current request semantics."
               ],
               "covered_processes": [
-                "Photoelectric",
-                "Compton Scattering",
-                "Pair Production",
-                "Bremsstrahlung"
+                "Photoelectric effect",
+                "Compton scattering",
+                "Pair production",
+                "Rayleigh scattering"
               ],
               "selection_source": "llm_recommender"
             },
@@ -3084,7 +3071,7 @@
           },
           "missing_fields": [],
           "is_complete": true,
-          "inference_backend": "llm_slot_frame+runtime_semantic+confirmed_pending_overwrite"
+          "inference_backend": "runtime_semantic+confirmed_pending_overwrite"
         },
         {
           "user": "Change output to json.",
@@ -3332,7 +3319,7 @@
           },
           "missing_fields": [],
           "is_complete": true,
-          "inference_backend": "llm_slot_frame+runtime_semantic+confirmed_pending_overwrite"
+          "inference_backend": "llm_semantic_frame+runtime_semantic+confirmed_pending_overwrite"
         }
       ]
     },
@@ -3938,7 +3925,7 @@
           },
           "missing_fields": [],
           "is_complete": true,
-          "inference_backend": "llm_slot_frame+runtime_semantic+confirmed_pending_overwrite"
+          "inference_backend": "llm_semantic_frame+runtime_semantic+confirmed_pending_overwrite"
         }
       ]
     }

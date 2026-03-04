@@ -49,6 +49,11 @@ Expected outputs:
 python nlu/bert_lab/bert_lab_data.py --out nlu/bert_lab/data/bert_lab_samples.jsonl --n 200 --seed 7
 ```
 
+Note:
+- Trained checkpoints and model weights are not shipped in this repository.
+- If you want to use the BERT lab locally, generate data and train the models on your own machine.
+- Keep `nlu/bert_lab/models/` as a local-only directory.
+
 ## Knowledge Quick Start
 
 Fetch Geant4 NIST material names (official list):
@@ -127,6 +132,11 @@ python -m builder.geometry.cli run_all --outdir builder/geometry/out --n_samples
 ```powershell
 python nlu/bert_lab/bert_lab_data.py --out nlu/bert_lab/data/bert_lab_samples.jsonl --n 200 --seed 7
 ```
+
+说明：
+- 本仓库不提供已训练好的 checkpoint 或模型权重。
+- 如需使用 BERT Lab，请先在本地生成数据并自行训练模型。
+- `nlu/bert_lab/models/` 应仅作为本地目录使用，不要纳入版本控制。
 
 ## 知识层快速开始
 

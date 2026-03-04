@@ -11,7 +11,7 @@
 ### Turn 1
 - User: `Please set up a 1 m x 1 m x 1 m copper box target with a gamma point source. Use physics FTFP_BERT.`
 - Dialogue action: `summarize_progress`
-- Backend: `llm_slot_frame+runtime_semantic`
+- Backend: `llm_semantic_frame+runtime_semantic`
 - Missing fields: `['source.energy', 'source.position', 'source.direction', 'output.format', 'output.path']`
 - Assistant: `Geometry: updated geometry structure, geometry parameter module_x, geometry parameter module_y. Materials: updated materials.selected_materials, volume-to-material binding, materials.selection_source. Source: updated source type, particle type, source.selection_source; still needs source energy, source position. Physics: updated physics list, physics.selection_source, physics.selection_reasons. Output: still needs output format, output path.`
 - Raw dialogue:
@@ -22,23 +22,23 @@
 - Dialogue action: `summarize_progress`
 - Backend: `llm_slot_frame+runtime_semantic`
 - Missing fields: `['source.position', 'source.direction', 'output.format', 'output.path']`
-- Assistant: `Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.`
+- Assistant: `Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.`
 - Raw dialogue:
   - user: Please set up a 1 m x 1 m x 1 m copper box target with a gamma point source. Use physics FTFP_BERT.
   - assistant: Geometry: updated geometry structure, geometry parameter module_x, geometry parameter module_y. Materials: updated materials.selected_materials, volume-to-material binding, materials.selection_source. Source: updated source type, particle type, source.selection_source; still needs source energy, source position. Physics: updated physics list, physics.selection_source, physics.selection_reasons. Output: still needs output format, output path.
   - user: Set source energy to 1 MeV.
-  - assistant: Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
+  - assistant: Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
 ### Turn 3
 - User: `Set source position to (0,0,-100).`
 - Dialogue action: `summarize_progress`
 - Backend: `llm_slot_frame+runtime_semantic`
 - Missing fields: `['source.direction', 'output.format', 'output.path']`
-- Assistant: `Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.`
+- Assistant: `Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.`
 - Raw dialogue:
   - user: Set source energy to 1 MeV.
-  - assistant: Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
+  - assistant: Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source energy; still needs source position, source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
   - user: Set source position to (0,0,-100).
-  - assistant: Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
+  - assistant: Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
 ### Turn 4
 - User: `Set source direction to (0,0,1).`
 - Dialogue action: `summarize_progress`
@@ -47,7 +47,7 @@
 - Assistant: `Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.`
 - Raw dialogue:
   - user: Set source position to (0,0,-100).
-  - assistant: Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
+  - assistant: Geometry: confirmed geometry.root_name, geometry parameter module_z. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source position; still needs source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
   - user: Set source direction to (0,0,1).
   - assistant: Geometry: confirmed geometry.root_name. Materials: confirmed materials.selection_reasons, materials.selection_source. Source: updated source direction. Physics: confirmed physics.selection_reasons, physics.selection_source. Output: still needs output format, output path.
 ### Turn 5
@@ -202,7 +202,7 @@
 ### Turn 4
 - User: `确认`
 - Dialogue action: `finalize`
-- Backend: `llm_slot_frame+runtime_semantic+confirmed_pending_overwrite`
+- Backend: `llm_semantic_frame+runtime_semantic+confirmed_pending_overwrite`
 - Missing fields: `[]`
 - Assistant: `配置已完成。`
 - Raw dialogue:
@@ -217,7 +217,7 @@
 ### Turn 1
 - User: `Please set up a 1 m x 1 m x 1 m copper box target with a gamma point source at (0,0,-100) mm pointing (0,0,1), energy 1 MeV, output ROOT. Choose the most suitable Geant4 reference physics list for pure gamma attenuation in copper.`
 - Dialogue action: `finalize`
-- Backend: `llm_slot_frame+runtime_semantic`
+- Backend: `llm_semantic_frame+runtime_semantic`
 - Missing fields: `[]`
 - Assistant: `Configuration complete.`
 - Raw dialogue:
@@ -285,7 +285,7 @@
 ### Turn 3
 - User: `confirm`
 - Dialogue action: `finalize`
-- Backend: `llm_slot_frame+runtime_semantic+confirmed_pending_overwrite`
+- Backend: `runtime_semantic+confirmed_pending_overwrite`
 - Missing fields: `[]`
 - Assistant: `Configuration complete.`
 - Raw dialogue:
@@ -307,7 +307,7 @@
 ### Turn 5
 - User: `confirm`
 - Dialogue action: `finalize`
-- Backend: `llm_slot_frame+runtime_semantic+confirmed_pending_overwrite`
+- Backend: `llm_semantic_frame+runtime_semantic+confirmed_pending_overwrite`
 - Missing fields: `[]`
 - Assistant: `Configuration complete.`
 - Raw dialogue:
@@ -364,7 +364,7 @@
 ### Turn 5
 - User: `确认`
 - Dialogue action: `finalize`
-- Backend: `llm_slot_frame+runtime_semantic+confirmed_pending_overwrite`
+- Backend: `llm_semantic_frame+runtime_semantic+confirmed_pending_overwrite`
 - Missing fields: `[]`
 - Assistant: `配置已完成。`
 - Raw dialogue:

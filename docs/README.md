@@ -8,10 +8,11 @@
 - `docs/dialogue_readiness_report_2026-03-02.md`: dialogue-layer readiness and response-chain notes.
 - `docs/strict_turn_contract_2026-03-03.md`: current strict-turn contract for prompt and agent behavior.
 - `docs/strict_contract_eval_summary_2026-03-03.md`: current evaluation summary under the strict contract.
-- `docs/bilingual_dialogue_eval_strict_contract_2026-03-03.md`: current bilingual strict-contract report.
-- `docs/bilingual_dialogue_eval_strict_contract_2026-03-03.json`: machine-readable bilingual strict-contract report.
-- `docs/multiturn_dialogue_eval_strict_contract_2026-03-03.md`: current multiturn strict-contract report.
-- `docs/multiturn_dialogue_eval_strict_contract_2026-03-03.json`: machine-readable multiturn strict-contract report.
+- `docs/bilingual_dialogue_eval_strict_contract_2026-03-03.md`: canonical full bilingual strict-contract report (`10/10`).
+- `docs/bilingual_dialogue_eval_strict_contract_2026-03-03.json`: machine-readable full bilingual strict-contract report.
+- `docs/multiturn_dialogue_eval_strict_contract_2026-03-03.md`: canonical full multiturn strict-contract report (`8/8`).
+- `docs/multiturn_dialogue_eval_strict_contract_2026-03-03.json`: machine-readable full multiturn strict-contract report.
+- `docs/test_readiness_assessment_2026-03-03.md`: current controlled-pilot readiness assessment.
 
 ## Archive Layout
 
@@ -23,3 +24,4 @@
 ## Note
 
 Only the strict-contract reports are kept at the top level. Generated intermediate reports should be archived under `docs/archive/` unless they are the current baseline.
+Exploratory or superseded reruns that are not part of the current baseline are kept under `legacy/reports/`.
