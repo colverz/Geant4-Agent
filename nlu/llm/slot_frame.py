@@ -8,6 +8,7 @@ from core.config.llm_prompt_registry import (
     STRICT_SLOT_PROMPT_PROFILE,
     build_strict_slot_prompt,
 )
+from core.config.output_format_registry import canonical_output_format
 from core.orchestrator.types import Intent
 from core.slots.slot_frame import SlotFrame
 from core.slots.slot_validator import validate_slot_frame
@@ -76,7 +77,6 @@ _MATERIAL_ALIASES = {
     "w": "G4_W",
     "\u94a8": "G4_W",
 }
-_OUTPUT_FORMATS = {"root", "json", "csv"}
 _NULL_LITERALS = {"null", "none", "n/a", "na", "unknown", "\u65e0", "\u672a\u77e5", "\u7a7a"}
 
 
@@ -258,12 +258,7 @@ def _canonical_particle(value: Any) -> str | None:
 
 
 def _canonical_output_format(value: Any) -> str | None:
-    text = (_clean_scalar(value) or "").lower()
-    if not text:
-        return None
-    if text in _OUTPUT_FORMATS:
-        return text
-    return None
+    return canonical_output_format(_clean_scalar(value))
 
 
 def _present_slot_paths(frame: SlotFrame) -> set[str]:

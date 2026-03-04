@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from core.config.output_format_registry import canonical_output_format
 from core.config.llm_prompt_registry import build_strict_semantic_prompt
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 from core.validation.error_codes import (
@@ -60,7 +61,6 @@ _MATERIAL_ALIASES = {
     "tungsten": "G4_W",
     "w": "G4_W",
 }
-_OUTPUT_FORMATS = {"root", "json", "csv"}
 _STRUCTURE_ALIASES = {
     "box": "single_box",
     "cube": "single_box",
@@ -314,10 +314,12 @@ def _expand_update_paths(path: str, value: Any, structure_hint: str) -> tuple[li
         return [(canon, text)], [], False
 
     if canon == "output.format":
-        text = str(value or "").strip().lower()
-        if not text:
+        fmt = canonical_output_format(value)
+        if fmt is None and not str(value or "").strip():
             return [], ["update_empty_output_format"], False
-        return [(canon, text if text in _OUTPUT_FORMATS else text)], [], False
+        if fmt is not None:
+            return [(canon, fmt)], [], False
+        return [(canon, str(value or "").strip().lower())], [], False
 
     if canon.startswith("geometry.params.") or canon in {
         "source.energy",

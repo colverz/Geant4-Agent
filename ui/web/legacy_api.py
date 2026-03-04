@@ -428,7 +428,7 @@ def _infer_position_from_text(text: str) -> Optional[Dict[str, Any]]:
 def _parse_output_path(text: str) -> Optional[str]:
     import re
 
-    m = re.search(r"([A-Za-z]:[\\/][^\\s]+\\.(?:root|csv|json)|[./\\w-]+\\.(?:root|csv|json))", text)
+    m = re.search(r"([A-Za-z]:[\\/][^\\s]+\\.(?:root|csv|json|xml|hdf5|h5)|[./\\w-]+\\.(?:root|csv|json|xml|hdf5|h5))", text)
     if not m:
         return None
     return m.group(1)

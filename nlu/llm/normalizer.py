@@ -20,7 +20,7 @@ _TARGET_HINTS = {
     "source.position": ["position", "origin", "center", "\u4f4d\u7f6e", "\u539f\u70b9", "\u4e2d\u5fc3"],
     "source.direction": ["direction", "+z", "-z", "+x", "-x", "+y", "-y", "\u65b9\u5411"],
     "physics.physics_list": ["physics list", "\u7269\u7406\u5217\u8868", "ftfp", "qgsp", "qbbc", "shielding"],
-    "output.format": ["output format", "root", "json", "csv", "\u8f93\u51fa\u683c\u5f0f"],
+    "output.format": ["output format", "root", "json", "csv", "xml", "hdf5", "h5", "\u8f93\u51fa\u683c\u5f0f"],
     "output.path": ["output path", "output/result", "\u8f93\u51fa\u8def\u5f84", "\u4fdd\u5b58\u5230", "\u5199\u5230", "file", "filename"],
 }
 

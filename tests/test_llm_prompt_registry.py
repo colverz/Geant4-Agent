@@ -17,6 +17,8 @@ class LlmPromptRegistryTest(unittest.TestCase):
         self.assertIn("Use slots, not config paths.", prompt)
         self.assertIn("Context: phase=geometry", prompt)
         self.assertIn("Do not restate unrelated slots from previous turns", prompt)
+        self.assertIn("csv|hdf5|root|xml|json|null", prompt)
+        self.assertIn("Prefer official Geant4 analysis file types", prompt)
         self.assertIn('User: "Output json."', prompt)
 
     def test_semantic_prompt_profile_is_versioned(self) -> None:

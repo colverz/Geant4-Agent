@@ -19,7 +19,7 @@ def _build_strict_slot_prompt_v1(user_text: str, context_summary: str) -> str:
         '    "materials": {"primary": "G4_Cu|null"},\n'
         '    "source": {"kind": "point|beam|plane|isotropic|null", "particle": "gamma|e-|proton|neutron|null", "energy_mev": 1.0, "position_mm": [0,0,-100], "direction_vec": [0,0,1]},\n'
         '    "physics": {"explicit_list": "FTFP_BERT|null", "recommendation_intent": "gamma_attenuation|null"},\n'
-        '    "output": {"format": "root|json|csv|null", "path": null}\n'
+        '    "output": {"format": "csv|hdf5|root|xml|json|null", "path": null}\n'
         "  }\n"
         "}\n"
         "Rules:\n"
@@ -30,6 +30,7 @@ def _build_strict_slot_prompt_v1(user_text: str, context_summary: str) -> str:
         "- If the user names a material informally (e.g. copper), normalize it to Geant4 NIST material if known.\n"
         "- If the user explicitly names a physics list, put it in physics.explicit_list.\n"
         "- If the user asks for a best-fit physics list without naming one, set physics.recommendation_intent instead of inventing a list.\n"
+        "- Prefer official Geant4 analysis file types (csv, hdf5, root, xml); use json only for the project-local export mode.\n"
         "- Internally canonicalize any input language into English clauses.\n"
         "- Never output placeholder strings like 'null', 'none', or 'unknown'; use JSON null when the value is absent.\n"
         "- Keep normalized_text concise and in English canonical clauses.\n"
@@ -59,7 +60,7 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         '    "materials": {"primary": "G4_Cu|null"},\n'
         '    "source": {"kind": "point|beam|plane|isotropic|null", "particle": "gamma|e-|proton|neutron|null", "energy_mev": 1.0, "position_mm": [0,0,-100], "direction_vec": [0,0,1]},\n'
         '    "physics": {"explicit_list": "FTFP_BERT|null", "recommendation_intent": "gamma_attenuation|null"},\n'
-        '    "output": {"format": "root|json|csv|null", "path": null}\n'
+        '    "output": {"format": "csv|hdf5|root|xml|json|null", "path": null}\n'
         "  }\n"
         "}\n"
         "Hard rules:\n"
@@ -77,6 +78,7 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         "- If the user names a material informally (e.g. copper), normalize it to Geant4 NIST material if known.\n"
         "- If the user explicitly names a physics list, put it in physics.explicit_list.\n"
         "- If the user asks for a best-fit physics list without naming one, set physics.recommendation_intent instead of inventing a list.\n"
+        "- Prefer official Geant4 analysis file types (csv, hdf5, root, xml); use json only for the project-local export mode.\n"
         "- Internally canonicalize any input language into English clauses.\n"
         "- Keep normalized_text concise and in English canonical clauses.\n"
         "Examples:\n"

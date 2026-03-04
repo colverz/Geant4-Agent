@@ -83,6 +83,20 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertIsNone(frame)
         self.assertEqual(meta.get("schema_errors"), [])
 
+    def test_parse_slot_payload_canonicalizes_hdf5_alias(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.5,
+            "normalized_text": "output.format:h5",
+            "target_slots": ["output.format"],
+            "slots": {"output": {"format": "h5"}},
+        }
+        frame, meta = parse_slot_payload(payload)
+        self.assertIsNotNone(frame)
+        assert frame is not None
+        self.assertEqual(meta.get("schema_errors"), [])
+        self.assertEqual(frame.output.format, "hdf5")
+
     def test_cylinder_half_length_maps_to_child_hz(self) -> None:
         payload = {
             "intent": "SET",

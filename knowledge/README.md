@@ -24,12 +24,12 @@ See `data/materials_geant4_nist.json` for the fetched list and metadata.
 
 - `data/physics_lists.json`: reference physics lists (official source).
 - `data/particles.json`: particle names (official source).
-- `data/output_formats.json`: output formats (project-defined).
+- `data/output_formats.json`: output formats (official Geant4 analysis formats + project extensions).
 
 Notes:
 - `data/physics_lists.json` is fetched from the official reference physics list index.
 - `data/particles.json` is fetched from the official Geant4 particle list pages.
-- `data/output_formats.json` remains project-defined (not an official Geant4 list).
+- `data/output_formats.json` now tracks the official Geant4 analysis manager file types (`csv`, `hdf5`, `root`, `xml`) and keeps `json` as a project-local extension.
 
 ---
 

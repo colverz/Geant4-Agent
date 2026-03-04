@@ -75,7 +75,7 @@ Then open:
 
 - **No full Geant4 runtime config**: schema exists, but no full generator of G4 macro or C++ config.
 - **Physics lists are reference-only**: fetched from official reference list, not a complete superset.
-- **Output formats are project-defined**: not an official Geant4 list.
+- **Output formats use the official Geant4 analysis file types** (`csv`, `hdf5`, `root`, `xml`) plus a project-local `json` extension.
 - **RAG not implemented**: `knowledge/rag/` is a placeholder; no retrieval index yet.
 - **Material → volume mapping is manual**: needs explicit `volume_names` to validate mappings.
 - **BERT data is synthetic-heavy**: real-world robustness still unverified.
@@ -159,7 +159,7 @@ python ui/web/server.py
 
 - **尚无完整 Geant4 运行配置**：只有 schema，没有完整的 G4 宏或 C++ 生成器。
 - **物理过程列表仅覆盖 reference**：非完整集合。
-- **输出格式为项目定义**：非官方 Geant4 列表。
+- **输出格式已接入 Geant4 官方分析文件类型**（`csv`、`hdf5`、`root`、`xml`），并保留项目本地 `json` 扩展。
 - **RAG 尚未实现**：`knowledge/rag/` 为占位。
 - **材料 → 体积映射需手工指定**：需要 `volume_names` 才能验证。
 - **BERT 数据以合成为主**：真实输入鲁棒性待验证。

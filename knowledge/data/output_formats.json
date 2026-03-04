@@ -1,9 +1,29 @@
 {
-  "source": "Project-maintained list (common output formats). Not an official Geant4 list.",
-  "items": [
-    "root",
+  "source": "Official Geant4 analysis manager file types, plus project-local extensions.",
+  "sources": [
+    {
+      "url": "https://geant4.web.cern.ch/documentation/dev/bfad_html/ForApplicationDevelopers/Analysis/managers.html",
+      "note": "Application Developers Guide: supported analysis manager file types."
+    }
+  ],
+  "fetched_at": "2026-03-04T13:15:40.949737Z",
+  "official_items": [
     "csv",
-    "ascii",
+    "hdf5",
+    "root",
+    "xml"
+  ],
+  "project_extensions": [
     "json"
-  ]
+  ],
+  "items": [
+    "csv",
+    "hdf5",
+    "json",
+    "root",
+    "xml"
+  ],
+  "aliases": {
+    "h5": "hdf5"
+  }
 }

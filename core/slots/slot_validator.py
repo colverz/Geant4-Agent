@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.config.output_format_registry import accepted_output_formats
 from core.slots.slot_frame import SlotFrame
 
 
 _GEOMETRY_KINDS = {"box", "cylinder", "sphere"}
 _SOURCE_KINDS = {"point", "beam", "plane", "isotropic"}
-_OUTPUT_FORMATS = {"root", "json", "csv"}
-
-
 @dataclass
 class SlotValidationResult:
     ok: bool
@@ -46,7 +44,7 @@ def validate_slot_frame(frame: SlotFrame) -> SlotValidationResult:
     if frame.source.direction_vec is not None and not _valid_vec3(frame.source.direction_vec):
         errors.append("source.direction_vec_invalid")
 
-    if frame.output.format is not None and frame.output.format not in _OUTPUT_FORMATS:
+    if frame.output.format is not None and frame.output.format not in accepted_output_formats():
         errors.append(f"output.format_invalid:{frame.output.format}")
 
     return SlotValidationResult(ok=len(errors) == 0, errors=errors)
