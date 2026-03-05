@@ -5,6 +5,7 @@ const state = {
   lang: localStorage.getItem("g4_lang") || "zh",
   ollamaConfigPath: localStorage.getItem("g4_ollama_config_path") || "",
   ollamaModel: "",
+  modelPreflight: null,
   lastMeta: null,
   lastProcess: null,
 };
@@ -30,6 +31,10 @@ const i18n = {
     config_json: "配置 JSON",
     process_title: "过程面板",
     footer: "本地运行，不依赖外部前端服务。",
+    runtime_ready: "模型检查通过：structure/ner 目录完整。",
+    runtime_not_ready: "模型检查未通过：",
+    runtime_missing: "缺失项",
+    runtime_warning: "告警",
     summary_lines: {
       geometry_structure: "几何结构",
       geometry_feasible: "几何可行",
@@ -67,6 +72,10 @@ const i18n = {
     config_json: "Config JSON",
     process_title: "Process Panel",
     footer: "Local-only: no external UI dependencies.",
+    runtime_ready: "Model preflight passed: structure/ner assets are available.",
+    runtime_not_ready: "Model preflight failed:",
+    runtime_missing: "missing",
+    runtime_warning: "warning",
     summary_lines: {
       geometry_structure: "Geometry",
       geometry_feasible: "Feasible",
@@ -85,6 +94,38 @@ const i18n = {
     },
   },
 };
+
+function renderRuntimeNotice() {
+  const box = $("runtime-notice");
+  if (!box) return;
+  const dict = i18n[state.lang];
+  const p = state.modelPreflight;
+  if (!p) {
+    box.className = "runtime-notice";
+    box.textContent = "";
+    return;
+  }
+  if (p.ready) {
+    box.className = "runtime-notice ready";
+    box.textContent = dict.runtime_ready;
+    return;
+  }
+
+  const missing = [];
+  const warnings = [];
+  for (const key of ["structure", "ner"]) {
+    const item = p[key] || {};
+    const m = Array.isArray(item.missing_files) ? item.missing_files : [];
+    const w = Array.isArray(item.warnings) ? item.warnings : [];
+    if (m.length) missing.push(`${key}: ${m.join(", ")}`);
+    if (w.length) warnings.push(`${key}: ${w.join(", ")}`);
+  }
+  const parts = [dict.runtime_not_ready];
+  if (missing.length) parts.push(`${dict.runtime_missing}: ${missing.join(" | ")}`);
+  if (warnings.length) parts.push(`${dict.runtime_warning}: ${warnings.join(" | ")}`);
+  box.className = "runtime-notice warn";
+  box.textContent = parts.join(" ");
+}
 
 function addMessage(role, text) {
   const chat = $("chat");
@@ -162,6 +203,8 @@ async function loadRuntimeConfigs() {
   }
   state.ollamaModel = data.current_model || "";
   state.ollamaConfigPath = sel.value || "";
+  state.modelPreflight = data.model_preflight || null;
+  renderRuntimeNotice();
   if (state.ollamaConfigPath) {
     localStorage.setItem("g4_ollama_config_path", state.ollamaConfigPath);
   }
@@ -179,7 +222,9 @@ async function applyRuntimeConfig(path) {
   }
   state.ollamaConfigPath = data.current_path || path;
   state.ollamaModel = data.current_model || "";
+  state.modelPreflight = data.model_preflight || null;
   localStorage.setItem("g4_ollama_config_path", state.ollamaConfigPath);
+  renderRuntimeNotice();
 }
 
 async function sendStep() {
@@ -293,6 +338,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.lang = e.target.value || "zh";
     localStorage.setItem("g4_lang", state.lang);
     applyI18n();
+    renderRuntimeNotice();
     if ($("summary").textContent) {
       try {
         const cfg = JSON.parse($("response").textContent || "{}");
@@ -302,6 +348,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   applyI18n();
+  renderRuntimeNotice();
   $("run-btn").addEventListener("click", sendStep);
   $("reset-btn").addEventListener("click", resetSession);
 });

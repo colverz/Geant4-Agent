@@ -424,7 +424,12 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
                     fallback_reason = slot_result.fallback_reason
 
     if not llm_used:
-        norm = normalize_user_turn(text, context_summary=context_summary, config_path=ollama_config_path)
+        norm = normalize_user_turn(
+            text,
+            context_summary=context_summary,
+            config_path=ollama_config_path,
+            enable_llm=bool(normalize_input and llm_router),
+        )
         user_candidate = CandidateUpdate(
             producer=Producer.USER_EXPLICIT,
             intent=norm["intent"],

@@ -19,6 +19,13 @@ def _clean_chat_text(raw: Any) -> str:
     return re.sub(r"^```[a-zA-Z0-9_-]*\s*|\s*```$", "", text, flags=re.DOTALL).strip()
 
 
+_INTERNAL_FIELD_PATTERN = re.compile(r"\b[a-z]+(?:\.[a-z_]+)+\b")
+
+
+def _contains_internal_field(text: str) -> bool:
+    return bool(_INTERNAL_FIELD_PATTERN.search(text))
+
+
 def ask_missing(
     missing: List[str],
     lang: str,
@@ -39,7 +46,7 @@ def ask_missing(
     try:
         resp = chat(prompt, config_path=ollama_config, temperature=temperature)
         text = _clean_chat_text(resp.get("response", ""))
-        if text:
+        if text and not _contains_internal_field(text):
             return text
     except Exception:
         pass
@@ -77,13 +84,13 @@ def naturalize_response(
 
     if lang == "zh":
         system_rules = (
-            "你是Geant4配置助手的用户层回复改写器。"
-            "任务：把给定基础回复改写成自然中文，口吻清晰友好。"
-            "硬约束："
-            "1) 不得新增事实、参数、字段或结论；"
-            "2) 不得删除基础回复中的关键约束（尤其确认/覆盖警告）；"
-            "3) 不输出推理过程；"
-            "4) 仅输出最终给用户的一段文本。"
+            "\u4f60\u662f Geant4 \u914d\u7f6e\u52a9\u624b\u7684\u7528\u6237\u5c42\u6539\u5199\u5668\u3002"
+            "\u4efb\u52a1\uff1a\u628a\u7ed9\u5b9a\u57fa\u7840\u56de\u590d\u6539\u5199\u6210\u81ea\u7136\u3001\u7b80\u6d01\u3001\u53cb\u597d\u7684\u4e2d\u6587\u3002"
+            "\u786c\u7ea6\u675f\uff1a"
+            "1) \u4e0d\u5f97\u65b0\u589e\u4e8b\u5b9e\u3001\u53c2\u6570\u3001\u5b57\u6bb5\u6216\u7ed3\u8bba\uff1b"
+            "2) \u4e0d\u5f97\u5220\u9664\u57fa\u7840\u56de\u590d\u4e2d\u7684\u5173\u952e\u7ea6\u675f\uff08\u5c24\u5176\u662f\u8986\u76d6\u786e\u8ba4\u63d0\u793a\uff09\uff1b"
+            "3) \u4e0d\u8f93\u51fa\u63a8\u7406\u8fc7\u7a0b\uff1b"
+            "4) \u4ec5\u8f93\u51fa\u6700\u7ec8\u7ed9\u7528\u6237\u7684\u4e00\u6bb5\u6587\u672c\u3002"
         )
     else:
         system_rules = (
@@ -110,3 +117,4 @@ def naturalize_response(
     except Exception:
         pass
     return base_message
+

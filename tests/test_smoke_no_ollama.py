@@ -113,6 +113,21 @@ class SmokeNoOllamaTest(unittest.TestCase):
         self.assertEqual(out.get("llm_used"), False)
         self.assertEqual(out.get("fallback_reason"), "E_LLM_DISABLED")
 
+    def test_chinese_payload_sets_source_type_without_reask(self) -> None:
+        out = step(
+            {
+                "text": "\u94dc\u7acb\u65b9\u4f53 1m x 1m x 1m\uff0cGamma \u70b9\u6e90\uff0c1 MeV\uff0c\u4f4d\u7f6e\u5728\u4e2d\u5fc3\uff0c\u65b9\u5411 +z\uff0c\u7269\u7406 FTFP_BERT\uff0c\u8f93\u51fa json",
+                "lang": "zh",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertNotIn("error", out)
+        self.assertEqual(out.get("config", {}).get("source", {}).get("type"), "point")
+        self.assertNotIn("source.type", out.get("missing_fields", []))
+
     def test_router_flag_is_observable_in_strict_path(self) -> None:
         out = step(
             {

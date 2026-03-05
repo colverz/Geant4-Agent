@@ -18,10 +18,17 @@ def single_field_request(path: str, lang: str) -> str:
 
 
 def clarification_fallback(items: Sequence[str], lang: str) -> str:
-    joined = ", ".join(items)
-    if _lang_key(lang) == "zh":
-        return f"\u8bf7\u8865\u5145\uff1a{joined}"
-    return f"Please provide: {joined}"
+    key = _lang_key(lang)
+    if not items:
+        return "\u8bf7\u8865\u5145\u5173\u952e\u53c2\u6570\u3002" if key == "zh" else "Please provide the key missing parameters."
+    if len(items) == 1:
+        if key == "zh":
+            return f"\u4e3a\u4e86\u7ee7\u7eed\u914d\u7f6e\uff0c\u8bf7\u518d\u786e\u8ba4\u4e00\u4e0b{items[0]}\u3002"
+        return f"To continue, could you confirm {items[0]}?"
+    head = ", ".join(items[:2])
+    if key == "zh":
+        return f"\u4e3a\u4e86\u7ee7\u7eed\u914d\u7f6e\uff0c\u8fd8\u9700\u8981{head}\u3002"
+    return f"To continue, I still need {head}."
 
 
 def clarification_prompt(

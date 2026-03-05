@@ -9,36 +9,38 @@ from typing import Dict, List, Tuple
 import torch
 from transformers import AutoModelForSequenceClassification, AutoModelForTokenClassification, AutoTokenizer
 
+from .model_preflight import (
+    MODELS_DIR,
+    select_default_ner_dir,
+    select_default_structure_dir,
+    validate_model_dir,
+)
 from .postprocess import merge_params
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = ROOT / "nlu" / "bert_lab" / "models"
 _STRUCTURE_CACHE: Dict[tuple[str, str], tuple[AutoTokenizer, AutoModelForSequenceClassification, torch.device]] = {}
 _NER_CACHE: Dict[tuple[str, str], tuple[AutoTokenizer, AutoModelForTokenClassification, torch.device]] = {}
 
 
 def _require_local_model_dir(path: Path, *, label: str) -> str:
-    config_path = path / "config.json"
-    if config_path.exists():
+    report = validate_model_dir(path, label=label)
+    if report["ok"]:
         return str(path)
+    missing = ", ".join(report.get("missing_files", [])) or "unknown"
     raise RuntimeError(
         f"Missing local {label} model at '{path}'. "
+        f"Missing assets: {missing}. "
         "Train it locally first or configure an explicit local model path."
     )
 
 
 def _default_structure_model() -> str:
-    for name in ["structure_controlled_v4c_e1", "structure_controlled_v3_e1", "structure_controlled_smoke", "structure_opt_v3", "structure_opt_v2", "structure"]:
-        p = MODELS_DIR / name
-        if (p / "config.json").exists():
-            return str(p)
-    return _require_local_model_dir(MODELS_DIR / "structure_controlled_v4c_e1", label="structure")
+    return _require_local_model_dir(select_default_structure_dir(MODELS_DIR), label="structure")
 
 
 def _default_ner_model() -> str:
-    p = MODELS_DIR / "ner"
-    return _require_local_model_dir(p, label="NER")
+    return _require_local_model_dir(select_default_ner_dir(MODELS_DIR), label="NER")
 
 
 def _softmax(x: torch.Tensor) -> torch.Tensor:

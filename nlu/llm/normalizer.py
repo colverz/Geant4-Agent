@@ -9,11 +9,27 @@ from nlu.bert_lab.ollama_client import chat, extract_json
 
 
 _TARGET_HINTS = {
-    "geometry.params.module_x": ["module_x", "x=", "x:", "width", "\u5bbd", "\u5bbd\u5ea6", "x\u65b9\u5411"],
-    "geometry.params.module_y": ["module_y", "y=", "y:", "height", "\u9ad8", "\u9ad8\u5ea6", "y\u65b9\u5411"],
-    "geometry.params.module_z": ["module_z", "z=", "z:", "thickness", "\u539a", "\u539a\u5ea6", "z\u65b9\u5411"],
-    "geometry.structure": ["structure", "geometry", "box", "cube", "sphere", "cylinder", "cylindrical", "ring", "grid"],
-    "materials.selected_materials": ["material", "\u94dc", "copper", "g4_"],
+    "geometry.params.module_x": ["module_x", "x=", "x:", "size_x", "width", "\u5bbd", "\u5bbd\u5ea6"],
+    "geometry.params.module_y": ["module_y", "y=", "y:", "size_y", "height", "\u9ad8", "\u9ad8\u5ea6"],
+    "geometry.params.module_z": ["module_z", "z=", "z:", "size_z", "thickness", "\u539a", "\u539a\u5ea6"],
+    "geometry.structure": [
+        "structure",
+        "geometry",
+        "box",
+        "cube",
+        "sphere",
+        "cylinder",
+        "cylindrical",
+        "ring",
+        "grid",
+        "\u7acb\u65b9\u4f53",
+        "\u957f\u65b9\u4f53",
+        "\u5706\u67f1",
+        "\u7403",
+        "\u73af",
+        "\u9635\u5217",
+    ],
+    "materials.selected_materials": ["material", "\u6750\u6599", "\u94dc", "\u94dd", "\u7845", "\u6c34", "copper", "aluminum", "silicon", "g4_"],
     "source.type": ["source type", "point", "beam", "isotropic", "\u70b9\u6e90", "\u675f\u6d41"],
     "source.particle": ["gamma", "electron", "proton", "particle", "\u7c92\u5b50"],
     "source.energy": ["mev", "gev", "kev", "\u80fd\u91cf"],
@@ -45,8 +61,8 @@ _REMOVE_PATTERNS = [
     r"\u79fb\u9664",
     r"\u6e05\u7a7a",
 ]
-_QUESTION_PATTERNS = [
-    r"[?\uFF1F]",
+_QUESTION_PUNCT_PATTERNS = [r"[?\uFF1F]"]
+_QUESTION_SEMANTIC_PATTERNS = [
     r"\b(?:why|reason|how|what|which|can you|could you|please explain)\b",
     r"\u4e3a\u4ec0\u4e48",
     r"\u7406\u7531",
@@ -58,6 +74,23 @@ _QUESTION_PATTERNS = [
     r"\u53ef\u4ee5\u5417",
 ]
 _VECTOR_LITERAL = r"\(\s*[-+0-9.]+\s*,\s*[-+0-9.]+\s*,\s*[-+0-9.]+\s*\)"
+_PAYLOAD_PATTERNS = [
+    r"\b\d+(?:\.\d+)?\s*(?:mev|gev|kev|mm|cm|m)\b",
+    r"\b(?:gamma|electron|proton|neutron|point|beam|isotropic)\b",
+    r"\b(?:g4_[a-z0-9_]+|ftfp|qgsp|qbbc|shielding|root|json|csv|hdf5|xml)\b",
+    r"[+\-][xyz]\b",
+    _VECTOR_LITERAL,
+    r"\u7acb\u65b9\u4f53",
+    r"\u5706\u67f1",
+    r"\u7403",
+    r"\u70b9\u6e90",
+    r"\u675f\u6d41",
+    r"\u5404\u5411\u540c\u6027",
+    r"\u80fd\u91cf",
+    r"\u4f4d\u7f6e",
+    r"\u65b9\u5411",
+    r"\u6750\u6599",
+]
 
 
 def _compact(text: str) -> str:
@@ -76,7 +109,13 @@ def _infer_intent(text: str) -> Intent:
         return Intent.MODIFY
     if _matches_any(compact, _REMOVE_PATTERNS):
         return Intent.REMOVE
-    if _matches_any(compact, _QUESTION_PATTERNS):
+
+    semantic_question = _matches_any(compact, _QUESTION_SEMANTIC_PATTERNS)
+    punct_question = _matches_any(compact, _QUESTION_PUNCT_PATTERNS)
+    looks_payload = _matches_any(compact.lower(), _PAYLOAD_PATTERNS)
+    if semantic_question:
+        return Intent.QUESTION
+    if punct_question and not looks_payload:
         return Intent.QUESTION
     return Intent.SET
 
@@ -92,7 +131,7 @@ def _collect_target_paths(payload: str) -> list[str]:
     if "pointing" in low or re.search(r"\balong\s*[+-]?[xyz]\b", low):
         out.append("source.direction")
     if (
-        re.search(r"\b\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:x|by)\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:x|by)\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)\b", low)
+        re.search(r"\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:x|by)\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:x|by)\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)", low)
         or "\u89c1\u65b9" in low
         or "\u8fb9\u957f" in low
         or "side length" in low
@@ -151,21 +190,24 @@ def normalize_user_turn(
     user_text: str,
     context_summary: str,
     config_path: str,
+    *,
+    enable_llm: bool = True,
 ) -> dict[str, Any]:
     controls = infer_user_turn_controls(user_text)
     prompt = build_normalization_prompt(user_text, context_summary=context_summary)
     normalized_text = ""
     structure_hint = ""
     confidence = 0.6
-    try:
-        resp = chat(prompt, config_path=config_path, temperature=0.0)
-        parsed = extract_json(resp.get("response", ""))
-        if isinstance(parsed, dict):
-            normalized_text = str(parsed.get("normalized_text", "")).strip()
-            structure_hint = str(parsed.get("structure_hint", "")).strip()
-            confidence = 0.8 if normalized_text else 0.6
-    except Exception:
-        normalized_text = ""
+    if enable_llm:
+        try:
+            resp = chat(prompt, config_path=config_path, temperature=0.0)
+            parsed = extract_json(resp.get("response", ""))
+            if isinstance(parsed, dict):
+                normalized_text = str(parsed.get("normalized_text", "")).strip()
+                structure_hint = str(parsed.get("structure_hint", "")).strip()
+                confidence = 0.8 if normalized_text else 0.6
+        except Exception:
+            normalized_text = ""
 
     if not normalized_text:
         normalized_text = user_text
@@ -173,7 +215,7 @@ def normalize_user_turn(
 
     intent = controls["intent"]
     target_paths = controls["target_paths"] or _infer_target_paths(user_text, normalized_text)
-    if re.search(r"\b(为什么|why|reason|理由)\b", user_text.lower()):
+    if re.search(r"\b(?:why|reason)\b", user_text.lower()) or re.search(r"\u4e3a\u4ec0\u4e48|\u7406\u7531", user_text):
         intent = Intent.QUESTION
     return {
         "intent": intent,

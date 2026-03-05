@@ -137,6 +137,30 @@ h3 {
   margin-top: 8px;
 }
 
+.runtime-notice {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  display: none;
+}
+
+.runtime-notice.ready {
+  display: block;
+  background: rgba(11, 107, 111, 0.1);
+  border: 1px solid rgba(11, 107, 111, 0.3);
+  color: #0a585b;
+}
+
+.runtime-notice.warn {
+  display: block;
+  background: rgba(204, 107, 44, 0.12);
+  border: 1px solid rgba(204, 107, 44, 0.35);
+  color: #7c3e14;
+}
+
 button {
   border: none;
   border-radius: 12px;

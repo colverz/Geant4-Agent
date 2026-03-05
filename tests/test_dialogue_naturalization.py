@@ -22,6 +22,16 @@ class DialogueNaturalizationTest(unittest.TestCase):
         self.assertIn("Latest user input: I already set the geometry.", prompt_text)
         self.assertIn("Confirmed context: geometry structure, material", prompt_text)
 
+    def test_ask_missing_rejects_internal_field_names(self) -> None:
+        with mock.patch("planner.agent.chat", return_value={"response": "Please provide: source.type"}):
+            out = ask_missing(
+                ["source.type"],
+                lang="en",
+                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                temperature=1.0,
+            )
+        self.assertEqual(out, "To continue, could you confirm source type (point / beam / isotropic)?")
+
     def test_naturalize_response_uses_llm_reply(self) -> None:
         with mock.patch("planner.agent.chat", return_value={"response": "Naturalized response."}) as mocked_chat:
             out = naturalize_response(

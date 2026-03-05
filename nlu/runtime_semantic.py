@@ -48,10 +48,16 @@ PARTICLE_ALIASES = {
 SOURCE_TYPE_ALIASES = {
     "point source": "point",
     "point": "point",
+    "\u70b9\u6e90": "point",
+    "\u70b9\u72b6\u6e90": "point",
     "beam": "beam",
+    "\u675f\u6d41": "beam",
+    "\u7c92\u5b50\u675f": "beam",
     "isotropic": "isotropic",
+    "\u5404\u5411\u540c\u6027": "isotropic",
     "plane source": "plane",
     "plane": "plane",
+    "\u9762\u6e90": "plane",
 }
 
 

@@ -123,6 +123,13 @@ def main() -> None:
         f"model={runtime.get('current_model', '')};",
         f"base_url={runtime.get('current_base_url', '')}",
     )
+    preflight = runtime.get("model_preflight", {})
+    print(
+        "Model preflight:",
+        f"ready={preflight.get('ready', False)};",
+        f"structure_ok={preflight.get('structure', {}).get('ok', False)};",
+        f"ner_ok={preflight.get('ner', {}).get('ok', False)}",
+    )
     HTTPServer((host, port), Handler).serve_forever()
 
 

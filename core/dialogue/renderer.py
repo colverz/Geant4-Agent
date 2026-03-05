@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.config.field_registry import friendly_labels
+from core.config.field_registry import friendly_label, friendly_labels
 from core.config.prompt_registry import clarification_fallback, completion_message
 from core.dialogue.types import DialogueAction, DialogueDecision
 from planner.question_renderer import render_naturalized_response, render_question
@@ -57,7 +57,8 @@ def _render_choice_explanation(decision: DialogueDecision, *, lang: str, dialogu
         if not isinstance(item, dict):
             continue
         label = str(item.get("label") or domain)
-        field = str(item.get("field") or label)
+        field_raw = str(item.get("field") or label)
+        field = friendly_label(field_raw, lang) if "." in field_raw else field_raw
         source = str(item.get("source") or "unknown")
         reasons = [str(reason) for reason in item.get("reasons", []) if str(reason)]
         if lang == "zh":

@@ -20,10 +20,10 @@ class PromptRegistryTest(unittest.TestCase):
         items = ["source energy", "source direction"]
         self.assertEqual(
             clarification_fallback(items, "en"),
-            "Please provide: source energy, source direction",
+            "To continue, I still need source energy, source direction.",
         )
         self.assertIn("Question:", clarification_prompt(items, "en"))
-        self.assertIn("\u95ee\u9898\uff1a", clarification_prompt(items, "zh"))
+        self.assertIn("\u8ffd\u95ee\uff1a", clarification_prompt(items, "zh"))
 
 
 if __name__ == "__main__":

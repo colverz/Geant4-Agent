@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from nlu.bert_lab.ollama_client import load_config
+from nlu.runtime_components.model_preflight import runtime_model_readiness
 
 
 ROOT = Path(__file__).parent
@@ -66,10 +67,11 @@ def runtime_config_payload() -> dict[str, Any]:
         current_base = cur.base_url
     except Exception:
         pass
+    model_preflight = runtime_model_readiness()
     return {
         "current_path": current_path,
         "current_model": current_model,
         "current_base_url": current_base,
         "available": items,
+        "model_preflight": model_preflight,
     }
-

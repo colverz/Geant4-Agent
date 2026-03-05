@@ -55,39 +55,57 @@ def _parse_module_triplet_mm(text: str) -> tuple[float, float, float] | None:
     )
 
 
+def _parse_named_length_mm(text: str, keys: list[str]) -> float | None:
+    num = r"[-+]?\d*\.?\d+"
+    unit = r"(mm|cm|m)"
+    key_pat = "|".join(re.escape(k) for k in keys)
+    m = re.search(rf"(?:{key_pat})\s*[:=]?\s*({num})\s*{unit}", text.lower())
+    if not m:
+        return None
+    return _value_to_mm(float(m.group(1)), m.group(2))
+
+
 def _infer_structure_from_text(text: str) -> str | None:
     low = text.lower()
-    if any(k in low for k in ["box", "cube", "立方体", "长方体"]):
+    if any(
+        k in low
+        for k in [
+            "box",
+            "cube",
+            "\u7acb\u65b9\u4f53",
+            "\u957f\u65b9\u4f53",
+        ]
+    ):
         return "single_box"
-    if any(k in low for k in ["cylinder", "tubs", "圆柱"]):
+    if any(k in low for k in ["cylinder", "tubs", "\u5706\u67f1"]):
         return "single_tubs"
-    if any(k in low for k in ["sphere", "球"]):
+    if any(k in low for k in ["sphere", "\u7403"]):
         return "single_sphere"
     return None
 
 
 def _infer_particle(text: str) -> str | None:
     low = text.lower()
-    if "gamma" in low or "光子" in low:
+    if "gamma" in low or "\u5149\u5b50" in low:
         return "gamma"
-    if "electron" in low or "电子" in low or "e-" in low:
+    if "electron" in low or "\u7535\u5b50" in low or "e-" in low:
         return "e-"
-    if "proton" in low or "质子" in low:
+    if "proton" in low or "\u8d28\u5b50" in low:
         return "proton"
-    if "neutron" in low or "中子" in low:
+    if "neutron" in low or "\u4e2d\u5b50" in low:
         return "neutron"
     return None
 
 
 def _infer_material(text: str) -> str | None:
     low = text.lower()
-    if "g4_cu" in low or "copper" in low or "铜" in low:
+    if "g4_cu" in low or "copper" in low or "\u94dc" in low:
         return "G4_Cu"
-    if "g4_si" in low or "silicon" in low or "硅" in low:
+    if "g4_si" in low or "silicon" in low or "\u7845" in low:
         return "G4_Si"
-    if "g4_al" in low or "aluminum" in low or "铝" in low:
+    if "g4_al" in low or "aluminum" in low or "aluminium" in low or "\u94dd" in low:
         return "G4_Al"
-    if "g4_water" in low or "water" in low or "水" in low:
+    if "g4_water" in low or "water" in low or "\u6c34" in low:
         return "G4_WATER"
     return None
 
@@ -105,13 +123,22 @@ def _infer_output_format(text: str) -> str | None:
 
 def _infer_source_type(text: str) -> str | None:
     low = text.lower()
-    if any(k in low for k in ["point source", "point", "点源", "点状源", "点束"]):
+    if any(
+        k in low
+        for k in [
+            "point source",
+            "point",
+            "\u70b9\u6e90",
+            "\u70b9\u72b6\u6e90",
+            "\u70b9\u675f",
+        ]
+    ):
         return "point"
-    if any(k in low for k in ["beam", "束流", "粒子束"]):
+    if any(k in low for k in ["beam", "\u675f\u6d41", "\u7c92\u5b50\u675f"]):
         return "beam"
-    if any(k in low for k in ["isotropic", "各向同性"]):
+    if any(k in low for k in ["isotropic", "\u5404\u5411\u540c\u6027"]):
         return "isotropic"
-    if any(k in low for k in ["plane source", "plane", "面源"]):
+    if any(k in low for k in ["plane source", "plane", "\u9762\u6e90"]):
         return "plane"
     return None
 
@@ -119,9 +146,14 @@ def _infer_source_type(text: str) -> str | None:
 def _parse_vector(text: str, key: str) -> dict | None:
     num = r"[-+]?\d*\.?\d+"
     unit = r"(?:\s*(?:mm|cm|m))?"
-    sep = r"\s*[,，; ]+\s*"
+    sep = r"\s*[,， ]+\s*"
+    key_patterns = {
+        "position": r"(?:position|pos|source\s*at|\u4f4d\u7f6e|\u5750\u6807)",
+        "direction": r"(?:direction|dir|pointing|\u65b9\u5411)",
+    }
+    key_pat = key_patterns.get(key, re.escape(key))
     pat = (
-        rf"{key}\s*[:=]?\s*\(?\s*({num}){unit}{sep}"
+        rf"{key_pat}\s*[:=]?\s*\(?\s*({num}){unit}{sep}"
         rf"({num}){unit}{sep}"
         rf"({num}){unit}\s*\)?"
     )
@@ -150,7 +182,7 @@ def _parse_direction_shorthand(text: str) -> dict | None:
 
 def _parse_position_shorthand(text: str) -> dict | None:
     low = text.lower()
-    if any(k in low for k in ["origin", "center", "原点", "中心"]):
+    if any(k in low for k in ["origin", "center", "\u539f\u70b9", "\u4e2d\u5fc3"]):
         return {"type": "vector", "value": [0.0, 0.0, 0.0]}
     return None
 
@@ -158,9 +190,9 @@ def _parse_position_shorthand(text: str) -> dict | None:
 def _parse_at_to(text: str) -> tuple[dict | None, dict | None]:
     num = r"[-+]?\d*\.?\d+"
     pat = (
-        rf"\bat\s*\(?\s*({num})\s*[,，; ]\s*({num})\s*[,，; ]\s*({num})\s*\)?\s*"
-        rf"(?:to|towards|->|朝|沿)\s*"
-        rf"\(?\s*({num})\s*[,，; ]\s*({num})\s*[,，; ]\s*({num})\s*\)?"
+        rf"\bat\s*\(?\s*({num})\s*[,， ]\s*({num})\s*[,， ]\s*({num})\s*\)?\s*"
+        rf"(?:to|towards|->)\s*"
+        rf"\(?\s*({num})\s*[,， ]\s*({num})\s*[,， ]\s*({num})\s*\)?"
     )
     m = re.search(pat, text.lower())
     if not m:
@@ -213,7 +245,6 @@ def extract_candidates_from_normalized_text(
             )
         )
 
-    # fallback geometry extraction from raw+normalized text
     if not frame.geometry.structure:
         inferred_structure = _infer_structure_from_text(merged_text)
         if inferred_structure:
@@ -256,6 +287,47 @@ def extract_candidates_from_normalized_text(
                     turn_id=turn_id,
                 ),
             ]
+        )
+    radius = _parse_named_length_mm(
+        merged_text,
+        [
+            "radius",
+            "rmax",
+            "\u534a\u5f84",
+        ],
+    )
+    if radius is not None:
+        updates.append(
+            UpdateOp(
+                path="geometry.params.child_rmax",
+                op="set",
+                value=float(radius),
+                producer=Producer.BERT_EXTRACTOR,
+                confidence=score,
+                turn_id=turn_id,
+            )
+        )
+    half_len = _parse_named_length_mm(
+        merged_text,
+        [
+            "half-length",
+            "half length",
+            "half_len",
+            "half_l",
+            "\u534a\u957f",
+            "\u534a\u9ad8",
+        ],
+    )
+    if half_len is not None:
+        updates.append(
+            UpdateOp(
+                path="geometry.params.child_hz",
+                op="set",
+                value=float(half_len),
+                producer=Producer.BERT_EXTRACTOR,
+                confidence=score,
+                turn_id=turn_id,
+            )
         )
 
     if frame.materials.selected_materials:
@@ -368,7 +440,6 @@ def extract_candidates_from_normalized_text(
                 )
             )
 
-    # lightweight kinematics fallbacks from normalized text
     energy = _parse_energy_mev(merged_text)
     if energy is not None:
         updates.append(
