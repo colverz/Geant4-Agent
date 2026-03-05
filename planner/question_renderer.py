@@ -9,12 +9,16 @@ def render_question(
     lang: str,
     ollama_config: str,
     temperature: float,
+    recent_user_text: str = "",
+    confirmed_items: list[str] | None = None,
 ) -> str:
     return ask_missing(
         planned_paths,
         lang=lang,
         ollama_config=ollama_config,
         temperature=temperature,
+        recent_user_text=recent_user_text,
+        confirmed_items=confirmed_items or [],
     )
 
 

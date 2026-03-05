@@ -24,11 +24,18 @@ def ask_missing(
     lang: str,
     ollama_config: str = "nlu/bert_lab/configs/ollama_config.json",
     temperature: float = 1.0,
+    recent_user_text: str = "",
+    confirmed_items: List[str] | None = None,
 ) -> str:
     if not missing:
         return ""
     friendly = clarification_items(missing, lang)
-    prompt = clarification_prompt(friendly, lang)
+    prompt = clarification_prompt(
+        friendly,
+        lang,
+        recent_user_text=recent_user_text,
+        confirmed_items=confirmed_items or [],
+    )
     try:
         resp = chat(prompt, config_path=ollama_config, temperature=temperature)
         text = _clean_chat_text(resp.get("response", ""))

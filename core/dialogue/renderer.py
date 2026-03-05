@@ -124,6 +124,13 @@ def render_dialogue_message(
     dialogue_summary: dict | None = None,
     raw_dialogue: list[dict] | None = None,
 ) -> str:
+    recent_user_text = ""
+    for item in reversed(list(raw_dialogue or [])):
+        if item.get("role") == "user":
+            recent_user_text = str(item.get("content", "")).strip()
+            break
+    confirmed_items = list((dialogue_summary or {}).get("recent_confirmed", []) or [])
+
     def _maybe_naturalize(text: str) -> str:
         if not use_llm_question or not text:
             return text
@@ -156,6 +163,8 @@ def render_dialogue_message(
                 lang=lang,
                 ollama_config=ollama_config,
                 temperature=user_temperature,
+                recent_user_text=recent_user_text,
+                confirmed_items=confirmed_items,
             )
         return clarification_fallback(friendly_labels(decision.asked_fields, lang), lang)
     if decision.action == DialogueAction.SUMMARIZE_PROGRESS:
