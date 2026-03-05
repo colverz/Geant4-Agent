@@ -64,6 +64,7 @@ _REMOVE_PATTERNS = [
 _QUESTION_PUNCT_PATTERNS = [r"[?\uFF1F]"]
 _QUESTION_SEMANTIC_PATTERNS = [
     r"\b(?:why|reason|how|what|which|can you|could you|please explain)\b",
+    r"\bwould\b",
     r"\u4e3a\u4ec0\u4e48",
     r"\u7406\u7531",
     r"\u539f\u56e0",
@@ -135,6 +136,8 @@ def _collect_target_paths(payload: str) -> list[str]:
         or "\u89c1\u65b9" in low
         or "\u8fb9\u957f" in low
         or "side length" in low
+        or re.search(r"\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:each|per)\s*side", low)
+        or re.search(r"\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:cube|box|cuboid)\b", low)
     ):
         out.extend(
             [
@@ -160,8 +163,10 @@ def _collect_target_paths(payload: str) -> list[str]:
             out.append("source.position")
         if re.search(rf"\bat\s*{_VECTOR_LITERAL}", low) and any(keyword in low for keyword in ["source", "beam", "point source", "particle source"]):
             out.append("source.position")
-        if any(keyword in low for keyword in ["direction", "pointing", "\u65b9\u5411"]):
+        if any(keyword in low for keyword in ["direction", "pointing", "toward", "towards", "\u65b9\u5411"]):
             out.append("source.direction")
+    if any(token in low for token in ["root tree", "root format", "root file"]):
+        out.append("output.format")
     return sorted(set(out))
 
 

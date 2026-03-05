@@ -228,6 +228,24 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertIn("source.position_mm", result.stage_trace.get("raw_text_backfill_fields", []))
         self.assertIn("source.direction_vec", result.stage_trace.get("raw_text_backfill_fields", []))
 
+    def test_build_llm_slot_frame_prefers_beam_over_pointing_token(self) -> None:
+        llm_payload = {
+            "intent": "SET",
+            "confidence": 0.8,
+            "normalized_text": "source.particle:gamma",
+            "target_slots": ["source.particle", "source.kind"],
+            "slots": {"source": {"particle": "gamma"}},
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(llm_payload)}):
+            result = build_llm_slot_frame(
+                "Set gamma beam from z- to z+, pointing +z.",
+                context_summary="phase=source",
+                config_path="",
+            )
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.source.kind, "beam")
+
     def test_parse_slot_payload_inferrs_cylinder_kind_from_dimensions(self) -> None:
         payload = {
             "intent": "SET",

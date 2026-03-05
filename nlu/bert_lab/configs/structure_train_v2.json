@@ -1,0 +1,18 @@
+{
+  "model": "distilbert-base-uncased",
+  "epochs": 2,
+  "batch_size": 16,
+  "lr": 3e-05,
+  "max_length": 256,
+  "seed": 42,
+  "eval_split": 0.2,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.1,
+  "save_total_limit": 2,
+  "label_smoothing": 0.05,
+  "unknown_class_boost": 1.4,
+  "gradient_accumulation_steps": 1,
+  "early_stopping_patience": 2,
+  "metric_for_best_model": "macro_f1",
+  "greater_is_better": true
+}

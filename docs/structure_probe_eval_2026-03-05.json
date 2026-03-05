@@ -1,0 +1,45 @@
+{
+  "run_config": {
+    "date": "2026-03-05",
+    "data": "nlu/bert_lab/data/controlled_structure_v2.jsonl",
+    "model_dir": "nlu/bert_lab/models/structure_controlled_v5_e2",
+    "device": "auto",
+    "min_confidence": 0.6,
+    "n_samples": 300,
+    "seed": 42
+  },
+  "summary": {
+    "accuracy": 1.0,
+    "total": 300,
+    "hits": 300,
+    "per_label_accuracy": {
+      "grid": 1.0,
+      "nest": 1.0,
+      "ring": 1.0,
+      "shell": 1.0,
+      "stack": 1.0,
+      "unknown": 1.0
+    }
+  },
+  "confusion": {
+    "grid": {
+      "grid": 55
+    },
+    "nest": {
+      "nest": 67
+    },
+    "ring": {
+      "ring": 55
+    },
+    "shell": {
+      "shell": 47
+    },
+    "stack": {
+      "stack": 58
+    },
+    "unknown": {
+      "unknown": 18
+    }
+  },
+  "failure_examples": []
+}

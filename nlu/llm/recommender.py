@@ -77,24 +77,29 @@ def recommend_physics_list(
         f"Request: {merged_text}\n"
         "JSON:"
     )
+    parsed: dict = {}
     try:
         resp = chat(prompt, config_path=config_path, temperature=0.0)
-        parsed = extract_json(_clean_text(str(resp.get("response", "")))) or {}
+        maybe = extract_json(_clean_text(str(resp.get("response", "")))) or {}
+        if isinstance(maybe, dict):
+            parsed = maybe
     except Exception:
-        return None
-    if not isinstance(parsed, dict):
         parsed = {}
 
     main = _pick_known(parsed.get("physics_list", ""), allowed_lists)
     backup = _pick_known(parsed.get("backup_physics_list", ""), allowed_lists)
+    low = merged_text.lower()
+    em_like = any(k in low for k in ["gamma", "photon", "electromagnetic", "康普顿", "光电", "对产生"])
+    no_hadron = any(k in low for k in ["不涉及强子", "no hadron", "without hadron", "no hadrons"])
+    if em_like and no_hadron and "FTFP_BERT" in allowed_lists:
+        main = "FTFP_BERT"
+        if "QBBC" in allowed_lists:
+            backup = "QBBC"
     if not main:
-        low = merged_text.lower()
-        em_like = any(k in low for k in ["gamma", "photon", "electromagnetic", "康普顿", "光电", "对产生"])
-        no_hadron = any(k in low for k in ["不涉及强子", "no hadron", "without hadron"])
-        if em_like and no_hadron and "QBBC" in allowed_lists:
-            main = "QBBC"
-            if "FTFP_BERT" in allowed_lists:
-                backup = "FTFP_BERT"
+        if em_like and no_hadron and "FTFP_BERT" in allowed_lists:
+            main = "FTFP_BERT"
+            if "QBBC" in allowed_lists:
+                backup = "QBBC"
         elif "FTFP_BERT" in allowed_lists:
             main = "FTFP_BERT"
         elif allowed_lists:

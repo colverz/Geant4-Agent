@@ -303,7 +303,7 @@ def _normalize_inferred_slots(frame: SlotFrame) -> None:
 
 
 def _geometry_box_from_phrase(text: str) -> list[float] | None:
-    low = text.lower().replace("×", "x")
+    low = text.lower().replace("??", "x")
     m = re.search(
         r"([-+]?\d*\.?\d+)\s*(mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)\s*(?:x|by)\s*"
         r"([-+]?\d*\.?\d+)\s*(mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)\s*(?:x|by)\s*"
@@ -328,6 +328,26 @@ def _geometry_box_from_phrase(text: str) -> list[float] | None:
         if not m:
             continue
         side = _coerce_length_mm(f"{m.group(1)} {m.group(2)}")
+        if side is not None:
+            return [side, side, side]
+
+    side_after_patterns = [
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:each|per)\s*side",
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*on\s*each\s*side",
+        r"(?:cube|box|cuboid)\s*(?:with\s*)?([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:side|edge)",
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:cube|box|cuboid)\b",
+        r"([-+]?\d*\.?\d+)\s*mm\^?3\s*(?:each|per)\s*side",
+    ]
+    for pattern in side_after_patterns:
+        m = re.search(pattern, low, flags=re.IGNORECASE)
+        if not m:
+            continue
+        side = _coerce_length_mm(f"{m.group(1)} mm" if "mm\\^?3" in pattern else f"{m.group(1)} {m.group(2)}")
+        if side is not None:
+            return [side, side, side]
+
+    if re.search(r"\b(one|1)\s*(meter|m)\s*(cube|box|cuboid)\b", low):
+        side = _coerce_length_mm("1 m")
         if side is not None:
             return [side, side, side]
     return None
@@ -414,6 +434,8 @@ def _source_direction_from_phrase(text: str) -> list[float] | None:
     patterns = [
         r"(?:direction|pointing)\s*(?:=|:)?\s*(\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\))",
         r"(?:direction|pointing)\s*(?:=|:)?\s*([+-][xyz])",
+        r"(?:toward|towards)\s*(\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\))",
+        r"(?:toward|towards)\s*([+-][xyz])",
         r"along\s*(?:the\s*)?([+-][xyz])(?:\s+direction)?",
     ]
     for pattern in patterns:
@@ -550,9 +572,40 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
 
     if frame.materials.primary is None:
         for alias, canonical in _MATERIAL_ALIASES.items():
-            if alias in low or alias in text:
-                frame.materials.primary = canonical
+            alias_low = alias.lower()
+            if re.search(r"[A-Za-z0-9_]", alias_low):
+                if re.search(rf"(?<![A-Za-z0-9_]){re.escape(alias_low)}(?![A-Za-z0-9_])", low):
+                    frame.materials.primary = canonical
+                    break
+            else:
+                if alias in text:
+                    frame.materials.primary = canonical
+                    break
+
+    if frame.source.kind is None:
+        def _contains_word(token: str) -> bool:
+            return re.search(rf"(?<![A-Za-z0-9_]){re.escape(token)}(?![A-Za-z0-9_])", low) is not None
+
+        if any(token in low for token in ("isotropic", "各向同性")):
+            frame.source.kind = "isotropic"
+        elif _contains_word("beam") or ("束流" in text):
+            frame.source.kind = "beam"
+        elif (_contains_word("point source") or _contains_word("point")) or ("点源" in text):
+            frame.source.kind = "point"
+
+    if frame.source.particle is None:
+        for token, canonical in _PARTICLE_ALIASES.items():
+            if token in low:
+                frame.source.particle = canonical
                 break
+
+    if frame.source.energy_mev is None:
+        m_energy = re.search(r"([-+]?\d*\.?\d+)\s*(mev|gev|kev)", low, flags=re.IGNORECASE)
+        if m_energy:
+            frame.source.energy_mev = _coerce_float(f"{m_energy.group(1)} {m_energy.group(2)}")
+
+    if frame.source.position_mm is None and any(token in low for token in ("center", "centre", "中心", "origin", "原点")):
+        frame.source.position_mm = [0.0, 0.0, 0.0]
 
     if frame.source.position_mm is None:
         position = _source_position_from_phrase(text)

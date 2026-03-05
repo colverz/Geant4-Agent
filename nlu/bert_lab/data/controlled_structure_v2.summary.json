@@ -1,0 +1,20 @@
+{
+  "base_path": "nlu\\bert_lab\\data\\controlled_structure.jsonl",
+  "out_path": "nlu\\bert_lab\\data\\controlled_structure_v2.jsonl",
+  "seed": 42,
+  "keep_original": true,
+  "total_rows": 13804,
+  "label_counts": {
+    "grid": 2640,
+    "nest": 2640,
+    "ring": 2640,
+    "shell": 2640,
+    "stack": 2640,
+    "unknown": 604
+  },
+  "style_counts": {
+    "kv_compact": 4401,
+    "original": 5000,
+    "sentence_compact": 4403
+  }
+}

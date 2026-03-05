@@ -1,0 +1,154 @@
+{
+  "run_config": {
+    "date": "2026-03-05",
+    "models_dir": "nlu\\bert_lab\\models",
+    "probe_json": "docs/structure_probe_eval_2026-03-05.json"
+  },
+  "assessment": {
+    "status": "not_optimal",
+    "best_model": "structure_controlled_v4c_e1",
+    "weighted_score": 1.0,
+    "robustness": 1.0,
+    "generalization_gap": 0.0,
+    "probe_accuracy": 0.92,
+    "recommendations": [
+      "Probe accuracy on noisy normalized text is below 0.95; add slot-style perturbation augmentation for nest/shell.",
+      "Keep LLM-first normalization; train BERT on normalized-text styles instead of free-form text."
+    ]
+  },
+  "audits": [
+    {
+      "name": "structure_controlled_v4c_e1",
+      "in_dist_acc": 1.0,
+      "hard_acc": 1.0,
+      "realnorm_acc": 1.0,
+      "eval_acc": 1.0,
+      "weighted_score": 1.0,
+      "robustness": 1.0,
+      "generalization_gap": 0.0,
+      "training_args": {
+        "learning_rate": 5e-05,
+        "per_device_train_batch_size": 16,
+        "num_train_epochs": 1,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "max_steps": -1,
+        "seed": 37,
+        "gradient_accumulation_steps": 1
+      }
+    },
+    {
+      "name": "structure_controlled_v3_e1",
+      "in_dist_acc": 1.0,
+      "hard_acc": 0.83375,
+      "realnorm_acc": 0.9111111111111111,
+      "eval_acc": 1.0,
+      "weighted_score": 0.8851875,
+      "robustness": 0.83375,
+      "generalization_gap": 0.1275694444444444,
+      "training_args": {
+        "learning_rate": 5e-05,
+        "per_device_train_batch_size": 16,
+        "num_train_epochs": 1,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "max_steps": -1,
+        "seed": 37,
+        "gradient_accumulation_steps": 1
+      }
+    },
+    {
+      "name": "structure_controlled_v4_e1",
+      "in_dist_acc": 1.0,
+      "hard_acc": 0.66,
+      "realnorm_acc": 1.0,
+      "eval_acc": 1.0,
+      "weighted_score": 0.8470000000000001,
+      "robustness": 0.66,
+      "generalization_gap": 0.16999999999999993,
+      "training_args": {
+        "learning_rate": 5e-05,
+        "per_device_train_batch_size": 16,
+        "num_train_epochs": 1,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "max_steps": -1,
+        "seed": 37,
+        "gradient_accumulation_steps": 1
+      }
+    },
+    {
+      "name": "structure_controlled_v2_e1",
+      "in_dist_acc": 0.8404166666666667,
+      "hard_acc": 0.85,
+      "realnorm_acc": 0.68,
+      "eval_acc": 1.0,
+      "weighted_score": 0.7725416666666667,
+      "robustness": 0.68,
+      "generalization_gap": 0.07541666666666669,
+      "training_args": {
+        "learning_rate": 5e-05,
+        "per_device_train_batch_size": 16,
+        "num_train_epochs": 1,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "max_steps": -1,
+        "seed": 37,
+        "gradient_accumulation_steps": 1
+      }
+    },
+    {
+      "name": "structure_controlled_v4b_e1",
+      "in_dist_acc": 1.0,
+      "hard_acc": 0.66,
+      "realnorm_acc": null,
+      "eval_acc": 1.0,
+      "weighted_score": 0.7218181818181819,
+      "robustness": 0.66,
+      "generalization_gap": 0.33999999999999997,
+      "training_args": {
+        "learning_rate": 5e-05,
+        "per_device_train_batch_size": 16,
+        "num_train_epochs": 1,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "max_steps": -1,
+        "seed": 37,
+        "gradient_accumulation_steps": 1
+      }
+    },
+    {
+      "name": "structure_controlled_smoke",
+      "in_dist_acc": 0.51625,
+      "hard_acc": 0.6,
+      "realnorm_acc": 0.51,
+      "eval_acc": 0.527363184079602,
+      "weighted_score": 0.5511250000000001,
+      "robustness": 0.51,
+      "generalization_gap": -0.03874999999999995,
+      "training_args": {
+        "learning_rate": 5e-05,
+        "per_device_train_batch_size": 16,
+        "num_train_epochs": 1,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "max_steps": 10,
+        "seed": 7,
+        "gradient_accumulation_steps": 1
+      }
+    }
+  ],
+  "probe_summary": {
+    "accuracy": 0.92,
+    "total": 300,
+    "hits": 276,
+    "per_label_accuracy": {
+      "grid": 1.0,
+      "nest": 0.8507462686567164,
+      "ring": 1.0,
+      "shell": 0.7021276595744681,
+      "stack": 1.0,
+      "unknown": 1.0
+    }
+  }
+}

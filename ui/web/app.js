@@ -32,6 +32,7 @@ const i18n = {
     summary: "摘要",
     config_json: "配置 JSON",
     process_title: "过程面板",
+    internal_trace_title: "内部迭代链（程序↔LLM）",
     footer: "本地运行，不依赖外部前端服务。",
     runtime_ready: "模型检查通过：structure/ner 目录完整。",
     runtime_not_ready: "模型检查未通过：",
@@ -74,6 +75,7 @@ const i18n = {
     summary: "Summary",
     config_json: "Config JSON",
     process_title: "Process Panel",
+    internal_trace_title: "Internal Iteration Chain (Program↔LLM)",
     footer: "Local-only: no external UI dependencies.",
     runtime_ready: "Model preflight passed: structure/ner assets are available.",
     runtime_not_ready: "Model preflight failed:",
@@ -185,6 +187,11 @@ function summarizeProcess(proc) {
   ].join("\n");
 }
 
+function summarizeInternalTrace(trace) {
+  if (!trace) return "";
+  return JSON.stringify(trace, null, 2);
+}
+
 async function loadRuntimeConfigs() {
   const sel = $("model-config-select");
   if (!sel) return;
@@ -282,10 +289,12 @@ async function sendStep() {
     rejected_updates: data.rejected_updates || [],
     violations: data.violations || [],
     applied_rules: data.applied_rules || [],
+    internal_trace: data.internal_trace || null,
   };
   $("summary").textContent = summarizeConfig(data.config);
   $("response").textContent = JSON.stringify(data.config || {}, null, 2);
   $("process-log").textContent = summarizeProcess(state.lastProcess);
+  $("internal-trace").textContent = summarizeInternalTrace(state.lastProcess.internal_trace);
 }
 
 async function resetSession() {
@@ -302,6 +311,7 @@ async function resetSession() {
   $("summary").textContent = "";
   $("response").textContent = "";
   $("process-log").textContent = "";
+  $("internal-trace").textContent = "";
   state.lastProcess = null;
 }
 

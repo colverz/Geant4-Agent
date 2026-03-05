@@ -123,23 +123,20 @@ def _infer_output_format(text: str) -> str | None:
 
 def _infer_source_type(text: str) -> str | None:
     low = text.lower()
-    if any(
-        k in low
-        for k in [
-            "point source",
-            "point",
-            "\u70b9\u6e90",
-            "\u70b9\u72b6\u6e90",
-            "\u70b9\u675f",
-        ]
-    ):
-        return "point"
-    if any(k in low for k in ["beam", "\u675f\u6d41", "\u7c92\u5b50\u675f"]):
-        return "beam"
+    def _contains_word(token: str) -> bool:
+        return re.search(rf"(?<![A-Za-z0-9_]){re.escape(token)}(?![A-Za-z0-9_])", low) is not None
+
     if any(k in low for k in ["isotropic", "\u5404\u5411\u540c\u6027"]):
         return "isotropic"
-    if any(k in low for k in ["plane source", "plane", "\u9762\u6e90"]):
+    if any(_contains_word(k) for k in ["beam"]) or any(k in low for k in ["\u675f\u6d41", "\u7c92\u5b50\u675f"]):
+        return "beam"
+    if any(_contains_word(k) for k in ["plane source", "plane"]) or "\u9762\u6e90" in text:
         return "plane"
+    if (
+        any(_contains_word(k) for k in ["point source", "point"])
+        or any(k in text for k in ["\u70b9\u6e90", "\u70b9\u72b6\u6e90", "\u70b9\u675f"])
+    ):
+        return "point"
     return None
 
 

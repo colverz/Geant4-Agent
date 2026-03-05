@@ -18,7 +18,6 @@ _SHARED_REQUIRED = [
     "source.particle",
     "source.energy",
     "source.position",
-    "source.direction",
     "physics.physics_list",
     "output.format",
     "output.path",
@@ -37,7 +36,22 @@ def _geometry_required_paths(config: dict | None = None) -> list[str]:
 
 
 def get_minimal_required_paths(config: dict | None = None) -> list[str]:
-    return _geometry_required_paths(config) + list(_SHARED_REQUIRED)
+    source_required = [
+        "source.type",
+        "source.particle",
+        "source.energy",
+        "source.position",
+    ]
+    source_type = str(get_path(config or {}, "source.type", "") or "").lower()
+    if source_type in {"point", "beam", "plane", ""}:
+        source_required.append("source.direction")
+    return _geometry_required_paths(config) + [
+        "materials.volume_material_map",
+        *source_required,
+        "physics.physics_list",
+        "output.format",
+        "output.path",
+    ]
 
 
 def get_local_required_paths(phase: Phase, *, config: dict | None = None) -> list[str]:
@@ -46,13 +60,16 @@ def get_local_required_paths(phase: Phase, *, config: dict | None = None) -> lis
     if phase == Phase.MATERIALS:
         return ["materials.volume_material_map"]
     if phase == Phase.SOURCE:
-        return [
+        required = [
             "source.type",
             "source.particle",
             "source.energy",
             "source.position",
-            "source.direction",
         ]
+        source_type = str(get_path(config or {}, "source.type", "") or "").lower()
+        if source_type in {"point", "beam", "plane", ""}:
+            required.append("source.direction")
+        return required
     if phase == Phase.PHYSICS:
         return ["physics.physics_list"]
     if phase == Phase.OUTPUT:

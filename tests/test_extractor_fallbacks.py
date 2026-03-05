@@ -31,6 +31,10 @@ class ExtractorFallbacksTest(unittest.TestCase):
         self.assertEqual(_infer_source_type("\u5404\u5411\u540c\u6027\u6e90"), "isotropic")
         self.assertEqual(_infer_source_type("\u9762\u6e90"), "plane")
 
+    def test_infer_source_type_avoids_pointing_false_positive(self) -> None:
+        self.assertEqual(_infer_source_type("gamma beam pointing +z"), "beam")
+        self.assertIsNone(_infer_source_type("direction pointing +z for gamma"))
+
     def test_direction_and_position_shorthand(self) -> None:
         self.assertEqual(_parse_direction_shorthand("\u6cbf +z \u65b9\u5411"), {"type": "vector", "value": [0.0, 0.0, 1.0]})
         self.assertEqual(_parse_position_shorthand("\u6e90\u653e\u5728\u4e2d\u5fc3"), {"type": "vector", "value": [0.0, 0.0, 0.0]})

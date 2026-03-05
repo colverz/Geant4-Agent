@@ -153,7 +153,13 @@ def _apply_explicit_user_controls(
         intent = Intent.SET
     elif user_candidate.intent == Intent.OTHER:
         intent = explicit_intent
-    target_paths = explicit_targets or list(user_candidate.target_paths)
+    existing_targets = [str(path) for path in user_candidate.target_paths if isinstance(path, str) and path]
+    if explicit_targets:
+        # Keep explicit detections while preserving high-confidence slot paths,
+        # otherwise we may accidentally drop extracted geometry/source slots.
+        target_paths = sorted(set(explicit_targets) | set(existing_targets))
+    else:
+        target_paths = list(existing_targets)
     if intent == user_candidate.intent and target_paths == list(user_candidate.target_paths):
         return user_candidate
     return CandidateUpdate(
@@ -323,6 +329,10 @@ def _match_choice(text: str, options: list[str]) -> str | None:
     return None
 
 
+def _has_explicit_physics_choice(text: str, options: list[str]) -> bool:
+    return _match_choice(text, options) is not None
+
+
 def _build_forced_explicit_candidate(
     *,
     text: str,
@@ -333,18 +343,19 @@ def _build_forced_explicit_candidate(
     merged = f"{text} ; {normalized_text}".strip(" ;")
     updates: list[UpdateOp] = []
 
+    physics_choice = _match_choice(merged, KNOWLEDGE["physics_lists"])
     should_try_physics = (
         user_candidate.intent in {Intent.SET, Intent.MODIFY}
         or "physics.physics_list" in user_candidate.target_paths
+        or (physics_choice is not None and user_candidate.intent not in {Intent.CONFIRM, Intent.REMOVE})
     )
     if should_try_physics:
-        physics_list = _match_choice(merged, KNOWLEDGE["physics_lists"])
-        if physics_list:
+        if physics_choice:
             updates.append(
                 UpdateOp(
                     path="physics.physics_list",
                     op="set",
-                    value=physics_list,
+                    value=physics_choice,
                     producer=Producer.USER_EXPLICIT,
                     confidence=1.0,
                     turn_id=turn_id,
@@ -352,12 +363,13 @@ def _build_forced_explicit_candidate(
             )
 
     output_formats = ["root", "csv", "hdf5", "xml", "json"]
+    output_fmt = _match_choice(merged, output_formats)
     should_try_output = (
         user_candidate.intent in {Intent.SET, Intent.MODIFY}
         or "output.format" in user_candidate.target_paths
+        or (output_fmt is not None and user_candidate.intent not in {Intent.CONFIRM, Intent.REMOVE})
     )
     if should_try_output:
-        output_fmt = _match_choice(merged, output_formats)
         if output_fmt:
             updates.append(
                 UpdateOp(
@@ -570,7 +582,9 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
     if forced_explicit is not None:
         candidates.append(forced_explicit)
 
-    allow_recommender = "physics.physics_list" not in set(user_candidate.target_paths)
+    merged_user_text = f"{text} ; {normalized_text}"
+    has_explicit_physics = _has_explicit_physics_choice(merged_user_text, KNOWLEDGE["physics_lists"])
+    allow_recommender = not has_explicit_physics
     reco_candidate = recommend_physics_list(
         text,
         normalized_text,
@@ -760,6 +774,39 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
     state.last_dialogue_action = dialogue_decision.action.value
     state.history.append({"role": "assistant", "content": question})
     raw_dialogue = build_raw_dialogue(state.history)
+    internal_trace = {
+        "nlu": {
+            "llm_used": llm_used,
+            "fallback_reason": fallback_reason,
+            "inference_backend": debug.get("inference_backend", "orchestrated"),
+            "normalization": normalization_payload,
+            "slot_debug": slot_debug,
+            "llm_stage_failures": list(llm_stage_failures),
+            "llm_schema_errors": list(llm_schema_errors),
+            "llm_raw_preview": str(llm_raw or "")[:2000],
+        },
+        "arbitration": {
+            "candidate_count": len(candidates),
+            "accepted_update_count": len(committed_updates),
+            "rejected_update_count": len(rejected_updates),
+            "pending_overwrite_count": len(staged_pending_overwrite),
+            "applied_rules": list(applied_rules),
+        },
+        "validation": {
+            "is_complete": is_complete,
+            "missing_fields": list(final_report.missing_required_paths),
+            "violations": list(report.errors),
+            "warnings": list(report.warnings),
+        },
+        "dialogue": {
+            "action": dialogue_decision.action.value,
+            "asked_fields": list(asked_fields),
+            "asked_fields_friendly": list(asked_fields_friendly),
+            "answered_this_turn": list(answered_this_turn),
+            "summary": dialogue_summary,
+            "trace": dialogue_trace,
+        },
+    }
 
     return {
         "session_id": state.session_id,
@@ -799,6 +846,7 @@ def process_turn(payload: dict, *, ollama_config_path: str, min_confidence: floa
         "warnings": report.warnings,
         "graph_candidates": debug.get("graph_candidates", []),
         "inference_backend": debug.get("inference_backend", "orchestrated"),
+        "internal_trace": internal_trace,
         "history": state.history[-10:],
         "audit_size": len(state.audit_trail),
     }
