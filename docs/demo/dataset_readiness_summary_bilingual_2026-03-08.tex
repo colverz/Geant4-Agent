@@ -1,0 +1,80 @@
+\documentclass[11pt,a4paper]{ctexart}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\setlist[itemize]{nosep,leftmargin=1.5em}
+\setlist[enumerate]{nosep,leftmargin=1.8em}
+\title{Dataset Readiness Summary\\??????????}
+\author{}
+\date{2026-03-08}
+\begin{document}
+\maketitle
+\section*{English}
+\subsection*{1. Summary Table}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.31\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedleft\arraybackslash}p{0.10\linewidth}>{\raggedright\arraybackslash}p{0.14\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}}
+\toprule
+Dataset & Latest Result & Pass Rate & Readiness & Recommended Use \\
+\midrule
+\path{eval_casebank_v1_20.json} & 2026-03-05\_234917 & 1.0000 & Demo-ready & Small static baseline \\
+\path{eval_casebank_missing_multiturn_v1_10.json} & 2026-03-06\_124519 & 1.0000 & Demo-ready & Missing-parameter closure demo \\
+\path{eval_casebank_v2_50.json} & 2026-03-06\_134702 & 0.9200 & Internal-only & Broad regression bank \\
+\path{eval_casebank_multiturn_live_v2_12.json} & 2026-03-07\_145107 & 1.0000 & Demo-ready & Compact live multi-turn demo \\
+\path{eval_casebank_multiturn_live_v3_24.json} & 2026-03-08\_001313 & 1.0000 & Primary demo baseline & Main external baseline \\
+\path{eval_casebank_multiturn_live_v4_24_colloquial_materials.json} & 2026-03-08\_102153 & 0.8333 & Stress-only & Colloquial material appendix \\
+\bottomrule
+\end{longtable}
+
+\subsection*{2. Recommendation}
+Use these externally without caveat:
+\begin{itemize}
+\item \path{docs/datasets/casebank/eval_casebank_v1_20.json}
+\item \path{docs/datasets/casebank/eval_casebank_missing_multiturn_v1_10.json}
+\item \path{docs/datasets/casebank/eval_casebank_multiturn_live_v2_12.json}
+\item \path{docs/datasets/casebank/eval_casebank_multiturn_live_v3_24.json}
+\end{itemize}
+Treat the following separately:
+\begin{itemize}
+\item \path{docs/datasets/casebank/eval_casebank_v2_50.json}: engineering regression set
+\item \path{docs/datasets/casebank/eval_casebank_multiturn_live_v4_24_colloquial_materials.json}: robustness stress set
+\end{itemize}
+
+\subsection*{3. Next Promotion Target}
+The next dataset to promote is \texttt{v4\_24 colloquial materials}. It should be moved to demo-ready only after the remaining four failures are removed and the live regression reaches the same reliability band as \texttt{v3\_24}.
+
+\newpage
+\section*{??}
+\subsection*{1. ??}
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.31\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedleft\arraybackslash}p{0.10\linewidth}>{\raggedright\arraybackslash}p{0.14\linewidth}>{\raggedright\arraybackslash}p{0.18\linewidth}}
+\toprule
+??? & ???? & ??? & ??? & ???? \\
+\midrule
+\path{eval_casebank_v1_20.json} & 2026-03-05\_234917 & 1.0000 & ??? & ?????? \\
+\path{eval_casebank_missing_multiturn_v1_10.json} & 2026-03-06\_124519 & 1.0000 & ??? & ?????? \\
+\path{eval_casebank_v2_50.json} & 2026-03-06\_134702 & 0.9200 & ??? & ???????? \\
+\path{eval_casebank_multiturn_live_v2_12.json} & 2026-03-07\_145107 & 1.0000 & ??? & ????? live ?? \\
+\path{eval_casebank_multiturn_live_v3_24.json} & 2026-03-08\_001313 & 1.0000 & ??? & ???????? \\
+\path{eval_casebank_multiturn_live_v4_24_colloquial_materials.json} & 2026-03-08\_102153 & 0.8333 & ???? & ?????????? \\
+\bottomrule
+\end{longtable}
+
+\subsection*{2. ??}
+????????????????????
+\begin{itemize}
+\item \path{docs/datasets/casebank/eval_casebank_v1_20.json}
+\item \path{docs/datasets/casebank/eval_casebank_missing_multiturn_v1_10.json}
+\item \path{docs/datasets/casebank/eval_casebank_multiturn_live_v2_12.json}
+\item \path{docs/datasets/casebank/eval_casebank_multiturn_live_v3_24.json}
+\end{itemize}
+???????????
+\begin{itemize}
+\item \path{docs/datasets/casebank/eval_casebank_v2_50.json}??????
+\item \path{docs/datasets/casebank/eval_casebank_multiturn_live_v4_24_colloquial_materials.json}???????
+\end{itemize}
+
+\subsection*{3. ???????}
+???????????? \texttt{v4\_24 colloquial materials}?????? 4 ????????????? live ????? \texttt{v3\_24} ???????????????????????
+\end{document}
