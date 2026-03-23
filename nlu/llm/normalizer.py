@@ -1,11 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from typing import Any
 
 from core.orchestrator.types import Intent
-from nlu.bert_lab.llm_bridge import build_normalization_prompt
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.llm_bridge import build_normalization_prompt
+from nlu.llm_support.ollama_client import chat, extract_json
 from nlu.uncertainty import has_uncertainty_signal, infer_unresolved_targets
 
 
@@ -59,7 +59,7 @@ _TARGET_HINTS = {
     "source.type": ["source type", "point", "beam", "isotropic", "\u70b9\u6e90", "\u675f\u6d41"],
     "source.particle": ["gamma", "electron", "proton", "particle", "\u7c92\u5b50"],
     "source.energy": ["mev", "gev", "kev", "\u80fd\u91cf"],
-    "source.position": ["position", "origin", "center", "\u4f4d\u7f6e", "\u539f\u70b9", "\u4e2d\u5fc3"],
+    "source.position": ["position", "origin", "center", "from", "\u4f4d\u7f6e", "\u539f\u70b9", "\u4e2d\u5fc3"],
     "source.direction": ["direction", "+z", "-z", "+x", "-x", "+y", "-y", "\u65b9\u5411"],
     "physics.physics_list": ["physics list", "\u7269\u7406\u5217\u8868", "ftfp", "qgsp", "qbbc", "shielding"],
     "output.format": ["output format", "root", "json", "csv", "xml", "hdf5", "h5", "\u8f93\u51fa\u683c\u5f0f"],
@@ -224,7 +224,7 @@ def _collect_target_paths(payload: str) -> list[str]:
     if re.search(_VECTOR_LITERAL, low):
         if any(keyword in low for keyword in ["position", "origin", "center", "\u4f4d\u7f6e", "\u539f\u70b9", "\u4e2d\u5fc3"]):
             out.append("source.position")
-        if re.search(rf"(?:located|source\s+at|beam\s+at)\s*{_VECTOR_LITERAL}", low):
+        if re.search(rf"(?:located|source\s+at|beam\s+at|source\s+from|beam\s+from|from)\s*{_VECTOR_LITERAL}", low):
             out.append("source.position")
         if re.search(rf"\bat\s*{_VECTOR_LITERAL}", low) and any(keyword in low for keyword in ["source", "beam", "point source", "particle source"]):
             out.append("source.position")
@@ -384,3 +384,4 @@ def normalize_user_turn(
         "structure_hint": structure_hint,
         "confidence": confidence,
     }
+

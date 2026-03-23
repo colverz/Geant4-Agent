@@ -21,11 +21,56 @@ def _render_update_status(decision: DialogueDecision, *, lang: str) -> str:
     )
 
 
+_STRUCTURE_VALUE_LABELS = {
+    "single_box": {"en": "box", "zh": "盒体"},
+    "single_tubs": {"en": "cylinder", "zh": "圆柱体"},
+    "single_sphere": {"en": "sphere", "zh": "球体"},
+    "single_orb": {"en": "orb", "zh": "球体"},
+    "single_cons": {"en": "truncated cone", "zh": "圆台"},
+    "single_trd": {"en": "trapezoid solid", "zh": "梯形体"},
+    "single_polycone": {"en": "polycone", "zh": "多段圆锥"},
+    "single_cuttubs": {"en": "cut cylinder", "zh": "切割圆柱"},
+    "single_trap": {"en": "trap solid", "zh": "斜梯体"},
+    "single_para": {"en": "parallelepiped", "zh": "平行六面体"},
+    "single_torus": {"en": "torus", "zh": "圆环体"},
+    "single_ellipsoid": {"en": "ellipsoid", "zh": "椭球体"},
+    "single_elltube": {"en": "elliptical tube", "zh": "椭圆管"},
+    "single_polyhedra": {"en": "polyhedra", "zh": "多面体"},
+    "ring": {"en": "ring layout", "zh": "环形布局"},
+    "grid": {"en": "grid layout", "zh": "网格布局"},
+    "nest": {"en": "nested layout", "zh": "嵌套布局"},
+    "stack": {"en": "stacked layout", "zh": "堆叠布局"},
+    "shell": {"en": "shell layout", "zh": "壳层布局"},
+    "boolean": {"en": "boolean solid", "zh": "布尔体"},
+    "unknown": {"en": "unspecified", "zh": "未指定"},
+}
+
+
+def _humanize_preview_value(path: str, value: object, *, lang: str) -> str:
+    if path == "geometry.graph_program":
+        return "updated geometry program" if lang != "zh" else "已更新几何程序"
+    if path == "geometry.structure":
+        key = str(value or "").strip()
+        labels = _STRUCTURE_VALUE_LABELS.get(key)
+        if labels:
+            return labels[lang]
+    if path == "materials.selected_materials" and isinstance(value, list):
+        return ", ".join(str(x) for x in value)
+    if isinstance(value, dict):
+        return "updated setting" if lang != "zh" else "已更新设置"
+    return str(value)
+
+
 def _format_preview_item(item: dict, *, lang: str) -> str:
     path = str(item.get("path", "")).strip()
-    field = str(item.get("field") or (friendly_label(path, lang) if path else "")).strip()
-    old_value = item.get("old")
-    new_value = item.get("new")
+    if path == "geometry.graph_program":
+        field = "geometry program" if lang != "zh" else "几何程序"
+    elif path == "geometry.structure":
+        field = "geometry type" if lang != "zh" else "几何类型"
+    else:
+        field = str(item.get("field") or (friendly_label(path, lang) if path else "")).strip()
+    old_value = _humanize_preview_value(path, item.get("old"), lang=lang)
+    new_value = _humanize_preview_value(path, item.get("new"), lang=lang)
     if lang == "zh":
         return f"{field}：{old_value} -> {new_value}"
     return f"{field}: {old_value} -> {new_value}"
@@ -91,7 +136,7 @@ def _render_structured_clarification(paths: list[str], *, lang: str) -> str:
         return missing_field_question(paths[0], lang)
     questions = [missing_field_question(path, lang) for path in paths[:2]]
     if lang == "zh":
-        return "还需要补充两项信息。 " + " ".join(questions)
+        return "我还需要两项信息。 " + " ".join(questions)
     return "I still need two details. " + " ".join(questions)
 
 
@@ -132,7 +177,8 @@ def render_dialogue_message(
         )
 
     if decision.action == DialogueAction.FINALIZE:
-        confirmed = list((dialogue_summary or {}).get("recent_confirmed", []) or [])
+        summary = dialogue_summary or {}
+        confirmed = list(summary.get("updated_fields") or summary.get("answered_fields") or summary.get("recent_confirmed", []) or [])
         return _maybe_naturalize(render_finalize_template(lang=lang, confirmed_items=confirmed) or completion_message(lang))
     if decision.action == DialogueAction.CONFIRM_OVERWRITE:
         return _maybe_naturalize(_render_overwrite_confirmation(decision, lang=lang))
@@ -162,12 +208,12 @@ def render_dialogue_message(
         if lang == "zh":
             parts: list[str] = []
             if updated:
-                parts.append(f"本轮已同步：{', '.join(updated)}。")
+                parts.append(f"本轮已更新：{', '.join(updated)}。")
             if recent:
                 parts.append(f"当前已确认：{', '.join(recent[:3])}。")
             if pending:
                 parts.append(f"仍需补充：{', '.join(pending[:2])}。")
-            return _maybe_naturalize("".join(parts) or "当前配置正在收敛。")
+            return _maybe_naturalize("".join(parts) or "配置正在收敛。")
         parts = []
         if updated:
             parts.append(f"Updated this turn: {', '.join(updated)}.")

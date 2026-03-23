@@ -10,6 +10,7 @@ from builder.geometry.synthesize import synthesize_from_params
 
 
 SKELETON_SUMMARY: Dict[str, str] = {
+    "nest_box_box": "nest",
     "nest_box_tubs": "nest",
     "grid_modules": "grid",
     "ring_modules": "ring",
@@ -36,11 +37,11 @@ SKELETON_SUMMARY: Dict[str, str] = {
 }
 
 KEYWORD_CUES: Dict[str, Tuple[str, ...]] = {
-    "ring": ("ring", "circular", "annulus", "circle", "radius", "环", "环形", "圆环"),
-    "grid": ("grid", "array", "matrix", "pitch", "nx", "ny", "阵列", "二维阵列", "探测板"),
-    "nest": ("nest", "inside", "contains", "contain", "inner", "outer", "嵌套", "内嵌", "盒子里", "外盒"),
-    "stack": ("stack", "layer", "layers", "along z", "stacked", "sandwich", "堆叠", "层", "夹层"),
-    "shell": ("shell", "concentric", "thickness", "coaxial", "壳", "屏蔽壳", "同心"),
+    "ring": ("ring", "circular", "annulus", "circle", "环", "环形", "圆环", "围成一圈", "一圈"),
+    "grid": ("grid", "array", "matrix", "pitch", "nx", "ny", "阵列", "二维阵列", "探测板", "网格", "排布"),
+    "nest": ("nest", "inside", "contains", "contain", "inner", "outer", "嵌套", "内嵌", "盒子里", "外盒", "外盒体", "内盒体", "包住", "包裹"),
+    "stack": ("stack", "layer", "layers", "along z", "stacked", "sandwich", "堆叠", "层", "夹层", "沿 z 方向", "沿z方向", "层厚"),
+    "shell": ("shell", "concentric", "thickness", "coaxial", "壳", "屏蔽壳", "同心", "屏蔽层", "多层壳", "外壳"),
     "single_box": ("single_box", "box", "cube", "cuboid"),
     "single_tubs": ("single_tubs", "tubs", "cylinder", "tube"),
     "single_sphere": ("single_sphere", "sphere", "ball"),
@@ -68,13 +69,16 @@ KEYWORD_CUES: Dict[str, Tuple[str, ...]] = {
         "cut out",
         "减去",
         "差集",
+        "并",
+        "并集",
+        "合并",
         "挖空",
         "开孔",
     ),
 }
 
 BOOLEAN_OP_CUES: Dict[str, Tuple[str, ...]] = {
-    "boolean_union_boxes": ("union", "combine", "merge", "并", "合并"),
+    "boolean_union_boxes": ("union", "combine", "merge", "并", "并集", "合并"),
     "boolean_subtraction_boxes": (
         "subtraction",
         "subtract",
@@ -144,6 +148,78 @@ def _cue_score(text: str, structure: str) -> float:
         if re.search(rf"(?<![a-z0-9_]){re.escape(needle)}(?![a-z0-9_])", t):
             score += 0.32
     return score
+
+
+def _graph_family_cue(text: str) -> str:
+    scored = {
+        summary: _cue_score(text, summary)
+        for summary in ("boolean", "ring", "grid", "stack", "shell", "nest")
+    }
+    best_summary = ""
+    best_score = 0.0
+    for summary, score in scored.items():
+        if score > best_score:
+            best_summary = summary
+            best_score = score
+    return best_summary
+
+
+def _param_signature_hint(params: Dict[str, float]) -> str:
+    has_module_triplet = all(key in params for key in ("module_x", "module_y", "module_z"))
+    has_parent_triplet = all(key in params for key in ("parent_x", "parent_y", "parent_z"))
+    has_child_triplet = all(key in params for key in ("child_x", "child_y", "child_z"))
+    has_bool_triplet = all(key in params for key in ("bool_a_x", "bool_a_y", "bool_a_z", "bool_b_x", "bool_b_y", "bool_b_z"))
+    has_shell = all(key in params for key in ("inner_r", "th1", "th2"))
+    has_stack = all(key in params for key in ("stack_x", "stack_y", "t1", "t2"))
+    has_ring = has_module_triplet and all(key in params for key in ("n", "radius"))
+    maybe_ring = has_module_triplet and "radius" in params
+    has_grid = has_module_triplet and all(key in params for key in ("nx", "ny"))
+    has_nest = has_parent_triplet and (has_child_triplet or all(key in params for key in ("child_rmax", "child_hz")))
+
+    if has_bool_triplet:
+        return "boolean"
+    if has_grid:
+        return "grid"
+    if has_stack:
+        return "stack"
+    if has_ring:
+        return "ring"
+    if has_nest:
+        return "nest"
+    if has_shell:
+        return "shell"
+    if maybe_ring:
+        return "ring"
+    return ""
+
+
+def _graph_lock_hint(text: str, params: Dict[str, float]) -> str:
+    low = text.lower()
+    has_module_triplet = all(key in params for key in ("module_x", "module_y", "module_z"))
+    has_parent_triplet = all(key in params for key in ("parent_x", "parent_y", "parent_z"))
+    has_child_triplet = all(key in params for key in ("child_x", "child_y", "child_z"))
+    has_tubs_child = all(key in params for key in ("child_rmax", "child_hz"))
+    has_bool_triplet = all(key in params for key in ("bool_a_x", "bool_a_y", "bool_a_z", "bool_b_x", "bool_b_y", "bool_b_z"))
+    has_shell = all(key in params for key in ("inner_r", "th1", "th2", "hz"))
+    has_stack = all(key in params for key in ("stack_x", "stack_y", "t1", "t2"))
+    has_grid = has_module_triplet and all(key in params for key in ("nx", "ny", "pitch_x", "pitch_y"))
+    has_ring = has_module_triplet and "radius" in params and ("n" in params or any(token in low for token in ("ring", "annulus", "circular", "pet", "环", "圆环")))
+    has_nest = has_parent_triplet and (has_child_triplet or has_tubs_child)
+    has_boolean = has_bool_triplet and any(token in low for token in KEYWORD_CUES.get("boolean", ()))
+
+    if has_boolean:
+        return "boolean"
+    if has_stack:
+        return "stack"
+    if has_grid:
+        return "grid"
+    if has_nest:
+        return "nest"
+    if has_shell:
+        return "shell"
+    if has_ring:
+        return "ring"
+    return ""
 
 
 def _explicit_structure_hint(text: str) -> str:
@@ -219,7 +295,49 @@ def _score_candidate(
         elif any_boolean_op:
             boolean_op_term = -0.10
 
-    total = 2.1 * coverage + cue + feasible_term + missing_term + error_term + hint_term + prior_term + boolean_op_term
+    graph_bias = 0.0
+    graph_cue = _graph_family_cue(text)
+    if graph_cue:
+        if candidate.summary == graph_cue:
+            graph_bias += 0.95
+        elif candidate.summary.startswith("single_"):
+            graph_bias -= 0.85
+        elif candidate.summary in GRAPH_SUMMARIES and candidate.summary != graph_cue:
+            graph_bias -= 0.12
+
+    signature_bias = 0.0
+    signature_hint = _param_signature_hint(params)
+    if signature_hint:
+        if candidate.summary == signature_hint:
+            signature_bias += 1.35
+        elif candidate.summary.startswith("single_"):
+            signature_bias -= 0.95
+        elif candidate.summary in GRAPH_SUMMARIES and candidate.summary != signature_hint:
+            signature_bias -= 0.18
+
+    graph_lock_bias = 0.0
+    graph_lock_hint = _graph_lock_hint(text, params)
+    if graph_lock_hint:
+        if candidate.summary == graph_lock_hint:
+            graph_lock_bias += 2.1
+        elif candidate.summary.startswith("single_"):
+            graph_lock_bias -= 1.6
+        elif candidate.summary in GRAPH_SUMMARIES and candidate.summary != graph_lock_hint:
+            graph_lock_bias -= 0.35
+
+    total = (
+        2.1 * coverage
+        + cue
+        + feasible_term
+        + missing_term
+        + error_term
+        + hint_term
+        + prior_term
+        + boolean_op_term
+        + graph_bias
+        + signature_bias
+        + graph_lock_bias
+    )
     return total, {
         "coverage": 2.1 * coverage,
         "cue": cue,
@@ -229,6 +347,9 @@ def _score_candidate(
         "hint": hint_term,
         "structure_prior": prior_term,
         "boolean_op": boolean_op_term,
+        "graph_bias": graph_bias,
+        "signature_bias": signature_bias,
+        "graph_lock_bias": graph_lock_bias,
         "total": total,
     }
 
@@ -248,9 +369,13 @@ def search_candidate_graphs(
     explicit_hint = _explicit_structure_hint(text)
     if explicit_hint:
         notes.append(f"explicit_structure_hint:{explicit_hint}")
+    graph_lock_hint = _graph_lock_hint(text, params)
+    if graph_lock_hint:
+        notes.append(f"graph_lock_hint:{graph_lock_hint}")
 
     structures = [s.name for s in SKELETONS]
     core_skeletons = {
+        "nest_box_box",
         "nest_box_tubs",
         "grid_modules",
         "ring_modules",
@@ -329,6 +454,10 @@ def search_candidate_graphs(
         chosen = "unknown"
     if best_label == "unknown":
         chosen = "unknown"
+    if graph_lock_hint and chosen.startswith("single_"):
+        locked_prob = probs.get(graph_lock_hint, 0.0)
+        if locked_prob >= 0.12:
+            chosen = graph_lock_hint
 
     scores = dict(probs)
     scores["best_prob"] = float(best_prob)

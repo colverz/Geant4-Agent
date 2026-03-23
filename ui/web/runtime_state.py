@@ -1,16 +1,16 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from pathlib import Path
 from typing import Any
 
-from nlu.bert_lab.ollama_client import load_config
+from nlu.llm_support.ollama_client import load_config
 from nlu.runtime_components.model_preflight import runtime_model_readiness
 
 
 ROOT = Path(__file__).parent
-OLLAMA_CONFIG_DIR = ROOT.parent.parent / "nlu" / "bert_lab" / "configs"
-CURRENT_OLLAMA_CONFIG = os.getenv("OLLAMA_CONFIG_PATH", "nlu/bert_lab/configs/ollama_config.json")
+OLLAMA_CONFIG_DIR = ROOT.parent.parent / "nlu" / "llm_support" / "configs"
+CURRENT_OLLAMA_CONFIG = os.getenv("OLLAMA_CONFIG_PATH", "nlu/llm_support/configs/ollama_config.json")
 _CURRENT_PATH_OBJ = Path(CURRENT_OLLAMA_CONFIG)
 if _CURRENT_PATH_OBJ.exists():
     CURRENT_OLLAMA_CONFIG = str(_CURRENT_PATH_OBJ.resolve()).replace("\\", "/")
@@ -82,3 +82,4 @@ def runtime_config_payload() -> dict[str, Any]:
         "available": items,
         "model_preflight": model_preflight,
     }
+

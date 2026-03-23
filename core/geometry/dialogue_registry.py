@@ -18,6 +18,11 @@ _GROUPS_BY_SKELETON: dict[str, dict[str, tuple[str, ...]]] = {
         "geometry.ask.grid.pitch_y": ("pitch_y",),
         "geometry.ask.grid.clearance": ("clearance",),
     },
+    "nest_box_box": {
+        "geometry.ask.nest.parent_size": ("parent_x", "parent_y", "parent_z"),
+        "geometry.ask.nest.child_size": ("child_x", "child_y", "child_z"),
+        "geometry.ask.nest.clearance": ("clearance",),
+    },
     "nest_box_tubs": {
         "geometry.ask.nest.parent_size": ("parent_x", "parent_y", "parent_z"),
         "geometry.ask.nest.child_radius": ("child_rmax",),
@@ -28,16 +33,11 @@ _GROUPS_BY_SKELETON: dict[str, dict[str, tuple[str, ...]]] = {
         "geometry.ask.stack.footprint": ("stack_x", "stack_y"),
         "geometry.ask.stack.thicknesses": ("t1", "t2", "t3"),
         "geometry.ask.stack.layer_clearance": ("stack_clearance",),
-        "geometry.ask.stack.parent_size": ("parent_x", "parent_y", "parent_z"),
-        "geometry.ask.stack.nest_clearance": ("nest_clearance",),
     },
     "shell_nested": {
         "geometry.ask.shell.inner_radius": ("inner_r",),
         "geometry.ask.shell.thicknesses": ("th1", "th2", "th3"),
         "geometry.ask.shell.half_length": ("hz",),
-        "geometry.ask.shell.child_radius": ("child_rmax",),
-        "geometry.ask.shell.child_half_length": ("child_hz",),
-        "geometry.ask.shell.clearance": ("clearance",),
     },
     "boolean_union_boxes": {
         "geometry.ask.boolean.solid_a_size": ("bool_a_x", "bool_a_y", "bool_a_z"),

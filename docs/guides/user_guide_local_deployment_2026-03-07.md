@@ -1,63 +1,51 @@
-# Geant4-Agent 使用方法与本地部署说明
+﻿# Geant4-Agent 浣跨敤鏂规硶涓庢湰鍦伴儴缃茶鏄?
+## 1. 閫傜敤鑼冨洿
 
-## 1. 适用范围
+杩欎唤璇存槑闈㈠悜涓ょ被鍦烘櫙锛?
+1. 鍦ㄦ湰鏈哄惎鍔?Web UI锛屽仛澶氳疆 first-pass 閰嶇疆鐢熸垚
+2. 鍦ㄥ彟涓€鍙?Windows 鏈哄櫒涓婂鐜板綋鍓嶉」鐩?
+褰撳墠鐗堟湰閫傚悎锛?
+- 鏈湴楠岃瘉
+- 鍐呴儴娴嬭瘯
+- 鍙楁帶鐪熶汉璇曠敤
 
-这份说明面向两类场景：
-
-1. 在本机启动 Web UI，做多轮 first-pass 配置生成
-2. 在另一台 Windows 机器上复现当前项目
-
-当前版本适合：
-
-- 本地验证
-- 内部测试
-- 受控真人试用
-
-当前版本不适合：
-
-- 直接作为完整 Geant4 工程生成器发布
-- 不受控公开测试
+褰撳墠鐗堟湰涓嶉€傚悎锛?
+- 鐩存帴浣滀负瀹屾暣 Geant4 宸ョ▼鐢熸垚鍣ㄥ彂甯?- 涓嶅彈鎺у叕寮€娴嬭瘯
 
 ---
 
-## 2. 推荐环境
+## 2. 鎺ㄨ崘鐜
 
-### 2.1 操作系统
+### 2.1 鎿嶄綔绯荤粺
 
-推荐：
-
+鎺ㄨ崘锛?
 - Windows 10 / 11
 
-当前项目的既有使用方式与脚本路径明显是 Windows-first。
-
+褰撳墠椤圭洰鐨勬棦鏈変娇鐢ㄦ柟寮忎笌鑴氭湰璺緞鏄庢樉鏄?Windows-first銆?
 ### 2.2 Python
 
-推荐：
-
+鎺ㄨ崘锛?
 - Python `3.10+`
 
-当前本地环境实际运行在 Python 3.12。
+褰撳墠鏈湴鐜瀹為檯杩愯鍦?Python 3.12銆?
+### 2.3 纭欢
 
-### 2.3 硬件
-
-- 只做推理与 Web UI：CPU 可运行
-- 做本地训练或高频推理：建议 NVIDIA GPU
+- 鍙仛鎺ㄧ悊涓?Web UI锛欳PU 鍙繍琛?- 鍋氭湰鍦拌缁冩垨楂橀鎺ㄧ悊锛氬缓璁?NVIDIA GPU
 
 ---
 
-## 3. 获取代码
+## 3. 鑾峰彇浠ｇ爜
 
-假设项目目录为：
+鍋囪椤圭洰鐩綍涓猴細
 
 ```powershell
 F:\geant4agent
 ```
 
-后续命令默认都在仓库根目录执行。
-
+鍚庣画鍛戒护榛樿閮藉湪浠撳簱鏍圭洰褰曟墽琛屻€?
 ---
 
-## 4. 创建虚拟环境
+## 4. 鍒涘缓铏氭嫙鐜
 
 ```powershell
 python -m venv .venv
@@ -65,7 +53,7 @@ python -m venv .venv
 python -m pip install --upgrade pip
 ```
 
-如果 PowerShell 限制脚本执行，可先运行：
+濡傛灉 PowerShell 闄愬埗鑴氭湰鎵ц锛屽彲鍏堣繍琛岋細
 
 ```powershell
 Set-ExecutionPolicy -Scope Process RemoteSigned
@@ -73,71 +61,61 @@ Set-ExecutionPolicy -Scope Process RemoteSigned
 
 ---
 
-## 5. 安装依赖
+## 5. 瀹夎渚濊禆
 
-当前仓库没有统一锁定的 `requirements.txt`，建议安装最小运行依赖。
-
-### 5.1 CPU 安装
+褰撳墠浠撳簱娌℃湁缁熶竴閿佸畾鐨?`requirements.txt`锛屽缓璁畨瑁呮渶灏忚繍琛屼緷璧栥€?
+### 5.1 CPU 瀹夎
 
 ```powershell
 python -m pip install torch transformers safetensors
 ```
 
-### 5.2 CUDA GPU 安装（示例：CUDA 12.1）
-
+### 5.2 CUDA GPU 瀹夎锛堢ず渚嬶細CUDA 12.1锛?
 ```powershell
 python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
 python -m pip install transformers safetensors
 ```
 
-如果你的 CUDA 版本不同，应改成匹配的 PyTorch wheel 源。
+濡傛灉浣犵殑 CUDA 鐗堟湰涓嶅悓锛屽簲鏀规垚鍖归厤鐨?PyTorch wheel 婧愩€?
+### 5.3 褰撳墠鏍稿績渚濊禆
 
-### 5.3 当前核心依赖
-
-运行时主要依赖：
+杩愯鏃朵富瑕佷緷璧栵細
 
 - `torch`
 - `transformers`
 - `safetensors`
 
-Web UI 本身基于 Python 标准库 `http.server`，不依赖 Flask/FastAPI。
-
+Web UI 鏈韩鍩轰簬 Python 鏍囧噯搴?`http.server`锛屼笉渚濊禆 Flask/FastAPI銆?
 ---
 
-## 6. 准备 LLM 配置
+## 6. 鍑嗗 LLM 閰嶇疆
 
-配置目录：
+閰嶇疆鐩綍锛?
+- `nlu/llm_support/configs/`
 
-- `nlu/bert_lab/configs/`
-
-当前可用示例：
-
+褰撳墠鍙敤绀轰緥锛?
 - `ollama_config.json`
 - `ollama_config_fast.json`
 - `ollama_config_expert_fast.json`
 - `openai_compatible_config.example.json`
 - `deepseek_api_config.example.json`
 
-### 6.1 使用 Ollama
+### 6.1 浣跨敤 Ollama
 
-编辑：
+缂栬緫锛?
+- `nlu/llm_support/configs/ollama_config.json`
 
-- `nlu/bert_lab/configs/ollama_config.json`
-
-确保以下字段正确：
-
+纭繚浠ヤ笅瀛楁姝ｇ‘锛?
 - `provider`
 - `base_url`
 - `model`
 
-### 6.2 使用 OpenAI 兼容接口 / DeepSeek
+### 6.2 浣跨敤 OpenAI 鍏煎鎺ュ彛 / DeepSeek
 
-可新建一个本地私有配置，例如：
+鍙柊寤轰竴涓湰鍦扮鏈夐厤缃紝渚嬪锛?
+- `nlu/llm_support/configs/deepseek_api.local.json`
 
-- `nlu/bert_lab/configs/deepseek_api.local.json`
-
-示例：
-
+绀轰緥锛?
 ```json
 {
   "provider": "deepseek",
@@ -152,252 +130,212 @@ Web UI 本身基于 Python 标准库 `http.server`，不依赖 Flask/FastAPI。
 }
 ```
 
-不要把私钥配置提交到版本库。
-
+涓嶈鎶婄閽ラ厤缃彁浜ゅ埌鐗堟湰搴撱€?
 ---
 
-## 7. 准备本地模型
+## 7. 鍑嗗鏈湴妯″瀷
 
-运行时会自动检查：
+杩愯鏃朵細鑷姩妫€鏌ワ細
 
-- structure 模型目录
-- `ner` 模型目录
+- structure 妯″瀷鐩綍
+- `ner` 妯″瀷鐩綍
 
-默认检查逻辑在：
+榛樿妫€鏌ラ€昏緫鍦細
 
 - `nlu/runtime_components/model_preflight.py`
 
-### 7.1 默认 structure 模型候选目录
+### 7.1 榛樿 structure 妯″瀷鍊欓€夌洰褰?
+绯荤粺浼氫紭鍏堝鎵句互涓嬬洰褰曚箣涓€锛?
+- `nlu/training/bert_lab/models/structure_controlled_v4c_e1`
+- `nlu/training/bert_lab/models/structure_controlled_v3_e1`
+- `nlu/training/bert_lab/models/structure_controlled_smoke`
+- `nlu/training/bert_lab/models/structure_opt_v3`
+- `nlu/training/bert_lab/models/structure_opt_v2`
+- `nlu/training/bert_lab/models/structure`
 
-系统会优先寻找以下目录之一：
+### 7.2 榛樿 NER 妯″瀷鐩綍
 
-- `nlu/bert_lab/models/structure_controlled_v4c_e1`
-- `nlu/bert_lab/models/structure_controlled_v3_e1`
-- `nlu/bert_lab/models/structure_controlled_smoke`
-- `nlu/bert_lab/models/structure_opt_v3`
-- `nlu/bert_lab/models/structure_opt_v2`
-- `nlu/bert_lab/models/structure`
+- `nlu/training/bert_lab/models/ner`
 
-### 7.2 默认 NER 模型目录
-
-- `nlu/bert_lab/models/ner`
-
-### 7.3 模型目录最低要求
-
-模型目录至少应包含：
+### 7.3 妯″瀷鐩綍鏈€浣庤姹?
+妯″瀷鐩綍鑷冲皯搴斿寘鍚細
 
 - `config.json`
-- tokenizer 资产之一：
-  - `tokenizer.json`
+- tokenizer 璧勪骇涔嬩竴锛?  - `tokenizer.json`
   - `vocab.txt`
   - `vocab.json + merges.txt`
-  - sentencepiece 文件
+  - sentencepiece 鏂囦欢
 
-### 7.4 重要说明
+### 7.4 閲嶈璇存槑
 
-仓库默认不附带训练好的模型权重。
+浠撳簱榛樿涓嶉檮甯﹁缁冨ソ鐨勬ā鍨嬫潈閲嶃€?
+濡傛灉浣犲湪鍙︿竴鍙版満鍣ㄩ儴缃诧紝闇€瑕侊細
 
-如果你在另一台机器部署，需要：
-
-- 把本地训练好的模型目录复制过去
-- 或在新机器重新训练
-
+- 鎶婃湰鍦拌缁冨ソ鐨勬ā鍨嬬洰褰曞鍒惰繃鍘?- 鎴栧湪鏂版満鍣ㄩ噸鏂拌缁?
 ---
 
-## 8. 启动 Web UI
+## 8. 鍚姩 Web UI
 
 ```powershell
 python ui\web\server.py
 ```
 
-启动后访问：
+鍚姩鍚庤闂細
 
 - `http://127.0.0.1:8088`
 
-启动日志会打印：
+鍚姩鏃ュ織浼氭墦鍗帮細
 
-- 当前 provider
-- 当前 model
-- 当前 base URL
-- model preflight 结果
+- 褰撳墠 provider
+- 褰撳墠 model
+- 褰撳墠 base URL
+- model preflight 缁撴灉
 
-如果 preflight 显示：
-
+濡傛灉 preflight 鏄剧ず锛?
 - `structure_ok=false`
-- 或 `ner_ok=false`
+- 鎴?`ner_ok=false`
 
-说明模型目录尚未准备好。
+璇存槑妯″瀷鐩綍灏氭湭鍑嗗濂姐€?
+---
+
+## 9. 鏈湴浣跨敤娴佺▼
+
+鎺ㄨ崘浣跨敤娴佺▼锛?
+1. 鍚姩 Web UI
+2. 纭褰撳墠 LLM config 鎸囧悜姝ｇ‘ provider
+3. 杈撳叆鑷劧璇█闇€姹?4. 璺熼殢绯荤粺杩涜澶氳疆琛ュ弬
+5. 鏌ョ湅杈撳嚭 JSON 涓庣敤鎴峰眰鎽樿
+
+褰撳墠绯荤粺宸茬粡鏀寔锛?
+- fuzzy 棣栬疆淇濆畧澶勭悊
+- overwrite 纭 / 鎷掔粷
+- graph family 鐨?family-aware 缂哄弬杩介棶
 
 ---
 
-## 9. 本地使用流程
+## 10. 浠呰繍琛?geometry 鐞嗚閮ㄥ垎
 
-推荐使用流程：
-
-1. 启动 Web UI
-2. 确认当前 LLM config 指向正确 provider
-3. 输入自然语言需求
-4. 跟随系统进行多轮补参
-5. 查看输出 JSON 与用户层摘要
-
-当前系统已经支持：
-
-- fuzzy 首轮保守处理
-- overwrite 确认 / 拒绝
-- graph family 的 family-aware 缺参追问
-
----
-
-## 10. 仅运行 geometry 理论部分
-
-如果你只想运行 geometry DSL 与理论验证，不需要启动 UI。
-
+濡傛灉浣犲彧鎯宠繍琛?geometry DSL 涓庣悊璁洪獙璇侊紝涓嶉渶瑕佸惎鍔?UI銆?
 ```powershell
 python -m builder.geometry.cli run_all --outdir builder/geometry/out --n_samples 200 --n_param_sets 100 --seed 7 --dataset builder/geometry/examples/coverage.csv
 ```
 
-预期输出：
-
+棰勬湡杈撳嚭锛?
 - `builder/geometry/out/coverage_summary.json`
 - `builder/geometry/out/coverage_checked.jsonl`
 - `builder/geometry/out/feasibility_summary.json`
 - `builder/geometry/out/ambiguity_summary.json`
 
-这部分不依赖 Geant4 运行时，只做理论层检查。
-
+杩欓儴鍒嗕笉渚濊禆 Geant4 杩愯鏃讹紝鍙仛鐞嗚灞傛鏌ャ€?
 ---
 
-## 11. 运行回归测试
+## 11. 杩愯鍥炲綊娴嬭瘯
 
-### 11.1 当前已验证的 live 集合
+### 11.1 褰撳墠宸查獙璇佺殑 live 闆嗗悎
 
 ```powershell
-python scripts/run_casebank_regression.py --dataset docs/eval_casebank_multiturn_live_v2_12.json --config nlu/bert_lab/configs/deepseek_api.local.json --outdir docs --baseline docs/casebank_baseline.json --min_confidence 0.6
+python scripts/run_casebank_regression.py --dataset docs/eval_casebank_multiturn_live_v2_12.json --config nlu/llm_support/configs/deepseek_api.local.json --outdir docs --baseline docs/casebank_baseline.json --min_confidence 0.6
 ```
 
-最近一次结果：
+鏈€杩戜竴娆＄粨鏋滐細
 
 - `pass_rate = 1.0000`
 - `internal_leak_turn_rate = 0.0000`
 
-输出内容包括：
-
-- JSON 报告
-- 中英文 PDF 报告
-- LaTeX 源文件
-
-### 11.2 检查 casebank 分布
+杈撳嚭鍐呭鍖呮嫭锛?
+- JSON 鎶ュ憡
+- 涓嫳鏂?PDF 鎶ュ憡
+- LaTeX 婧愭枃浠?
+### 11.2 妫€鏌?casebank 鍒嗗竷
 
 ```powershell
 python scripts/verify_eval_casebank.py --dataset docs/eval_casebank_multiturn_live_v3_24.json
 ```
 
-这一步只检查数据集分布，不调用 LLM。
-
+杩欎竴姝ュ彧妫€鏌ユ暟鎹泦鍒嗗竷锛屼笉璋冪敤 LLM銆?
 ---
 
-## 12. 本地训练 BERT
+## 12. 鏈湴璁粌 BERT
 
-### 12.1 构建 structure v2 数据集
+### 12.1 鏋勫缓 structure v2 鏁版嵁闆?
+结构数据构建脚本已迁入本地归档工具目录 `legacy/tooling/`，不再作为仓库主链路的一部分跟踪。
 
-```powershell
-python scripts/build_structure_v2_dataset.py --base nlu/bert_lab/data/controlled_structure.jsonl --extra nlu/bert_lab/data/controlled_multitask.jsonl --out nlu/bert_lab/data/controlled_structure_v2.jsonl --keep_original
-```
+### 12.2 璁粌 structure 妯″瀷
 
-### 12.2 训练 structure 模型
+训练配置保留在：
 
-```powershell
-python scripts/train_structure_v2.py --config nlu/bert_lab/configs/structure_train_v2.json --outdir nlu/bert_lab/models/structure_controlled_v5_e2 --device cuda
-```
+- `nlu/training/bert_lab/configs/structure_train_v2.json`
 
-训练输出放到：
+璁粌杈撳嚭鏀惧埌锛?
+- `nlu/training/bert_lab/models/structure_controlled_v5_e2`
 
-- `nlu/bert_lab/models/structure_controlled_v5_e2`
-
-之后 runtime preflight 会自动发现它。
-
+涔嬪悗 runtime preflight 浼氳嚜鍔ㄥ彂鐜板畠銆?
 ---
 
-## 13. 在另一台 Windows 机器部署
+## 13. 鍦ㄥ彟涓€鍙?Windows 鏈哄櫒閮ㄧ讲
 
-推荐顺序：
+鎺ㄨ崘椤哄簭锛?
+1. 澶嶅埗浠ｇ爜浠撳簱
+2. 鍒涘缓 `.venv`
+3. 瀹夎 `torch + transformers + safetensors`
+4. 澶嶅埗鏈湴璁粌濂界殑妯″瀷鍒?`nlu/training/bert_lab/models/`
+5. 鍑嗗 LLM 閰嶇疆鏂囦欢
+6. 鍚姩 `python ui\\web\\server.py`
+7. 鎵撳紑娴忚鍣ㄨ闂?`http://127.0.0.1:8088`
 
-1. 复制代码仓库
-2. 创建 `.venv`
-3. 安装 `torch + transformers + safetensors`
-4. 复制本地训练好的模型到 `nlu/bert_lab/models/`
-5. 准备 LLM 配置文件
-6. 启动 `python ui\\web\\server.py`
-7. 打开浏览器访问 `http://127.0.0.1:8088`
+### 濡傛灉 LLM 鍦ㄨ繙绔?
+渚嬪锛?
+- 杩滅鏈哄櫒杩愯 Ollama
+- 鏈満閫氳繃 SSH 杞彂鍒?`11434`
 
-### 如果 LLM 在远端
-
-例如：
-
-- 远端机器运行 Ollama
-- 本机通过 SSH 转发到 `11434`
-
-只需要把配置文件中的 `base_url` 改到本机转发地址，例如：
+鍙渶瑕佹妸閰嶇疆鏂囦欢涓殑 `base_url` 鏀瑰埌鏈満杞彂鍦板潃锛屼緥濡傦細
 
 - `http://127.0.0.1:11434`
 
-项目本身不要求模型与 UI 跑在同一台机器。
-
+椤圭洰鏈韩涓嶈姹傛ā鍨嬩笌 UI 璺戝湪鍚屼竴鍙版満鍣ㄣ€?
 ---
 
-## 14. 常见问题
+## 14. 甯歌闂
 
-### 14.1 UI 能打开，但对话不工作
+### 14.1 UI 鑳芥墦寮€锛屼絾瀵硅瘽涓嶅伐浣?
+浼樺厛妫€鏌ワ細
 
-优先检查：
+1. LLM 閰嶇疆鏄惁姝ｇ‘
+2. API key 鏄惁鏈夋晥
+3. model preflight 鏄惁閫氳繃
+4. structure 涓?NER 妯″瀷鐩綍鏄惁閮藉瓨鍦?
+### 14.2 鍥炲寰堟満姊?
+杩欓€氬父涓嶆槸閮ㄧ讲鏁呴殰锛岃€屾槸锛?
+- 褰撳墠鍔ㄤ綔绾фā鏉垮湪璧蜂繚鎶や綔鐢?- 鎴?LLM 鑷劧鍖栬鎷掔粷鍚庡洖閫€鍒板畨鍏ㄦā鏉?
+### 14.3 閰嶇疆鑳界悊瑙ｏ紝浣嗘煇浜涘瓧娈典笉鎻愪氦
 
-1. LLM 配置是否正确
-2. API key 是否有效
-3. model preflight 是否通过
-4. structure 与 NER 模型目录是否都存在
+褰撳墠涓婚摼宸茬粡淇宸茬煡 P0 鎻愪氦闂銆傝嫢浠嶅嚭鐜帮紝浼樺厛妫€鏌ワ細
 
-### 14.2 回复很机械
+- 鏄惁鏄?fuzzy 棣栬疆
+- 鏄惁琚?lock 鎷︽埅
+- 鏄惁琚?explicit target filter 涓㈠純
+- 鏄惁琚?Gate 鎷掔粷
 
-这通常不是部署故障，而是：
+### 14.4 涓轰粈涔堝綋鍓嶄笉鐩存帴杈撳嚭瀹屾暣 Geant4 宸ョ▼
 
-- 当前动作级模板在起保护作用
-- 或 LLM 自然化被拒绝后回退到安全模板
+鍥犱负褰撳墠浼樺厛绾ф槸锛?
+- 鍏堝仛瀵硅瘽闂幆
+- 鍏堝仛閰嶇疆姝ｇ‘鎬?- 鍏堜繚璇佸彲瑙ｉ噴鍜屽彲杩介棶
 
-### 14.3 配置能理解，但某些字段不提交
-
-当前主链已经修复已知 P0 提交问题。若仍出现，优先检查：
-
-- 是否是 fuzzy 首轮
-- 是否被 lock 拦截
-- 是否被 explicit target filter 丢弃
-- 是否被 Gate 拒绝
-
-### 14.4 为什么当前不直接输出完整 Geant4 工程
-
-因为当前优先级是：
-
-- 先做对话闭环
-- 先做配置正确性
-- 先保证可解释和可追问
-
-完整工程生成仍在后续阶段。
-
+瀹屾暣宸ョ▼鐢熸垚浠嶅湪鍚庣画闃舵銆?
 ---
 
-## 15. 部署建议
+## 15. 閮ㄧ讲寤鸿
 
-如果你的目标是：
+濡傛灉浣犵殑鐩爣鏄細
 
-- 本地验证
-- 内部测试
-- 受控试用
+- 鏈湴楠岃瘉
+- 鍐呴儴娴嬭瘯
+- 鍙楁帶璇曠敤
 
-当前版本已经可以使用。
+褰撳墠鐗堟湰宸茬粡鍙互浣跨敤銆?
+濡傛灉浣犵殑鐩爣鏄細
 
-如果你的目标是：
+- 闈㈠悜澶栭儴鐢ㄦ埛鐩存帴寮€鏀?- 瀵瑰鏉傚嚑浣曞仛楂樿鐩栨壙璇?- 鐩存帴杈撳嚭瀹屾暣 Geant4 宸ョ▼
 
-- 面向外部用户直接开放
-- 对复杂几何做高覆盖承诺
-- 直接输出完整 Geant4 工程
-
-当前版本还不够，需要继续扩大 live casebank 并补复杂几何回归。
+褰撳墠鐗堟湰杩樹笉澶燂紝闇€瑕佺户缁墿澶?live casebank 骞惰ˉ澶嶆潅鍑犱綍鍥炲綊銆?

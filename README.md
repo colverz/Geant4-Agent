@@ -4,25 +4,33 @@ A Geant4-oriented geometry assembly prototype: DSL + feasibility checker, plus a
 
 ## Repository Layout
 
-This repo is split into layered components:
+This repo is now easier to read if you treat it as three groups rather than one flat tree:
 
-- `builder/geometry/`: DSL + feasibility checker + experiments (Geant4-style assemblies)
-- `nlu/bert_lab/`: BERT-based NLU (structure + parameters + entities)
-- `planner/`: LLM-driven planning + clarification flows
-- `knowledge/`: Materials/environment knowledge (JSON schema + validation)
-- `ui/web/`: Local web UI for multi-turn dialogue
-- `core/`: Shared schemas and semantic frame
+- Runtime path: `core/`, `nlu/`, `planner/`, `ui/web/`
+- Deterministic builders and knowledge: `builder/geometry/`, `knowledge/`
+- Historical assets and generated deliverables: `docs/archive/`, `legacy/`, `docs/reports/`
+
+Main directories:
+
+- `core/`: shared contracts, orchestration, dialogue policy, validation, config registries
+- `nlu/`: runtime NLU, LLM adapters, BERT extractor, and separated training assets
+- `builder/geometry/`: DSL + feasibility checker + geometry synthesis
+- `planner/`: clarification planning and question rendering
+- `knowledge/`: materials, particles, physics lists, schemas, and validation tools
+- `ui/web/`: local multi-turn web UI
+- `docs/`: active docs, release docs, reports, and archives
+- `legacy/`: frozen legacy programs and reports
 
 ## Architecture Overview
 
 - **Geometry core** (`builder/geometry/`): DSL + analytical feasibility checks. Produces errors, warnings, and suggestions.
-- **NLU core** (`nlu/bert_lab/`): Structure classification + parameter/entity extraction + postprocess.
+- **NLU core** (`nlu/`): Runtime semantic extraction, LLM-assisted parsing, structure extraction, and separated BERT training assets.
 - **Planner layer** (`planner/`): LLM-driven question planning and schema-constrained outputs.
 - **Knowledge layer** (`knowledge/`): JSON schema, validated lists, and validation.
 - **UI layer** (`ui/web/`): Local multi-turn interface.
-- **Core** (`core/`): Shared schema + semantic frame.
+- **Core** (`core/`): Shared contracts, orchestration, dialogue state, and validation.
 
-See: `docs/ARCHITECTURE.md`
+See: `docs/architecture/ARCHITECTURE.md` and `docs/PROJECT_CONCLUSION_2026-03-23.md`.
 
 ## Virtual Environment
 
@@ -43,16 +51,17 @@ Expected outputs:
 - `builder/geometry/out/feasibility_summary.json`
 - `builder/geometry/out/ambiguity_summary.json`
 
-## BERT Lab Quick Start
+## BERT Training Quick Start
 
 ```powershell
-python nlu/bert_lab/bert_lab_data.py --out nlu/bert_lab/data/bert_lab_samples.jsonl --n 200 --seed 7
+python nlu/training/bert_lab/bert_lab_data.py --out nlu/training/bert_lab/data/bert_lab_samples.jsonl --n 200 --seed 7
 ```
 
 Note:
 - Trained checkpoints and model weights are not shipped in this repository.
-- If you want to use the BERT lab locally, generate data and train the models on your own machine.
-- Keep `nlu/bert_lab/models/` as a local-only directory.
+- Training assets now live under `nlu/training/bert_lab/`, outside the runtime path.
+- If you want to train locally, generate data and train the models on your own machine.
+- Keep `nlu/training/bert_lab/models/` as a local-only directory.
 
 ## Knowledge Quick Start
 
@@ -71,31 +80,11 @@ python ui/web/server.py
 Then open:
 - http://127.0.0.1:8088
 
-## Casebank Regression (EN+ZH PDF)
+## Archived Tooling
 
-Run the fixed 20-case regression set and generate bilingual LaTeX/PDF reports:
+Evaluation, regression, and one-off dataset scripts have been moved out of the main tree into local-only archived tooling under `legacy/tooling/`.
 
-```powershell
-python scripts/run_casebank_regression.py --dataset docs/eval_casebank_v1_20.json --config nlu/bert_lab/configs/ollama_config.json --outdir docs
-```
-
-Run the missing-parameter multi-turn regression set:
-
-```powershell
-python scripts/run_casebank_regression.py --dataset docs/eval_casebank_missing_multiturn_v1_10.json --config nlu/bert_lab/configs/ollama_config.json --outdir docs
-```
-
-Set a dedicated baseline for the missing multi-turn set:
-
-```powershell
-python scripts/run_casebank_regression.py --dataset docs/eval_casebank_missing_multiturn_v1_10.json --config nlu/bert_lab/configs/ollama_config.json --outdir docs --baseline docs/casebank_missing_multiturn_baseline.json --set_baseline
-```
-
-Set/update baseline:
-
-```powershell
-python scripts/run_casebank_regression.py --dataset docs/eval_casebank_v1_20.json --config nlu/bert_lab/configs/ollama_config.json --outdir docs --set_baseline
-```
+Generated reports and local test outputs are intentionally ignored by git.
 
 ## LLM Provider Config (Ollama / OpenAI-Compatible)
 
@@ -105,9 +94,9 @@ The project now supports multiple LLM backends through config files:
 - `provider=openai_compatible` (also supports aliases like `deepseek`): uses `POST /v1/chat/completions`
 
 Example configs:
-- `nlu/bert_lab/configs/ollama_config.json`
-- `nlu/bert_lab/configs/openai_compatible_config.example.json`
-- `nlu/bert_lab/configs/deepseek_api_config.example.json`
+- `nlu/llm_support/configs/ollama_config.json`
+- `nlu/llm_support/configs/openai_compatible_config.example.json`
+- `nlu/llm_support/configs/deepseek_api_config.example.json`
 
 To use API-key based providers, set `api_key` or `api_key_env` in the config.
 
@@ -128,25 +117,33 @@ To use API-key based providers, set `api_key` or `api_key_env` in the config.
 
 ## 仓库结构
 
-仓库按分层组件组织：
+现在更适合按三类理解这个仓库：
 
-- `builder/geometry/`：DSL + 理论可行性检查 + 实验
-- `nlu/bert_lab/`：BERT 语义解析（结构/参数/实体）
-- `planner/`：LLM 规划与追问流程
-- `knowledge/`：材料/环境知识（JSON schema + 校验）
-- `ui/web/`：本地多轮对话界面
-- `core/`：共享 schema 与语义帧
+- 运行主链路：`core/`、`nlu/`、`planner/`、`ui/web/`
+- 确定性构建与知识：`builder/geometry/`、`knowledge/`
+- 历史归档与生成物：`docs/archive/`、`legacy/`、`docs/reports/`
+
+主要目录：
+
+- `core/`：共享契约、编排、对话状态、校验和配置注册表
+- `nlu/`：运行时语义解析、LLM 适配层、BERT 提取器，以及拆分后的训练资产
+- `builder/geometry/`：DSL、可行性检查、几何合成
+- `planner/`：追问规划和问题渲染
+- `knowledge/`：材料、粒子、物理列表、schema 与校验工具
+- `ui/web/`：本地多轮 Web UI
+- `docs/`：当前文档、发布材料、回归报告、归档材料
+- `legacy/`：冻结的旧程序和历史报告
 
 ## 架构概览
 
 - **几何核心**（`builder/geometry/`）：DSL + 解析可行性判定，输出错误/警告/建议。
-- **语义核心**（`nlu/bert_lab/`）：结构分类 + 参数/实体抽取 + 后处理。
+- **语义核心**（`nlu/`）：运行时语义抽取、LLM 辅助解析、结构识别，以及拆分后的 BERT 训练资产。
 - **规划层**（`planner/`）：LLM 驱动的追问与 schema 约束输出。
 - **知识层**（`knowledge/`）：JSON schema、可溯源列表与校验。
 - **UI 层**（`ui/web/`）：本地多轮对话界面。
-- **Core**（`core/`）：共享 schema 与语义帧。
+- **Core**（`core/`）：共享契约、编排、对话状态与校验。
 
-详见：`docs/ARCHITECTURE.md`
+详见：`docs/architecture/ARCHITECTURE.md` 与 `docs/PROJECT_CONCLUSION_2026-03-23.md`
 
 ## 虚拟环境
 
@@ -167,16 +164,21 @@ python -m builder.geometry.cli run_all --outdir builder/geometry/out --n_samples
 - `builder/geometry/out/feasibility_summary.json`
 - `builder/geometry/out/ambiguity_summary.json`
 
-## BERT 快速开始
+## BERT 训练快速开始
 
 ```powershell
-python nlu/bert_lab/bert_lab_data.py --out nlu/bert_lab/data/bert_lab_samples.jsonl --n 200 --seed 7
+python nlu/training/bert_lab/bert_lab_data.py --out nlu/training/bert_lab/data/bert_lab_samples.jsonl --n 200 --seed 7
 ```
 
 说明：
 - 本仓库不提供已训练好的 checkpoint 或模型权重。
-- 如需使用 BERT Lab，请先在本地生成数据并自行训练模型。
-- `nlu/bert_lab/models/` 应仅作为本地目录使用，不要纳入版本控制。
+- 训练相关资产已迁移到 `nlu/training/bert_lab/`，不再放在运行时主链路里。
+- 如需训练，请先在本地生成数据并自行训练模型。
+- `nlu/training/bert_lab/models/` 应仅作为本地目录使用，不要纳入版本控制。
+
+## 已归档工具
+
+回归、评测、数据探针等一次性脚本已经迁入 `legacy/tooling/`，并作为本地工具处理，不再作为主仓库代码的一部分维护。
 
 ## 知识层快速开始
 
@@ -203,9 +205,9 @@ python ui/web/server.py
 - `provider=openai_compatible`（也支持 `deepseek` 等别名）：调用 `POST /v1/chat/completions`
 
 示例配置文件：
-- `nlu/bert_lab/configs/ollama_config.json`
-- `nlu/bert_lab/configs/openai_compatible_config.example.json`
-- `nlu/bert_lab/configs/deepseek_api_config.example.json`
+- `nlu/llm_support/configs/ollama_config.json`
+- `nlu/llm_support/configs/openai_compatible_config.example.json`
+- `nlu/llm_support/configs/deepseek_api_config.example.json`
 
 如需 API Key 模式，可在配置中设置 `api_key` 或 `api_key_env`。
 
@@ -217,3 +219,4 @@ python ui/web/server.py
 - **RAG 尚未实现**：`knowledge/rag/` 为占位。
 - **材料 → 体积映射需手工指定**：需要 `volume_names` 才能验证。
 - **BERT 数据以合成为主**：真实输入鲁棒性待验证。
+

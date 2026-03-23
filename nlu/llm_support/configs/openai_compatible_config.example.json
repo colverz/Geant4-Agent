@@ -1,0 +1,12 @@
+{
+  "provider": "openai_compatible",
+  "base_url": "https://api.openai.com",
+  "chat_path": "/v1/chat/completions",
+  "model": "gpt-4.1-mini",
+  "timeout_s": 120,
+  "api_key_env": "OPENAI_API_KEY",
+  "headers": {
+    "Content-Type": "application/json"
+  }
+}
+

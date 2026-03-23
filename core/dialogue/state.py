@@ -54,7 +54,11 @@ def build_dialogue_summary(
     visible_answered = _filter_summary_paths(decision.answered_this_turn)
     visible_pending = _filter_summary_paths(decision.missing_fields)
     visible_asked = _filter_summary_paths(decision.asked_fields)
-    visible_confirmed = _filter_summary_paths(confirmed_fact_paths)
+    if decision.action.value == "finalize":
+        finalize_confirmed = list(dict.fromkeys([*decision.updated_paths, *decision.answered_this_turn]))
+        visible_confirmed = _filter_summary_paths(finalize_confirmed) or _filter_summary_paths(confirmed_fact_paths)
+    else:
+        visible_confirmed = _filter_summary_paths(confirmed_fact_paths)
     grouped_status = build_grouped_status(
         updated_paths=visible_updated,
         pending_paths=visible_pending,

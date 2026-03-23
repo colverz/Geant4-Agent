@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -6,7 +6,7 @@ from typing import Any, List
 
 from core.config.field_registry import clarification_items, friendly_labels
 from core.config.prompt_registry import clarification_fallback, clarification_prompt
-from nlu.bert_lab.ollama_client import chat
+from nlu.llm_support.ollama_client import chat
 
 
 def _clean_chat_text(raw: Any) -> str:
@@ -127,7 +127,7 @@ def _fallback_question_for_paths(paths: List[str], friendly: List[str], lang: st
 def ask_missing(
     missing: List[str],
     lang: str,
-    ollama_config: str = "nlu/bert_lab/configs/ollama_config.json",
+    ollama_config: str = "nlu/llm_support/configs/ollama_config.json",
     temperature: float = 1.0,
     recent_user_text: str = "",
     confirmed_items: List[str] | None = None,
@@ -223,7 +223,7 @@ def naturalize_response(
     overwrite_preview: list[dict] | None,
     dialogue_summary: dict | None,
     raw_dialogue: list[dict] | None,
-    ollama_config: str = "nlu/bert_lab/configs/ollama_config.json",
+    ollama_config: str = "nlu/llm_support/configs/ollama_config.json",
     temperature: float = 1.0,
 ) -> str:
     if not base_message:
@@ -278,3 +278,4 @@ def naturalize_response(
     except Exception:
         pass
     return base_message
+

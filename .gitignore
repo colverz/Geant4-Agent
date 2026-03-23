@@ -33,6 +33,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+*.log
 
 # Unit test / coverage reports
 htmlcov/
@@ -119,7 +120,57 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Project archives
+# Generated docs / reports
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+docs/reports/regression/
+docs/reports/
+docs/demo/*.aux
+docs/demo/*.log
+docs/demo/*.out
+docs/demo/*.pdf
+docs/demo/*.tex
+docs/demo/full_test_demo_readiness_*.md
+docs/demo/release/
+docs/demo/release/*.zip
+docs/archive/20*/
+docs/datasets/casebank/eval_casebank_multiturn_live_*.json
+
+# Local scratch
+tmp_*.txt
+
+# Archived local-only tooling
+scripts/
+legacy/tooling/
+
+# Training assets / local model artifacts
+nlu/training/bert_lab/models/**/checkpoint-*/
+nlu/training/bert_lab/models/*/checkpoint-*/
+nlu/training/bert_lab/models/
+nlu/training/bert_lab/data/bert_lab_ollama_samples.jsonl
+nlu/training/bert_lab/data/bert_lab_mix_samples.jsonl
+nlu/training/bert_lab/data/eval/*.json
+nlu/training/bert_lab/data/eval/*_report.json
+nlu/training/bert_lab/data/controlled_*.jsonl
+nlu/training/bert_lab/data/controlled_corpus_summary.json
+nlu/training/bert_lab/data/audit_report.json
+nlu/training/bert_lab/data/eval/
+nlu/training/bert_lab/configs/_tmp.json
+nlu/training/bert_lab/configs/*.local.json
+
+# Legacy compatibility copies / old local artifacts
 nlu/bert_lab/archive/
 nlu/bert_lab/models/**/checkpoint-*/
 nlu/bert_lab/models/*/checkpoint-*/

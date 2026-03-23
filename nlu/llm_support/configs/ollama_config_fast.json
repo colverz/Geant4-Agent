@@ -1,0 +1,9 @@
+{
+  "provider": "ollama",
+  "base_url": "http://localhost:11434",
+  "model": "qwen3:14b",
+  "timeout_s": 180,
+  "headers": {
+    "Content-Type": "application/json"
+  }
+}

@@ -16,7 +16,7 @@ from nlu.runtime_components.postprocess import merge_params
 
 ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE_DIR = ROOT / "knowledge" / "data"
-MODELS_DIR = ROOT / "nlu" / "bert_lab" / "models"
+MODELS_DIR = ROOT / "nlu" / "training" / "bert_lab" / "models"
 
 _CACHE: dict[str, list[str]] | None = None
 
@@ -151,13 +151,62 @@ def _alias_match(text: str, mapping: dict[str, str], allowed: list[str]) -> str 
     return None
 
 
+def _material_mentions(text: str, allowed: list[str]) -> list[str]:
+    low = text.lower()
+    hits: list[tuple[int, str]] = []
+    for alias, canonical in MATERIAL_ALIASES.items():
+        for match in re.finditer(rf"(?<![A-Za-z0-9_]){re.escape(alias)}(?![A-Za-z0-9_])", low):
+            if canonical in allowed:
+                hits.append((match.start(), canonical))
+    hits.sort(key=lambda item: item[0])
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for _, canonical in hits:
+        if canonical not in seen:
+            ordered.append(canonical)
+            seen.add(canonical)
+    return ordered
+
+
+def _select_primary_material(text: str, allowed: list[str]) -> str | None:
+    mentions = _material_mentions(text, allowed)
+    if not mentions:
+        return None
+    low = text.lower()
+    if any(
+        token in low
+        for token in (
+            "boolean",
+            "subtract",
+            "subtraction",
+            "difference",
+            "minus",
+            "hole",
+            "cut out",
+            "cutout",
+            "减去",
+            "差集",
+            "挖空",
+            "开孔",
+            "打孔",
+        )
+    ):
+        for material in mentions:
+            if material != "G4_AIR":
+                return material
+    if any(token in low for token in ("parent", "outer", "container", "外盒", "容器")):
+        for material in mentions:
+            if material != "G4_AIR":
+                return material
+    return mentions[0]
+
+
 def _has_unknown_material_marker(text: str) -> bool:
     low = text.lower()
     return bool(
-        re.search(r"(?:材料|material)\s*[:：]?\s*[?？]+", text)
-        or re.search(r"(?:材料|material)\s*(?:unknown|tbd|unspecified)\b", low)
+        re.search("(?:\u6750\u6599|material)\\s*[:\uff1a]?\\s*[?\uff1f]+", text)
+        or re.search("(?:\u6750\u6599|material)\\s*(?:unknown|tbd|unspecified)\\b", low)
     )
-
 
 def _pick_ner_model() -> str:
     p = MODELS_DIR / "ner"
@@ -230,22 +279,53 @@ def _fallback_dialogue_skeleton(text: str) -> str:
         return "boolean_intersection_boxes"
     if any(
         token in low
-        for token in ("subtraction", "subtract", "minus", "difference", "hole", "cut out", "cutout", "减去", "差集", "挖空", "开孔", "打孔")
+        for token in (
+            "subtraction",
+            "subtract",
+            "minus",
+            "difference",
+            "hole",
+            "cut out",
+            "cutout",
+            "减去",
+            "差集",
+            "挖空",
+            "开孔",
+            "打孔",
+        )
     ):
         return "boolean_subtraction_boxes"
     if any(token in low for token in ("union", "boolean", "combine", "merge", "并", "合并", "并集")):
         return "boolean_union_boxes"
-    if any(token in low for token in ("ring", "annulus", "circular", "环", "环形", "圆环")):
+    if any(token in low for token in ("ring", "annulus", "circular", "环", "环形", "圆环", "围成一圈", "一圈")):
         return "ring_modules"
-    if any(token in low for token in ("grid", "array", "matrix", "阵列", "二维阵列", "探测板")):
+    if any(token in low for token in ("grid", "array", "matrix", "阵列", "二维阵列", "探测板", "网格")):
         return "grid_modules"
-    if any(token in low for token in ("stack", "layers", "layer", "stacked", "sandwich", "堆叠", "夹层", "层")):
+    if any(token in low for token in ("stack", "layers", "layer", "stacked", "sandwich", "堆叠", "夹层", "沿 z 方向", "沿z方向")):
         return "stack_in_box"
-    if any(token in low for token in ("shell", "concentric", "coaxial", "壳", "同心", "屏蔽壳")):
+    if any(token in low for token in ("shell", "concentric", "coaxial", "壳", "同心", "屏蔽壳", "屏蔽层", "多层壳")):
         return "shell_nested"
-    if any(token in low for token in ("nest", "inside", "contains", "inner", "outer", "嵌套", "内嵌", "外盒", "盒子里")):
+    if any(token in low for token in ("nest", "inside", "contains", "inner", "outer", "嵌套", "内嵌", "外盒", "盒子里", "外盒体", "内盒体", "包住")):
         return "nest_box_tubs"
     return ""
+
+
+def _infer_source_type_from_content(text: str, normalized_text: str, frame: SemanticFrame) -> str | None:
+    merged = f"{text} ; {normalized_text}".lower()
+    if any(token in merged for token in ("point source", "point", "点源", "点状源")):
+        return "point"
+    if any(token in merged for token in ("beam", "pencil beam", "collimated", "束流", "粒子束", "准直", "平行束", "入射")):
+        return "beam"
+    if any(token in merged for token in ("plane source", "plane", "面源")):
+        return "plane"
+    if any(token in merged for token in ("isotropic", "各向同性")):
+        return "isotropic"
+    if frame.source.direction is not None and frame.source.position is not None:
+        if any(token in merged for token in ("束流", "平行束", "入射", "沿 +z", "沿+z", "along +z")):
+            return "beam"
+    if frame.source.direction is not None and frame.source.position is not None and frame.source.particle in {"proton", "e-", "electron"}:
+        return "beam"
+    return None
 
 
 def extract_runtime_semantic_frame(
@@ -379,10 +459,13 @@ def extract_runtime_semantic_frame(
 
     knowledge = _load_knowledge()
     raw_material = None if _has_unknown_material_marker(text) else (
-        _match_any(text, knowledge["materials"]) or _alias_match(text, MATERIAL_ALIASES, knowledge["materials"])
+        _select_primary_material(text, knowledge["materials"])
+        or _match_any(text, knowledge["materials"])
+        or _alias_match(text, MATERIAL_ALIASES, knowledge["materials"])
     )
     normalized_material = None if _has_unknown_material_marker(normalized_text or "") else (
-        _match_any(normalized_text, knowledge["materials"])
+        _select_primary_material(normalized_text, knowledge["materials"])
+        or _match_any(normalized_text, knowledge["materials"])
         or _alias_match(normalized_text, MATERIAL_ALIASES, knowledge["materials"])
     )
     material = raw_material or normalized_material
@@ -402,6 +485,8 @@ def extract_runtime_semantic_frame(
         normalized_text, SOURCE_TYPE_ALIASES, knowledge["source_types"]
     )
     source_type = raw_source_type or normalized_source_type
+    if not source_type:
+        source_type = _infer_source_type_from_content(text, normalized_text, frame)
     if source_type:
         frame.source.type = source_type
 

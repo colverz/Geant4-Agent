@@ -1,9 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.ollama_client import chat, extract_json
 
 
 def _clean_text(raw: str) -> str:
@@ -38,8 +38,8 @@ def recommend_physics_list(
         for k in [
             "physics",
             "physics list",
-            "物理",
-            "列表",
+            "鐗╃悊",
+            "鍒楄〃",
             "geant4",
             "qgsp",
             "ftfp",
@@ -56,11 +56,11 @@ def recommend_physics_list(
             "pick",
             "best",
             "most suitable",
-            "推荐",
-            "选择",
-            "最合适",
-            "给出名称",
-            "备选",
+            "鎺ㄨ崘",
+            "閫夋嫨",
+            "鏈€鍚堥€?,
+            "缁欏嚭鍚嶇О",
+            "澶囬€?,
         ]
     )
     trigger = has_physics_domain and has_decision_intent
@@ -89,8 +89,8 @@ def recommend_physics_list(
     main = _pick_known(parsed.get("physics_list", ""), allowed_lists)
     backup = _pick_known(parsed.get("backup_physics_list", ""), allowed_lists)
     low = merged_text.lower()
-    em_like = any(k in low for k in ["gamma", "photon", "electromagnetic", "康普顿", "光电", "对产生"])
-    no_hadron = any(k in low for k in ["不涉及强子", "no hadron", "without hadron", "no hadrons"])
+    em_like = any(k in low for k in ["gamma", "photon", "electromagnetic", "搴锋櫘椤?, "鍏夌數", "瀵逛骇鐢?])
+    no_hadron = any(k in low for k in ["涓嶆秹鍙婂己瀛?, "no hadron", "without hadron", "no hadrons"])
     if em_like and no_hadron and "FTFP_BERT" in allowed_lists:
         main = "FTFP_BERT"
         if "QBBC" in allowed_lists:
@@ -171,3 +171,4 @@ def recommend_physics_list(
         confidence=float(conf),
         rationale="llm_recommender",
     )
+

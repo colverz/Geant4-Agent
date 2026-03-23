@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -37,7 +37,7 @@ class NormalizerIntentTest(unittest.TestCase):
             out = normalize_user_turn(
                 "set source energy 1 MeV",
                 context_summary="",
-                config_path="nlu/bert_lab/configs/ollama_config.json",
+                config_path="nlu/llm_support/configs/ollama_config.json",
                 enable_llm=False,
             )
         mocked_chat.assert_not_called()
@@ -47,3 +47,4 @@ class NormalizerIntentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

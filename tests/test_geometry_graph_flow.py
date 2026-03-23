@@ -7,6 +7,7 @@ from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.semantic_frame import SemanticFrame
 from builder.geometry.synthesize import synthesize_from_params
 from nlu.bert.extractor import extract_candidates_from_normalized_text
+from nlu.runtime_components.graph_search import search_candidate_graphs
 
 
 class GeometryGraphFlowTest(unittest.TestCase):
@@ -92,9 +93,9 @@ class GeometryGraphFlowTest(unittest.TestCase):
         self.assertEqual(mapped.get("geometry.chosen_skeleton"), "nest_box_tubs")
         self.assertEqual(mapped.get("geometry.graph_program", {}).get("root"), "nest")
         self.assertNotIn("geometry.graph_program", debug.get("graph_choice", {}).get("dialogue_missing_paths", []))
-        self.assertNotIn("geometry.params.parent_x", mapped)
-        self.assertNotIn("geometry.params.parent_y", mapped)
-        self.assertNotIn("geometry.params.parent_z", mapped)
+        self.assertEqual(mapped.get("geometry.params.parent_x"), 80.0)
+        self.assertEqual(mapped.get("geometry.params.parent_y"), 80.0)
+        self.assertEqual(mapped.get("geometry.params.parent_z"), 80.0)
 
     def test_extractor_does_not_commit_sampled_defaults_for_incomplete_ring(self) -> None:
         candidate, debug = extract_candidates_from_normalized_text(
@@ -118,7 +119,7 @@ class GeometryGraphFlowTest(unittest.TestCase):
         self.assertNotIn("geometry.params.module_z", mapped)
         self.assertEqual(debug.get("graph_choice", {}).get("missing_params"), ["module_x", "module_y", "module_z"])
 
-    def test_extractor_does_not_commit_sampled_defaults_for_incomplete_shell(self) -> None:
+    def test_extractor_keeps_shell_graph_without_sampled_nested_defaults(self) -> None:
         candidate, debug = extract_candidates_from_normalized_text(
             "geometry.kind=box; geometry.size_triplet_mm=[100,100,100]; materials.primary=G4_Pb; output.format=json",
             raw_text="Create a concentric shell with inner radius 15 mm, thicknesses 5 mm, 8 mm, half length 40 mm.",
@@ -136,17 +137,11 @@ class GeometryGraphFlowTest(unittest.TestCase):
         self.assertEqual(mapped.get("geometry.params.th1"), 5.0)
         self.assertEqual(mapped.get("geometry.params.th2"), 8.0)
         self.assertEqual(mapped.get("geometry.params.hz"), 40.0)
+        self.assertNotIn("geometry.params.th3", mapped)
         self.assertNotIn("geometry.params.child_rmax", mapped)
         self.assertNotIn("geometry.params.child_hz", mapped)
         self.assertNotIn("geometry.params.clearance", mapped)
-        self.assertEqual(
-            debug.get("graph_choice", {}).get("dialogue_missing_paths"),
-            [
-                "geometry.ask.shell.child_radius",
-                "geometry.ask.shell.child_half_length",
-                "geometry.ask.shell.clearance",
-            ],
-        )
+        self.assertEqual(debug.get("graph_choice", {}).get("dialogue_missing_paths"), [])
 
     def test_extractor_preserves_graph_metadata(self) -> None:
         frame = SemanticFrame()
@@ -255,6 +250,77 @@ class GeometryGraphFlowTest(unittest.TestCase):
         mapped = {update.path: update.value for update in candidate.updates}
         self.assertEqual(mapped["geometry.root_name"], "ring")
         self.assertEqual(mapped["materials.volume_material_map"], {"ring": "G4_Cu"})
+
+    def test_graph_search_prefers_ring_for_module_triplet_plus_radius_signature(self) -> None:
+        result = search_candidate_graphs(
+            "PET detector ring with module 6 mm x 6 mm x 15 mm and radius 90 mm",
+            {"module_x": 6.0, "module_y": 6.0, "module_z": 15.0, "radius": 90.0},
+            min_confidence=0.6,
+            seed=7,
+            top_k=3,
+            apply_autofix=True,
+        )
+        self.assertEqual(result.structure, "ring")
+
+    def test_graph_search_prefers_boolean_for_dual_box_signature(self) -> None:
+        result = search_candidate_graphs(
+            "set geometry to box with size 60 mm x 60 mm x 30 mm; set geometry to box with size 40 mm x 80 mm x 30 mm",
+            {
+                "bool_a_x": 60.0,
+                "bool_a_y": 60.0,
+                "bool_a_z": 30.0,
+                "bool_b_x": 40.0,
+                "bool_b_y": 80.0,
+                "bool_b_z": 30.0,
+            },
+            min_confidence=0.6,
+            seed=7,
+            top_k=3,
+            apply_autofix=True,
+        )
+        self.assertEqual(result.structure, "boolean")
+
+    def test_graph_search_prefers_nest_when_parent_and_child_signatures_exist(self) -> None:
+        result = search_candidate_graphs(
+            "outer box 80 mm x 80 mm x 80 mm, inner lead cylinder radius 15 mm, half length 25 mm, clearance 1 mm",
+            {
+                "parent_x": 80.0,
+                "parent_y": 80.0,
+                "parent_z": 80.0,
+                "child_rmax": 15.0,
+                "child_hz": 25.0,
+                "clearance": 1.0,
+                "module_x": 80.0,
+                "module_y": 80.0,
+                "module_z": 80.0,
+                "radius": 15.0,
+            },
+            min_confidence=0.6,
+            seed=7,
+            top_k=3,
+            apply_autofix=True,
+        )
+        self.assertEqual(result.structure, "nest")
+
+    def test_graph_search_prefers_grid_when_pitch_and_counts_exist(self) -> None:
+        result = search_candidate_graphs(
+            "4 x 4 layout, 6 mm x 6 mm x 1.5 mm modules, pitch_x 8 mm, pitch_y 8 mm, clearance 0.5 mm",
+            {
+                "nx": 4,
+                "ny": 4,
+                "module_x": 6.0,
+                "module_y": 6.0,
+                "module_z": 1.5,
+                "pitch_x": 8.0,
+                "pitch_y": 8.0,
+                "clearance": 0.5,
+            },
+            min_confidence=0.6,
+            seed=7,
+            top_k=3,
+            apply_autofix=True,
+        )
+        self.assertEqual(result.structure, "grid")
 
 
 if __name__ == "__main__":

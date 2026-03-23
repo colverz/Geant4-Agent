@@ -567,8 +567,12 @@ class SmokeNoOllamaTest(unittest.TestCase):
         self.assertEqual(geometry.get("params", {}).get("th1"), 5.0)
         self.assertEqual(geometry.get("params", {}).get("th2"), 8.0)
         self.assertEqual(geometry.get("params", {}).get("hz"), 40.0)
+        self.assertNotIn("th3", geometry.get("params", {}))
         self.assertNotIn("child_rmax", geometry.get("params", {}))
-        self.assertIn("geometry.ask.shell.child_radius", out.get("missing_fields", []))
+        self.assertNotIn("geometry.ask.shell.child_radius", out.get("missing_fields", []))
+        self.assertNotIn("geometry.ask.shell.child_half_length", out.get("missing_fields", []))
+        self.assertNotIn("geometry.ask.shell.clearance", out.get("missing_fields", []))
+        self.assertIn("source.position", out.get("missing_fields", []))
 
     def test_boolean_minus_request_prefers_subtraction_skeleton(self) -> None:
         out = step(
@@ -1271,6 +1275,48 @@ class SmokeNoOllamaTest(unittest.TestCase):
         self.assertEqual(out.get("config", {}).get("physics", {}).get("physics_list"), "QBBC")
         rejected_producers = {item.get("producer") for item in out.get("rejected_updates", [])}
         self.assertNotIn("llm_recommender", rejected_producers)
+
+    def test_full_stack_prompt_can_close_without_parent_box(self) -> None:
+        out = step(
+            {
+                "text": "Stack three steel slabs along z with x 100 mm and y 100 mm, thicknesses 4 mm, 8 mm, 12 mm, clearance 1 mm; gamma beam 5 MeV from (0,0,-250) mm along +z; physics Shielding; output csv.",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(out.get("config", {}).get("geometry", {}).get("structure"), "stack")
+        self.assertTrue(out.get("is_complete"))
+
+    def test_full_shell_prompt_can_close_without_nested_child_defaults(self) -> None:
+        out = step(
+            {
+                "text": "Shell geometry with inner radius 60 mm, thicknesses 4 mm, 4 mm, 4 mm, half length 100 mm, material copper; point electron source 2 MeV at center; FTFP_BERT; output json.",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(out.get("config", {}).get("geometry", {}).get("structure"), "shell")
+        self.assertTrue(out.get("is_complete"))
+
+    def test_boolean_subtraction_prefers_solid_material_over_air_hole(self) -> None:
+        out = step(
+            {
+                "text": "Create a subtraction boolean: subtract a 20 mm x 20 mm x 20 mm air box from a 100 mm x 60 mm x 40 mm iron box; point gamma 1.17 MeV at (0,0,-120) mm toward +z; physics QBBC; output json.",
+                "lang": "en",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": False,
+                "autofix": True,
+            }
+        )
+        self.assertEqual(out.get("config", {}).get("geometry", {}).get("structure"), "boolean")
+        self.assertEqual(out.get("config", {}).get("materials", {}).get("selected_materials"), ["G4_Fe"])
 
 
 if __name__ == "__main__":

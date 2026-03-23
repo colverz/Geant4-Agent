@@ -104,6 +104,85 @@ class RuntimePostprocessTest(unittest.TestCase):
         self.assertEqual(params.get("child_rmax"), 15.0)
         self.assertEqual(params.get("child_hz"), 25.0)
 
+    def test_merge_params_backfills_grid_counts_from_modules_phrase_and_shared_pitch(self) -> None:
+        params, _ = merge_params(
+            "6 by 5 modules, each module 8 mm x 8 mm x 2 mm, pitch 10 mm by 10 mm, clearance 0.5 mm, grid layout",
+            {},
+        )
+        self.assertEqual(params.get("nx"), 6)
+        self.assertEqual(params.get("ny"), 5)
+        self.assertEqual(params.get("pitch_x"), 10.0)
+        self.assertEqual(params.get("pitch_y"), 10.0)
+
+    def test_merge_params_backfills_grid_counts_from_loose_pair_when_pitch_present(self) -> None:
+        params, _ = merge_params(
+            "4 x 4 layout, 6 mm x 6 mm x 1.5 mm modules, pitch_x 8 mm, pitch_y 8 mm, clearance 0.5 mm",
+            {},
+        )
+        self.assertEqual(params.get("nx"), 4)
+        self.assertEqual(params.get("ny"), 4)
+        self.assertEqual(params.get("pitch_x"), 8.0)
+        self.assertEqual(params.get("pitch_y"), 8.0)
+
+    def test_merge_params_backfills_grid_pitch_from_and_phrase(self) -> None:
+        params, _ = merge_params(
+            "grid layout, 10 by 3 modules, each 5 mm x 20 mm x 0.5 mm, pitch 6 mm and 22 mm, clearance 0.2 mm",
+            {},
+        )
+        self.assertEqual(params.get("pitch_x"), 6.0)
+        self.assertEqual(params.get("pitch_y"), 22.0)
+
+    def test_merge_params_supports_chinese_multiplication_sign_and_axis_pitch(self) -> None:
+        params, _ = merge_params(
+            "设置为4×4网格，每个模块6毫米×6毫米×1.5毫米，x方向间距8毫米，y方向间距8毫米",
+            {},
+        )
+        self.assertEqual(params.get("nx"), 4)
+        self.assertEqual(params.get("ny"), 4)
+        self.assertEqual(params.get("module_x"), 6.0)
+        self.assertEqual(params.get("module_y"), 6.0)
+        self.assertEqual(params.get("module_z"), 1.5)
+        self.assertEqual(params.get("pitch_x"), 8.0)
+        self.assertEqual(params.get("pitch_y"), 8.0)
+
+    def test_merge_params_supports_boolean_triplets_with_chinese_multiplication_sign(self) -> None:
+        params, _ = merge_params(
+            "使用一个120毫米×80毫米×50毫米的大盒子，减去一个30毫米×20毫米×10毫米的盒子",
+            {},
+        )
+        self.assertEqual(params.get("bool_a_x"), 120.0)
+        self.assertEqual(params.get("bool_a_y"), 80.0)
+        self.assertEqual(params.get("bool_a_z"), 50.0)
+        self.assertEqual(params.get("bool_b_x"), 30.0)
+        self.assertEqual(params.get("bool_b_y"), 20.0)
+        self.assertEqual(params.get("bool_b_z"), 10.0)
+
+    def test_merge_params_backfills_nested_parent_and_child_box_triplets(self) -> None:
+        params, _ = merge_params(
+            "nested layout: parent box 300 mm x 300 mm x 300 mm, child box 100 mm x 100 mm x 100 mm, clearance 5 mm",
+            {},
+        )
+        self.assertEqual(params.get("parent_x"), 300.0)
+        self.assertEqual(params.get("parent_y"), 300.0)
+        self.assertEqual(params.get("parent_z"), 300.0)
+        self.assertEqual(params.get("child_x"), 100.0)
+        self.assertEqual(params.get("child_y"), 100.0)
+        self.assertEqual(params.get("child_z"), 100.0)
+        self.assertEqual(params.get("clearance"), 5.0)
+
+    def test_merge_params_promotes_dual_box_prompt_to_boolean_triplets(self) -> None:
+        params, notes = merge_params(
+            "set geometry to box with size 60 mm x 60 mm x 30 mm; set geometry to box with size 40 mm x 80 mm x 30 mm",
+            {},
+        )
+        self.assertEqual(params.get("bool_a_x"), 60.0)
+        self.assertEqual(params.get("bool_a_y"), 60.0)
+        self.assertEqual(params.get("bool_a_z"), 30.0)
+        self.assertEqual(params.get("bool_b_x"), 40.0)
+        self.assertEqual(params.get("bool_b_y"), 80.0)
+        self.assertEqual(params.get("bool_b_z"), 30.0)
+        self.assertTrue(any("dual-box heuristic" in note for note in notes))
+
 
 if __name__ == "__main__":
     unittest.main()

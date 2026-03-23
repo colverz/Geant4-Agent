@@ -48,6 +48,27 @@ def _sample_int(rng: random.Random, lo: int, hi: int) -> int:
 
 # ===== Skeletons =====
 
+def build_nest_box_box(p: Dict[str, float]) -> Graph:
+    nodes = {
+        "parent": Box(id="parent", x=p["parent_x"], y=p["parent_y"], z=p["parent_z"]),
+        "child": Box(id="child", x=p["child_x"], y=p["child_y"], z=p["child_z"]),
+        "nest": Nest(id="nest", parent="parent", child="child", clearance=p["clearance"]),
+    }
+    return Graph(nodes=nodes, root="nest")
+
+
+def sample_nest_box_box(rng: random.Random) -> Dict[str, float]:
+    return {
+        "parent_x": _sample_uniform(rng, 20.0, 120.0),
+        "parent_y": _sample_uniform(rng, 20.0, 120.0),
+        "parent_z": _sample_uniform(rng, 20.0, 120.0),
+        "child_x": _sample_uniform(rng, 5.0, 60.0),
+        "child_y": _sample_uniform(rng, 5.0, 60.0),
+        "child_z": _sample_uniform(rng, 5.0, 60.0),
+        "clearance": _sample_uniform(rng, 0.0, 5.0),
+    }
+
+
 def build_nest_box_tubs(p: Dict[str, float]) -> Graph:
     nodes = {
         "parent": Box(id="parent", x=p["parent_x"], y=p["parent_y"], z=p["parent_z"]),
@@ -127,15 +148,21 @@ def sample_ring_modules(rng: random.Random) -> Dict[str, float]:
 
 
 def build_stack_in_box(p: Dict[str, float]) -> Graph:
+    stack_clearance = p.get("stack_clearance", 0.0)
+    nest_clearance = p.get("nest_clearance", 0.0)
     stack = StackZ(
         id="stack",
         x=p["stack_x"],
         y=p["stack_y"],
         thicknesses=(p["t1"], p["t2"], p["t3"]),
-        clearance=p["stack_clearance"],
+        clearance=stack_clearance,
     )
-    parent = Box(id="parent", x=p["parent_x"], y=p["parent_y"], z=p["parent_z"])
-    nest = Nest(id="nest", parent="parent", child="stack", clearance=p["nest_clearance"])
+    stack_z = p["t1"] + p["t2"] + p["t3"] + 2.0 * stack_clearance
+    parent_x = p.get("parent_x", p["stack_x"] + 2.0 * nest_clearance)
+    parent_y = p.get("parent_y", p["stack_y"] + 2.0 * nest_clearance)
+    parent_z = p.get("parent_z", stack_z + 2.0 * nest_clearance)
+    parent = Box(id="parent", x=parent_x, y=parent_y, z=parent_z)
+    nest = Nest(id="nest", parent="parent", child="stack", clearance=nest_clearance)
     nodes = {"stack": stack, "parent": parent, "nest": nest}
     return Graph(nodes=nodes, root="nest")
 
@@ -156,14 +183,24 @@ def sample_stack_in_box(rng: random.Random) -> Dict[str, float]:
 
 
 def build_shell_nested(p: Dict[str, float]) -> Graph:
+    thicknesses = tuple(
+        p[key]
+        for key in ("th1", "th2", "th3")
+        if key in p and p[key] is not None
+    )
+    if not thicknesses:
+        raise KeyError("shell_nested requires at least one shell thickness")
     shell = ShellTubsFromThicknesses(
         id="shell",
         inner_r=p["inner_r"],
-        thicknesses=(p["th1"], p["th2"], p["th3"]),
+        thicknesses=thicknesses,
         hz=p["hz"],
     )
-    child = Tubs(id="child", rmax=p["child_rmax"], hz=p["child_hz"])
-    nest = Nest(id="nest", parent="shell", child="child", clearance=p["clearance"])
+    clearance = p.get("clearance", 0.0)
+    child_rmax = p.get("child_rmax", max(p["inner_r"] - clearance, 0.1))
+    child_hz = p.get("child_hz", max(p["hz"] - clearance, 0.1))
+    child = Tubs(id="child", rmax=child_rmax, hz=child_hz)
+    nest = Nest(id="nest", parent="shell", child="child", clearance=clearance)
     nodes = {"shell": shell, "child": child, "nest": nest}
     return Graph(nodes=nodes, root="nest")
 
@@ -531,6 +568,14 @@ def register_skeleton(skeleton: Skeleton) -> None:
 
 register_skeleton(
     Skeleton(
+        name="nest_box_box",
+        build_fn=build_nest_box_box,
+        param_sampler=sample_nest_box_box,
+        param_keys=("parent_x", "parent_y", "parent_z", "child_x", "child_y", "child_z", "clearance"),
+    )
+)
+register_skeleton(
+    Skeleton(
         name="nest_box_tubs",
         build_fn=build_nest_box_tubs,
         param_sampler=sample_nest_box_tubs,
@@ -565,10 +610,6 @@ register_skeleton(
             "t2",
             "t3",
             "stack_clearance",
-            "parent_x",
-            "parent_y",
-            "parent_z",
-            "nest_clearance",
         ),
     )
 )
@@ -577,7 +618,7 @@ register_skeleton(
         name="shell_nested",
         build_fn=build_shell_nested,
         param_sampler=sample_shell_nested,
-        param_keys=("inner_r", "th1", "th2", "hz", "child_rmax", "child_hz", "clearance"),
+        param_keys=("inner_r", "th1", "th2", "hz"),
     )
 )
 register_skeleton(

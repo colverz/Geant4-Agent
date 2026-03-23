@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -289,7 +289,7 @@ class DialogueAgentTest(unittest.TestCase):
                 decision,
                 lang="en",
                 use_llm_question=True,
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 user_temperature=1.0,
                 dialogue_summary={},
                 raw_dialogue=[{"role": "user", "content": "build a box"}],
@@ -313,7 +313,7 @@ class DialogueAgentTest(unittest.TestCase):
                 decision,
                 lang="en",
                 use_llm_question=True,
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 user_temperature=1.0,
                 dialogue_summary={},
                 raw_dialogue=[],
@@ -325,3 +325,4 @@ class DialogueAgentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

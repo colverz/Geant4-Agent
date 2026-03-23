@@ -5,7 +5,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = ROOT / "nlu" / "bert_lab" / "models"
+MODELS_DIR = ROOT / "nlu" / "training" / "bert_lab" / "models"
 STRUCTURE_MODEL_CANDIDATES = [
     "structure_controlled_v4c_e1",
     "structure_controlled_v3_e1",
@@ -85,4 +85,3 @@ def runtime_model_readiness(models_dir: Path = MODELS_DIR) -> dict[str, Any]:
         "ner": ner_report,
         "ready": bool(structure_report["ok"] and ner_report["ok"]),
     }
-

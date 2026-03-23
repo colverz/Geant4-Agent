@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ from core.validation.error_codes import (
     E_LLM_FRAME_PARSE_FAILED,
     E_LLM_FRAME_SCHEMA_INVALID,
 )
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.ollama_client import chat, extract_json
 
 
 _ALLOWED_PREFIXES = ("geometry.", "materials.", "source.", "physics.", "output.")
@@ -54,7 +54,7 @@ _MATERIAL_ALIASES = {
     "cesium iodide": "G4_CESIUM_IODIDE",
     "caesium iodide": "G4_CESIUM_IODIDE",
     "csi": "G4_CESIUM_IODIDE",
-    "碘化铯": "G4_CESIUM_IODIDE",
+    "\u7898\u5316\u94ef": "G4_CESIUM_IODIDE",
     "g4_csi": "G4_CESIUM_IODIDE",
     "g4_cesium_iodide": "G4_CESIUM_IODIDE",
     "g4_cesium-iodide": "G4_CESIUM_IODIDE",
@@ -193,7 +193,7 @@ def _parse_triplet_mm(value: Any) -> tuple[float, float, float] | None:
             text = ",".join(str(x) for x in value)
     else:
         text = str(value or "")
-    text = text.strip().lower().replace("×", "x")
+    text = text.strip().lower().replace("脳", "x")
     if not text:
         return None
 
@@ -245,7 +245,7 @@ def _coerce_vector(value: Any) -> dict[str, Any] | None:
                 "-z": [0.0, 0.0, -1.0],
             }
             return {"type": "vector", "value": mapping[low]}
-        m = re.match(r"^\(?\s*([-+]?\d*\.?\d+)\s*[,，]\s*([-+]?\d*\.?\d+)\s*[,，]\s*([-+]?\d*\.?\d+)\s*\)?$", low)
+        m = re.match(r"^\(?\s*([-+]?\d*\.?\d+)\s*[,锛宂\s*([-+]?\d*\.?\d+)\s*[,锛宂\s*([-+]?\d*\.?\d+)\s*\)?$", low)
         if m:
             return {"type": "vector", "value": [float(m.group(1)), float(m.group(2)), float(m.group(3))]}
     return None
@@ -565,3 +565,4 @@ def build_llm_semantic_frame(
         fallback_reason=None,
         schema_errors=[],
     )
+

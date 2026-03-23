@@ -60,6 +60,66 @@ class DialogueRendererTest(unittest.TestCase):
         self.assertIn("material", message.lower())
         self.assertIn("Reply 'confirm' to apply it", message)
 
+    def test_overwrite_confirmation_humanizes_structure_value(self) -> None:
+        message = render_dialogue_message(
+            DialogueDecision(
+                action=DialogueAction.CONFIRM_OVERWRITE,
+                overwrite_preview=[{"path": "geometry.structure", "old": "single_box", "new": "single_tubs"}],
+                user_intent="MODIFY",
+            ),
+            lang="en",
+            use_llm_question=False,
+            ollama_config="",
+            user_temperature=1.0,
+            dialogue_summary={},
+            raw_dialogue=[],
+        )
+        self.assertIn("box", message.lower())
+        self.assertIn("cylinder", message.lower())
+        self.assertNotIn("single_box", message)
+        self.assertNotIn("single_tubs", message)
+
+    def test_overwrite_confirmation_hides_graph_program_payload(self) -> None:
+        message = render_dialogue_message(
+            DialogueDecision(
+                action=DialogueAction.CONFIRM_OVERWRITE,
+                overwrite_preview=[{"path": "geometry.graph_program", "old": {"root": "box"}, "new": {"root": "ring"}}],
+                user_intent="MODIFY",
+            ),
+            lang="en",
+            use_llm_question=False,
+            ollama_config="",
+            user_temperature=1.0,
+            dialogue_summary={},
+            raw_dialogue=[],
+        )
+        self.assertIn("updated geometry program", message.lower())
+        self.assertNotIn("geometry.graph_program", message)
+        self.assertNotIn("{'root': 'box'}", message)
+
+
+
+    def test_finalize_prefers_current_turn_confirmed_fields_over_stale_history(self) -> None:
+        message = render_dialogue_message(
+            DialogueDecision(
+                action=DialogueAction.FINALIZE,
+                updated_paths=["geometry.structure", "materials.selected_materials"],
+                answered_this_turn=["geometry.structure", "materials.selected_materials"],
+                user_intent="CONFIRM",
+            ),
+            lang="en",
+            use_llm_question=False,
+            ollama_config="",
+            user_temperature=1.0,
+            dialogue_summary={
+                "updated_fields": ["geometry type", "material"],
+                "answered_fields": ["geometry type", "material"],
+                "recent_confirmed": ["boolean solid A x", "boolean solid B y"],
+            },
+            raw_dialogue=[],
+        )
+        self.assertIn("Configuration complete", message)
+        self.assertNotIn("boolean solid", message.lower())
 
 if __name__ == "__main__":
     unittest.main()

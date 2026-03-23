@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from unittest import mock
@@ -12,7 +12,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["source.energy"],
                 lang="en",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
                 recent_user_text="I already set the geometry.",
                 confirmed_items=["geometry structure", "material"],
@@ -27,7 +27,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["source.type"],
                 lang="en",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "I still need the source type, for example point, beam, or isotropic.")
@@ -37,7 +37,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["geometry.ask.ring.radius"],
                 lang="en",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "To complete the ring geometry, I still need the ring radius.")
@@ -47,7 +47,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["source.energy"],
                 lang="en",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "I still need the source energy in MeV.")
@@ -57,7 +57,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["materials.volume_material_map"],
                 lang="en",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "I still need the material assignment, meaning which volume uses which material.")
@@ -67,10 +67,10 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["source.energy"],
                 lang="zh",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
-        self.assertEqual(out, "还需要确认源能量，按 MeV 给出即可。")
+        self.assertEqual(out, "\u8fd8\u9700\u8981\u786e\u8ba4\u6e90\u80fd\u91cf\uff0c\u6309 MeV \u7ed9\u51fa\u5373\u53ef\u3002")
 
     def test_naturalize_response_uses_llm_reply(self) -> None:
         with mock.patch("planner.agent.chat", return_value={"response": "Naturalized response."}) as mocked_chat:
@@ -84,7 +84,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[],
                 dialogue_summary={"updated_fields": ["source energy"]},
                 raw_dialogue=[{"role": "user", "content": "set source energy to 1 MeV"}],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "Naturalized response.")
@@ -102,7 +102,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[],
                 dialogue_summary={},
                 raw_dialogue=[],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "Base response.")
@@ -124,7 +124,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[{"path": "materials.selected_materials", "old": "G4_Cu", "new": "G4_Al"}],
                 dialogue_summary={"pending_fields": ["output path"]},
                 raw_dialogue=[{"role": "user", "content": "change material to aluminum"}],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(
@@ -140,10 +140,10 @@ class DialogueNaturalizationTest(unittest.TestCase):
             out = ask_missing(
                 ["source.energy"],
                 lang="zh",
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
-        self.assertEqual(out, "还需要确认源能量，按 MeV 给出即可。")
+        self.assertEqual(out, "\u8fd8\u9700\u8981\u786e\u8ba4\u6e90\u80fd\u91cf\uff0c\u6309 MeV \u7ed9\u51fa\u5373\u53ef\u3002")
 
     def test_naturalize_response_rejects_internal_field_output(self) -> None:
         with mock.patch("planner.agent.chat", return_value={"response": "Updated source.energy and output.path."}):
@@ -157,7 +157,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[],
                 dialogue_summary={},
                 raw_dialogue=[],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "Base response.")
@@ -174,13 +174,13 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[],
                 dialogue_summary={},
                 raw_dialogue=[],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "Base response.")
 
     def test_naturalize_response_rejects_language_mismatch(self) -> None:
-        with mock.patch("planner.agent.chat", return_value={"response": "我已经更新好了。"}):
+        with mock.patch("planner.agent.chat", return_value={"response": "\u6211\u5df2\u7ecf\u66f4\u65b0\u597d\u4e86\u3002"}):
             out = naturalize_response(
                 "Base response.",
                 lang="en",
@@ -191,7 +191,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[],
                 dialogue_summary={},
                 raw_dialogue=[],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertEqual(out, "Base response.")
@@ -208,7 +208,7 @@ class DialogueNaturalizationTest(unittest.TestCase):
                 overwrite_preview=[{"path": "output.format", "old": "csv", "new": "root"}],
                 dialogue_summary={},
                 raw_dialogue=[],
-                ollama_config="nlu/bert_lab/configs/ollama_config.json",
+                ollama_config="nlu/llm_support/configs/ollama_config.json",
                 temperature=1.0,
             )
         self.assertIn("Reply 'confirm' to apply it", out)
@@ -216,3 +216,4 @@ class DialogueNaturalizationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

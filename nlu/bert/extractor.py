@@ -134,29 +134,37 @@ def _infer_particle(text: str) -> str | None:
 
 def _infer_material(text: str) -> str | None:
     low = text.lower()
-    if "g4_air" in low or "air" in low or "\u7a7a\u6c14" in low:
-        return "G4_AIR"
-    if "g4_cesium_iodide" in low or "g4_cesium-iodide" in low or "g4_csi" in low or "cesium iodide" in low or "caesium iodide" in low or "csi" in low:
-        return "G4_CESIUM_IODIDE"
-    if "g4_pb" in low or "lead" in low or "\u94c5" in low:
-        return "G4_Pb"
-    if "g4_stainless-steel" in low or "g4_stainless_steel" in low or "stainless steel" in low or "steel" in low or "\u94a2" in low:
-        return "G4_STAINLESS-STEEL"
-    if "g4_fe" in low or "iron" in low or "\u94c1" in low:
-        return "G4_Fe"
-    if "g4_w" in low or "tungsten" in low or "\u94a8" in low:
-        return "G4_W"
-    if "g4_cu" in low or "copper" in low or "\u94dc" in low:
-        return "G4_Cu"
-    if "g4_si" in low or "silicon" in low or "\u7845" in low:
-        return "G4_Si"
-    if "g4_al" in low or "aluminum" in low or "aluminium" in low or "\u94dd" in low:
-        return "G4_Al"
-    if "concrete" in low or "\u6df7\u51dd\u571f" in low:
-        return "G4_CONCRETE"
-    if "g4_water" in low or "water" in low or "\u6c34" in low:
-        return "G4_WATER"
-    return None
+    ordered = [
+        ("G4_AIR", ["g4_air", "air", "空气"]),
+        ("G4_CESIUM_IODIDE", ["g4_cesium_iodide", "g4_cesium-iodide", "g4_csi", "cesium iodide", "caesium iodide", "csi", "碘化铯"]),
+        ("G4_Pb", ["g4_pb", "lead", "铅"]),
+        ("G4_STAINLESS-STEEL", ["g4_stainless-steel", "g4_stainless_steel", "stainless steel", "steel", "钢"]),
+        ("G4_Fe", ["g4_fe", "iron", "铁"]),
+        ("G4_W", ["g4_w", "tungsten", "钨"]),
+        ("G4_Cu", ["g4_cu", "copper", "铜"]),
+        ("G4_Si", ["g4_si", "silicon", "硅"]),
+        ("G4_Al", ["g4_al", "aluminum", "aluminium", "铝"]),
+        ("G4_CONCRETE", ["g4_concrete", "concrete", "混凝土"]),
+        ("G4_WATER", ["g4_water", "water", "水"]),
+    ]
+    mentions: list[str] = []
+    for canonical, aliases in ordered:
+        for alias in aliases:
+            if alias in low:
+                mentions.append(canonical)
+                break
+    dedup: list[str] = []
+    for material in mentions:
+        if material not in dedup:
+            dedup.append(material)
+    if any(
+        token in low
+        for token in ("boolean", "subtract", "subtraction", "difference", "minus", "hole", "cut out", "cutout", "减去", "差集", "挖空", "开孔", "打孔")
+    ):
+        for material in dedup:
+            if material != "G4_AIR":
+                return material
+    return dedup[0] if dedup else None
 
 
 def _infer_output_format(text: str) -> str | None:
@@ -192,21 +200,22 @@ def _infer_source_type(text: str) -> str | None:
 def _parse_vector(text: str, key: str) -> dict | None:
     num = r"[-+]?\d*\.?\d+"
     unit = r"(?:\s*(?:mm|cm|m))?"
-    sep = r"\s*[,， ]+\s*"
+    sep = r"\s*[,?]+\s*"
     key_patterns = {
-        "position": r"(?:position|pos|source\s*at|\u4f4d\u7f6e|\u5750\u6807)",
-        "direction": r"(?:direction|dir|pointing|\u65b9\u5411)",
+        "position": r"(?:position|pos|source\s*at|from|位置|坐标)",
+        "direction": r"(?:direction|dir|pointing|方向)",
     }
     key_pat = key_patterns.get(key, re.escape(key))
     pat = (
-        rf"{key_pat}\s*[:=]?\s*\(?\s*({num}){unit}{sep}"
-        rf"({num}){unit}{sep}"
-        rf"({num}){unit}\s*\)?"
+        rf"{key_pat}\s*[:=]?\s*"
+        rf"(?:\(\s*({num})\s*{sep}({num})\s*{sep}({num})\s*\)\s*{unit}"
+        rf"|({num}){unit}{sep}({num}){unit}{sep}({num}){unit})"
     )
     m = re.search(pat, text.lower())
     if not m:
         return None
-    return {"type": "vector", "value": [float(m.group(1)), float(m.group(2)), float(m.group(3))]}
+    groups = [g for g in m.groups() if g is not None]
+    return {"type": "vector", "value": [float(groups[0]), float(groups[1]), float(groups[2])]}
 
 
 def _parse_direction_shorthand(text: str) -> dict | None:

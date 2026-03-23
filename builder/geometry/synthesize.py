@@ -12,12 +12,13 @@ from .library import SKELETONS
 
 
 STRUCTURE_ALIASES: Dict[str, Tuple[str, ...]] = {
-    "nest": ("nest_box_tubs", "stack_in_box", "shell_nested"),
+    "nest": ("nest_box_box", "nest_box_tubs", "stack_in_box", "shell_nested"),
     "grid": ("grid_modules",),
     "ring": ("ring_modules",),
     "stack": ("stack_in_box",),
     "shell": ("shell_nested",),
     "box_tubs": ("nest_box_tubs",),
+    "box_box": ("nest_box_box",),
     "box": ("single_box",),
     "cube": ("single_box",),
     "single_box": ("single_box",),
@@ -94,6 +95,16 @@ def _apply_autofix(sk_name: str, p: Dict[str, float]) -> Dict[str, float]:
             min_radius = needed / denom
             if out["radius"] < min_radius:
                 out["radius"] = min_radius
+    elif sk_name == "nest_box_box":
+        needed_x = out["child_x"] + 2.0 * out["clearance"]
+        needed_y = out["child_y"] + 2.0 * out["clearance"]
+        needed_z = out["child_z"] + 2.0 * out["clearance"]
+        if out["parent_x"] < needed_x:
+            out["parent_x"] = needed_x
+        if out["parent_y"] < needed_y:
+            out["parent_y"] = needed_y
+        if out["parent_z"] < needed_z:
+            out["parent_z"] = needed_z
     elif sk_name == "nest_box_tubs":
         needed_xy = 2.0 * out["child_rmax"] + 2.0 * out["clearance"]
         needed_z = 2.0 * out["child_hz"] + 2.0 * out["clearance"]
@@ -115,11 +126,19 @@ def _apply_autofix(sk_name: str, p: Dict[str, float]) -> Dict[str, float]:
         if out["parent_z"] < needed_z:
             out["parent_z"] = needed_z
     elif sk_name == "shell_nested":
-        shell_rmax = out["inner_r"] + out["th1"] + out["th2"] + out["th3"]
-        needed_rmax = out["child_rmax"] + out["clearance"]
+        thickness_total = sum(
+            float(out[key])
+            for key in ("th1", "th2", "th3")
+            if key in out and out[key] is not None
+        )
+        shell_rmax = out["inner_r"] + thickness_total
+        clearance = float(out.get("clearance", 0.0))
+        child_rmax = float(out.get("child_rmax", max(out["inner_r"] - clearance, 0.1)))
+        child_hz = float(out.get("child_hz", max(out["hz"] - clearance, 0.1)))
+        needed_rmax = child_rmax + clearance
         if shell_rmax < needed_rmax:
-            out["th3"] += needed_rmax - shell_rmax
-        needed_hz = out["child_hz"] + out["clearance"]
+            out["th3"] = float(out.get("th3", 0.0)) + (needed_rmax - shell_rmax)
+        needed_hz = child_hz + clearance
         if out["hz"] < needed_hz:
             out["hz"] = needed_hz
     return out
@@ -141,6 +160,10 @@ def synthesize_from_params(
     missing = _missing_params(sk, user_params)
     default_params = sk.param_sampler(rng)
     params = _fill_params(user_params, default_params)
+    if sk.name == "shell_nested":
+        for optional_key in ("th3", "child_rmax", "child_hz", "clearance"):
+            if optional_key not in user_params:
+                params.pop(optional_key, None)
     if apply_autofix:
         params = _apply_autofix(sk.name, params)
 

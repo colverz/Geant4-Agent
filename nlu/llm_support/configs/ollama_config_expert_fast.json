@@ -1,0 +1,9 @@
+{
+  "provider": "ollama",
+  "base_url": "http://localhost:11434",
+  "model": "g4_expert_14b:latest",
+  "timeout_s": 120,
+  "headers": {
+    "Content-Type": "application/json"
+  }
+}

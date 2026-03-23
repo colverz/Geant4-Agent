@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -12,8 +12,8 @@ from core.config.defaults import build_legacy_default_config
 from core.config.field_registry import friendly_labels
 from core.config.phase_registry import phase_title, select_phase_fields
 from core.config.prompt_registry import clarification_fallback, completion_message
-from nlu.bert_lab.llm_bridge import build_missing_params_prompt, build_missing_params_schema
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.llm_bridge import build_missing_params_prompt, build_missing_params_schema
+from nlu.llm_support.ollama_client import chat, extract_json
 from planner.agent import ask_missing
 from ui.web.runtime_state import get_ollama_config_path
 
@@ -134,9 +134,9 @@ def _heuristic_focus(text: str) -> List[str]:
 
 def _infer_geometry_hint(text: str) -> Optional[str]:
     low = text.lower()
-    if any(k in low for k in ["cube", "box", "立方体", "长方体"]):
+    if any(k in low for k in ["cube", "box", "绔嬫柟浣?, "闀挎柟浣?]):
         return "single_box"
-    if any(k in low for k in ["cylinder", "tubs", "圆柱"]):
+    if any(k in low for k in ["cylinder", "tubs", "鍦嗘煴"]):
         return "single_tubs"
     return None
 
@@ -145,7 +145,7 @@ def _has_explicit_geometry_assignment(text: str) -> bool:
     low = text.lower()
     if re.search(r"\b(structure|geometry)\s*[:=]", low):
         return True
-    if re.search(r"(几何|结构)\s*[:=]", text):
+    if re.search(r"(鍑犱綍|缁撴瀯)\s*[:=]", text):
         return True
 
     shape_tokens = (
@@ -164,14 +164,14 @@ def _has_explicit_geometry_assignment(text: str) -> bool:
         "polycone",
         "cuttubs",
         "boolean",
-        "环形",
-        "阵列",
-        "堆叠",
-        "嵌套",
-        "壳层",
-        "立方体",
-        "圆柱",
-        "球",
+        "鐜舰",
+        "闃靛垪",
+        "鍫嗗彔",
+        "宓屽",
+        "澹冲眰",
+        "绔嬫柟浣?,
+        "鍦嗘煴",
+        "鐞?,
     )
     verb_tokens = (
         "use",
@@ -182,11 +182,11 @@ def _has_explicit_geometry_assignment(text: str) -> bool:
         "change",
         "switch",
         "update",
-        "改成",
-        "改为",
-        "换成",
-        "改用",
-        "设置",
+        "鏀规垚",
+        "鏀逛负",
+        "鎹㈡垚",
+        "鏀圭敤",
+        "璁剧疆",
     )
     has_shape = any(tok in low or tok in text for tok in shape_tokens)
     has_verb = any(tok in low or tok in text for tok in verb_tokens)
@@ -405,12 +405,12 @@ def _parse_triplet(text: str, key: str) -> Optional[Dict[str, Any]]:
 def _infer_direction_from_text(text: str) -> Optional[Dict[str, Any]]:
     low = text.lower().replace(" ", "")
     mapping = [
-        (("+z", "沿+z", "towards+z", "along+z"), [0.0, 0.0, 1.0]),
-        (("-z", "沿-z", "towards-z", "along-z"), [0.0, 0.0, -1.0]),
-        (("+x", "沿+x", "towards+x", "along+x"), [1.0, 0.0, 0.0]),
-        (("-x", "沿-x", "towards-x", "along-x"), [-1.0, 0.0, 0.0]),
-        (("+y", "沿+y", "towards+y", "along+y"), [0.0, 1.0, 0.0]),
-        (("-y", "沿-y", "towards-y", "along-y"), [0.0, -1.0, 0.0]),
+        (("+z", "娌?z", "towards+z", "along+z"), [0.0, 0.0, 1.0]),
+        (("-z", "娌?z", "towards-z", "along-z"), [0.0, 0.0, -1.0]),
+        (("+x", "娌?x", "towards+x", "along+x"), [1.0, 0.0, 0.0]),
+        (("-x", "娌?x", "towards-x", "along-x"), [-1.0, 0.0, 0.0]),
+        (("+y", "娌?y", "towards+y", "along+y"), [0.0, 1.0, 0.0]),
+        (("-y", "娌?y", "towards-y", "along-y"), [0.0, -1.0, 0.0]),
     ]
     for keys, vec in mapping:
         if any(k in low for k in keys):
@@ -420,7 +420,7 @@ def _infer_direction_from_text(text: str) -> Optional[Dict[str, Any]]:
 
 def _infer_position_from_text(text: str) -> Optional[Dict[str, Any]]:
     low = text.lower()
-    if any(k in low for k in ["origin", "at origin", "原点", "中心", "center"]):
+    if any(k in low for k in ["origin", "at origin", "鍘熺偣", "涓績", "center"]):
         return {"type": "vector", "value": [0.0, 0.0, 0.0]}
     return None
 
@@ -669,10 +669,10 @@ def _is_physics_recommend_request(text: str) -> bool:
     physics_tokens = [
         "physics list",
         "physics_list",
-        "物理列表",
-        "物理过程",
-        "预置物理",
-        "预设物理",
+        "鐗╃悊鍒楄〃",
+        "鐗╃悊杩囩▼",
+        "棰勭疆鐗╃悊",
+        "棰勮鐗╃悊",
     ]
     decision_tokens = [
         "choose",
@@ -681,11 +681,11 @@ def _is_physics_recommend_request(text: str) -> bool:
         "best",
         "most suitable",
         "pick",
-        "选择",
-        "推荐",
-        "最合适",
-        "给出名称",
-        "备选",
+        "閫夋嫨",
+        "鎺ㄨ崘",
+        "鏈€鍚堥€?,
+        "缁欏嚭鍚嶇О",
+        "澶囬€?,
     ]
     has_physics = any(t in low or t in text for t in physics_tokens)
     has_decision = any(t in low or t in text for t in decision_tokens)
@@ -789,7 +789,7 @@ def legacy_step(payload: Dict[str, Any]) -> Dict[str, Any]:
     needs_norm = bool(debug.get("requires_llm_normalization", False))
     if needs_norm:
         msg = (
-            "请先启用/修复 LLM 归一化（Ollama），再继续提取参数。"
+            "璇峰厛鍚敤/淇 LLM 褰掍竴鍖栵紙Ollama锛夛紝鍐嶇户缁彁鍙栧弬鏁般€?
             if lang == "zh"
             else "Please enable/fix LLM normalization (Ollama) before parameter extraction."
         )
@@ -806,7 +806,7 @@ def legacy_step(payload: Dict[str, Any]) -> Dict[str, Any]:
             "missing_fields": state.missing_fields,
             "assistant_message": msg,
             "phase": "normalization",
-            "phase_title": "输入归一化" if lang == "zh" else "Input Normalization",
+            "phase_title": "杈撳叆褰掍竴鍖? if lang == "zh" else "Input Normalization",
             "asked_fields": [],
             "asked_fields_friendly": [],
             "is_complete": False,
@@ -1008,5 +1008,6 @@ def legacy_solve(payload: Dict[str, Any]) -> Dict[str, Any]:
         "graph_candidates": debug.get("graph_candidates", []),
         "best_candidate": best,
     }
+
 
 

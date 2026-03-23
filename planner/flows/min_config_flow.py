@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any, Dict
 
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.ollama_client import chat, extract_json
 
 
 def load_text(path: str | Path) -> str:
@@ -25,7 +25,7 @@ def generate_min_config(
     user_text: str,
     schema_path: str = "core/schema/geant4_min_config.schema.json",
     system_path: str = "core/prompts/min_config_system.txt",
-    ollama_config: str = "nlu/bert_lab/configs/ollama_config.json",
+    ollama_config: str = "nlu/llm_support/configs/ollama_config.json",
 ) -> Dict[str, Any]:
     schema_text = load_text(schema_path)
     system_text = load_text(system_path)
@@ -42,9 +42,10 @@ if __name__ == "__main__":
     parser.add_argument("--text", required=True)
     parser.add_argument("--schema", default="core/schema/geant4_min_config.schema.json")
     parser.add_argument("--system", default="core/prompts/min_config_system.txt")
-    parser.add_argument("--ollama_config", default="nlu/bert_lab/configs/ollama_config.json")
+    parser.add_argument("--ollama_config", default="nlu/llm_support/configs/ollama_config.json")
     args = parser.parse_args()
 
     out = generate_min_config(args.text, args.schema, args.system, args.ollama_config)
     print(json.dumps(out, indent=2))
+
 

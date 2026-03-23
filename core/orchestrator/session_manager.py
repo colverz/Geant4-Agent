@@ -59,11 +59,118 @@ SESSIONS: dict[str, SessionState] = {}
 
 
 def _load_knowledge() -> dict[str, list[str]]:
+    materials = json.loads((KNOWLEDGE_DIR / "materials_geant4_nist.json").read_text(encoding="utf-8")).get(
+        "materials", []
+    )
+    source_types = json.loads((KNOWLEDGE_DIR / "source_constraints.json").read_text(encoding="utf-8")).get("types", [])
+    output_formats = json.loads((KNOWLEDGE_DIR / "output_formats.json").read_text(encoding="utf-8")).get("items", [])
     physics_lists = json.loads((KNOWLEDGE_DIR / "physics_lists.json").read_text(encoding="utf-8")).get("items", [])
-    return {"physics_lists": physics_lists}
+    return {
+        "materials": materials,
+        "source_types": source_types or ["point", "beam", "plane", "isotropic"],
+        "output_formats": output_formats or ["root", "csv", "hdf5", "xml", "json"],
+        "physics_lists": physics_lists,
+    }
 
 
 KNOWLEDGE = _load_knowledge()
+
+_MATERIAL_ALIASES = {
+    "air": "G4_AIR",
+    "water": "G4_WATER",
+    "silicon": "G4_Si",
+    "copper": "G4_Cu",
+    "aluminum": "G4_Al",
+    "aluminium": "G4_Al",
+    "iron": "G4_Fe",
+    "steel": "G4_STAINLESS-STEEL",
+    "stainless steel": "G4_STAINLESS-STEEL",
+    "lead": "G4_Pb",
+    "tungsten": "G4_W",
+    "csi": "G4_CESIUM_IODIDE",
+    "cesium iodide": "G4_CESIUM_IODIDE",
+    "caesium iodide": "G4_CESIUM_IODIDE",
+    "g4_si": "G4_Si",
+    "g4_cu": "G4_Cu",
+    "g4_al": "G4_Al",
+    "g4_fe": "G4_Fe",
+    "g4_pb": "G4_Pb",
+    "g4_w": "G4_W",
+    "铜": "G4_Cu",
+    "铝": "G4_Al",
+    "铁": "G4_Fe",
+    "钢": "G4_STAINLESS-STEEL",
+    "铅": "G4_Pb",
+    "钨": "G4_W",
+    "硅": "G4_Si",
+    "空气": "G4_AIR",
+    "水": "G4_WATER",
+    "碘化铯": "G4_CESIUM_IODIDE",
+}
+
+_SOURCE_TYPE_ALIASES = {
+    "point source": "point",
+    "点源": "point",
+    "点状源": "point",
+    "beam": "beam",
+    "pencil beam": "beam",
+    "collimated beam": "beam",
+    "collimated": "beam",
+    "束流": "beam",
+    "粒子束": "beam",
+    "准直束": "beam",
+    "plane source": "plane",
+    "plane": "plane",
+    "面源": "plane",
+    "isotropic": "isotropic",
+    "各向同性": "isotropic",
+}
+
+
+def _alias_match(text: str, mapping: dict[str, str], allowed: list[str]) -> str | None:
+    low = (text or "").lower()
+    for alias, canonical in sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True):
+        alias_low = alias.lower()
+        if re.search(r"[A-Za-z0-9_]", alias_low):
+            if re.search(rf"(?<![A-Za-z0-9_]){re.escape(alias_low)}(?![A-Za-z0-9_])", low):
+                if canonical in allowed:
+                    return canonical
+        elif alias in text and canonical in allowed:
+            return canonical
+    return None
+
+
+def _extract_forced_material_choice(text: str) -> str | None:
+    merged = text or ""
+    low = merged.lower()
+    # Avoid opportunistic one-token matches unless material is explicitly being set.
+    explicit_material_context = bool(
+        re.search(r"(?:\bmaterial\b|\bmade of\b|\buse\b|\bwith\b)", low)
+        or any(token in merged for token in ("材料", "材质", "用"))
+    )
+    if not explicit_material_context:
+        return None
+    return _match_choice(merged, KNOWLEDGE["materials"]) or _alias_match(
+        merged,
+        _MATERIAL_ALIASES,
+        KNOWLEDGE["materials"],
+    )
+
+
+def _extract_forced_source_type_choice(text: str) -> str | None:
+    merged = text or ""
+    low = merged.lower()
+    if "point source" in low or "点源" in merged or "点状源" in merged:
+        return "point"
+    if any(token in low for token in ("pencil beam", "collimated beam", "beam")) or any(
+        token in merged for token in ("束流", "粒子束", "准直束")
+    ):
+        return "beam"
+    if "plane source" in low or "面源" in merged:
+        return "plane"
+    if "isotropic" in low or "各向同性" in merged:
+        return "isotropic"
+    return None
 
 
 def default_config() -> dict[str, Any]:
@@ -498,8 +605,7 @@ def _build_forced_explicit_candidate(
                 )
             )
 
-    output_formats = ["root", "csv", "hdf5", "xml", "json"]
-    output_fmt = _match_choice(merged, output_formats)
+    output_fmt = _match_choice(merged, KNOWLEDGE["output_formats"])
     should_try_output = (
         user_candidate.intent in {Intent.SET, Intent.MODIFY}
         or "output.format" in user_candidate.target_paths

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
@@ -19,7 +19,7 @@ from core.validation.error_codes import (
     E_LLM_SLOT_PARSE_FAILED,
     E_LLM_SLOT_SCHEMA_INVALID,
 )
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.ollama_client import chat, extract_json
 from nlu.uncertainty import (
     has_grounded_payload_for_target,
     has_uncertainty_signal,
@@ -100,7 +100,7 @@ _MATERIAL_ALIASES = {
     "cesium iodide": "G4_CESIUM_IODIDE",
     "caesium iodide": "G4_CESIUM_IODIDE",
     "csi": "G4_CESIUM_IODIDE",
-    "碘化铯": "G4_CESIUM_IODIDE",
+    "\u7898\u5316\u94ef": "G4_CESIUM_IODIDE",
     "g4_csi": "G4_CESIUM_IODIDE",
     "g4_cesium_iodide": "G4_CESIUM_IODIDE",
     "g4_cesium-iodide": "G4_CESIUM_IODIDE",
@@ -217,7 +217,7 @@ def _coerce_length_mm(value: Any) -> float | None:
     try:
         return float(text)
     except ValueError:
-        m = re.fullmatch(r"([-+]?\d*\.?\d+)\s*(mm|cm|m|毫米|厘米|米)", text)
+        m = re.fullmatch(r"([-+]?\d*\.?\d+)\s*(mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)", text)
         if not m:
             return None
         return _to_mm(float(m.group(1)), m.group(2))
@@ -229,7 +229,7 @@ def _coerce_triplet_mm(value: Any) -> list[float] | None:
             return [float(value[0]), float(value[1]), float(value[2])]
         except Exception:
             pass
-    text = str(value or "").strip().lower().replace("×", "x")
+    text = str(value or "").strip().lower().replace("\u00d7", "x")
     if not text or text in _NULL_LITERALS:
         return None
     num = r"[-+]?\d*\.?\d+"
@@ -320,27 +320,53 @@ def _canonical_output_format(value: Any) -> str | None:
 
 def _extract_explicit_material(text: str) -> str | None:
     low = text.lower()
+    hits: list[tuple[int, str]] = []
     for alias, canonical in _MATERIAL_ALIASES.items():
         alias_low = alias.lower()
         if re.search(r"[A-Za-z0-9_]", alias_low):
-            if re.search(rf"(?<![A-Za-z0-9_]){re.escape(alias_low)}(?![A-Za-z0-9_])", low):
-                return canonical
+            for match in re.finditer(rf"(?<![A-Za-z0-9_]){re.escape(alias_low)}(?![A-Za-z0-9_])", low):
+                hits.append((match.start(), canonical))
         elif alias in text:
-            return canonical
-    return None
+            hits.append((text.index(alias), canonical))
+    if not hits:
+        return None
+    hits.sort(key=lambda item: item[0])
+    ordered: list[str] = []
+    for _, canonical in hits:
+        if canonical not in ordered:
+            ordered.append(canonical)
+    if any(
+        token in low
+        for token in (
+            "boolean",
+            "subtract",
+            "subtraction",
+            "difference",
+            "minus",
+            "hole",
+            "cut out",
+            "cutout",
+        )
+    ):
+        for material in ordered:
+            if material != "G4_AIR":
+                return material
+    return ordered[0]
 
 
 def _extract_explicit_source_kind(text: str) -> str | None:
     low = text.lower()
-    if any(token in low for token in ("isotropic", "各向同性")):
+    if "isotropic" in low or "\u5404\u5411\u540c\u6027" in text:
         return "isotropic"
-    if re.search(r"(?<![A-Za-z0-9_])beam(?![A-Za-z0-9_])", low) or "束流" in text:
+    if re.search(r"(?<![A-Za-z0-9_])beam(?![A-Za-z0-9_])", low) or any(
+        token in text for token in ("\u675f\u6d41", "\u7c92\u5b50\u675f", "\u51c6\u76f4", "\u5e73\u884c\u675f")
+    ):
         return "beam"
     if re.search(r"(?<![A-Za-z0-9_])point source(?![A-Za-z0-9_])", low) or re.search(
         r"(?<![A-Za-z0-9_])point(?![A-Za-z0-9_])", low
-    ) or "点源" in text:
+    ) or any(token in text for token in ("\u70b9\u6e90", "\u70b9\u72b6\u6e90")):
         return "point"
-    if re.search(r"(?<![A-Za-z0-9_])plane(?: source)?(?![A-Za-z0-9_])", low) or "面源" in text:
+    if re.search(r"(?<![A-Za-z0-9_])plane(?: source)?(?![A-Za-z0-9_])", low) or "\u9762\u6e90" in text:
         return "plane"
     return None
 
@@ -348,8 +374,8 @@ def _extract_explicit_source_kind(text: str) -> str | None:
 def _has_unknown_material_marker(text: str) -> bool:
     low = text.lower()
     return bool(
-        re.search(r"(?:材料|material)\s*[:：]?\s*[?？]+", text)
-        or re.search(r"(?:材料|material)\s*(?:unknown|tbd|unspecified)\b", low)
+        re.search("(?:\u6750\u6599|material)\\s*[:\uff1a]?\\s*[?\uff1f]+", text)
+        or re.search("(?:\u6750\u6599|material)\\s*(?:unknown|tbd|unspecified)\\b", low)
     )
 
 
@@ -376,16 +402,17 @@ def _has_graph_family_cue(text: str) -> bool:
             "union",
             "subtraction",
             "intersection",
-            "阵列",
-            "二维阵列",
-            "探测板",
-            "堆叠",
-            "同心",
-            "嵌套",
-            "布尔",
-            "并集",
-            "减法",
-            "相交",
+            "\u9635\u5217",
+            "\u4e8c\u7ef4\u9635\u5217",
+            "\u63a2\u6d4b\u677f",
+            "\u7f51\u683c",
+            "\u5806\u53e0",
+            "\u540c\u5fc3",
+            "\u5d4c\u5957",
+            "\u5e03\u5c14",
+            "\u5e76\u96c6",
+            "\u51cf\u6cd5",
+            "\u76f8\u4ea4",
         )
     )
 
@@ -773,6 +800,7 @@ def _source_position_from_phrase(text: str) -> list[float] | None:
     patterns = [
         r"(?:position(?:ed)?|located)\s*(?:at|=|:)?\s*(\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\)\s*(?:mm|cm|m)?)",
         r"(?:source\s+at|at)\s*(\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\)\s*(?:mm|cm|m)?)",
+        r"(?:from)\s*(\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\)\s*(?:mm|cm|m)?)",
         r"(?:position|located)\s*(?:at|=|:)?\s*([-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*(?:mm|cm|m))",
     ]
     for pattern in patterns:
@@ -1284,7 +1312,7 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
         if m_energy:
             frame.source.energy_mev = _coerce_float(f"{m_energy.group(1)} {m_energy.group(2)}")
 
-    if frame.source.position_mm is None and any(token in low for token in ("center", "centre", "中心", "origin", "原点")):
+    if frame.source.position_mm is None and any(token in low for token in ("center", "centre", "涓績", "origin", "鍘熺偣")):
         frame.source.position_mm = [0.0, 0.0, 0.0]
 
     if frame.source.position_mm is None:
@@ -1536,3 +1564,4 @@ def build_llm_slot_frame(
         schema_errors=[],
         stage_trace=stage_trace,
     )
+

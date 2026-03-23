@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import tempfile
@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from nlu.bert_lab import ollama_client
+from nlu.llm_support import ollama_client
 
 
 class _FakeResponse:
@@ -54,7 +54,7 @@ class LlmClientTest(unittest.TestCase):
                 captured["body"] = json.loads(req.data.decode("utf-8"))
                 return _FakeResponse({"response": "ok"})
 
-            with mock.patch("nlu.bert_lab.ollama_client.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with mock.patch("nlu.llm_support.ollama_client.urllib.request.urlopen", side_effect=_fake_urlopen):
                 out = ollama_client.chat("hello", config_path=p, temperature=0.1)
 
         self.assertEqual(out["response"], "ok")
@@ -85,7 +85,7 @@ class LlmClientTest(unittest.TestCase):
                 captured["auth"] = req.headers.get("Authorization", "")
                 return _FakeResponse({"choices": [{"message": {"content": "{\"ok\":true}"}}]})
 
-            with mock.patch("nlu.bert_lab.ollama_client.urllib.request.urlopen", side_effect=_fake_urlopen):
+            with mock.patch("nlu.llm_support.ollama_client.urllib.request.urlopen", side_effect=_fake_urlopen):
                 out = ollama_client.chat("hello", config_path=p, temperature=0.0)
 
         self.assertEqual(captured["url"], "https://api.openai.com/v1/chat/completions")
@@ -97,4 +97,5 @@ class LlmClientTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 
