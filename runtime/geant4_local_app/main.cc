@@ -35,6 +35,12 @@ struct RuntimeConfig {
   std::string material = "G4_Cu";
   std::string particle = "gamma";
   double energy_mev = 1.0;
+  double source_x_mm = 0.0;
+  double source_y_mm = 0.0;
+  double source_z_mm = -100.0;
+  double direction_x = 0.0;
+  double direction_y = 0.0;
+  double direction_z = 1.0;
   double size_x_mm = 50.0;
   double size_y_mm = 50.0;
   double size_z_mm = 50.0;
@@ -74,6 +80,21 @@ double extract_number(const std::string& text, const std::string& key, double fa
   return fallback;
 }
 
+double extract_nested_number(
+    const std::string& text,
+    const std::string& object_key,
+    const std::string& key,
+    double fallback) {
+  const std::regex pattern(
+      "\"" + object_key + "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)",
+      std::regex::icase);
+  std::smatch match;
+  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
+    return std::stod(match[1].str());
+  }
+  return fallback;
+}
+
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
   RuntimeConfig cfg;
   cfg.events = events;
@@ -86,6 +107,12 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.physics_list = extract_string(text, "physics_list", cfg.physics_list);
   cfg.physics_list = extract_string(text, "name", cfg.physics_list);
   cfg.energy_mev = extract_number(text, "energy", cfg.energy_mev);
+  cfg.source_x_mm = extract_nested_number(text, "position", "x", cfg.source_x_mm);
+  cfg.source_y_mm = extract_nested_number(text, "position", "y", cfg.source_y_mm);
+  cfg.source_z_mm = extract_nested_number(text, "position", "z", cfg.source_z_mm);
+  cfg.direction_x = extract_nested_number(text, "direction", "x", cfg.direction_x);
+  cfg.direction_y = extract_nested_number(text, "direction", "y", cfg.direction_y);
+  cfg.direction_z = extract_nested_number(text, "direction", "z", cfg.direction_z);
   cfg.size_x_mm = extract_number(text, "size_x", cfg.size_x_mm);
   cfg.size_y_mm = extract_number(text, "size_y", cfg.size_y_mm);
   cfg.size_z_mm = extract_number(text, "size_z", cfg.size_z_mm);
@@ -171,8 +198,14 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
     }
     particle_gun_->SetParticleDefinition(particle);
     particle_gun_->SetParticleEnergy(config_.energy_mev * MeV);
-    particle_gun_->SetParticleMomentumDirection(G4ThreeVector(0., 0., 1.));
-    particle_gun_->SetParticlePosition(G4ThreeVector(0., 0., -100. * mm));
+    auto direction = G4ThreeVector(config_.direction_x, config_.direction_y, config_.direction_z);
+    if (direction.mag() == 0.0) {
+      direction = G4ThreeVector(0., 0., 1.);
+    }
+    direction = direction.unit();
+    particle_gun_->SetParticleMomentumDirection(direction);
+    particle_gun_->SetParticlePosition(
+        G4ThreeVector(config_.source_x_mm * mm, config_.source_y_mm * mm, config_.source_z_mm * mm));
   }
 
   ~RuntimePrimaryGeneratorAction() override { delete particle_gun_; }
@@ -189,7 +222,10 @@ void write_vis_macro(const fs::path& macro_path) {
   out << "/vis/open OGL 800x800-0+0\n";
   out << "/vis/viewer/set/style surface\n";
   out << "/vis/viewer/set/background 1 1 1\n";
+  out << "/tracking/storeTrajectory 1\n";
   out << "/vis/drawVolume\n";
+  out << "/vis/scene/add/trajectories smooth\n";
+  out << "/vis/scene/endOfEventAction accumulate\n";
   out << "/vis/viewer/set/viewpointThetaPhi 50 25\n";
   out << "/vis/viewer/zoom 1.4\n";
   out << "/vis/scene/add/axes 0 0 0 100 mm\n";
@@ -256,6 +292,8 @@ int main(int argc, char** argv) {
   auto* ui = G4UImanager::GetUIpointer();
   ui->ApplyCommand("/control/execute " + macro_path.string());
   if (cfg.mode == "viewer") {
+    ui->ApplyCommand("/run/initialize");
+    ui->ApplyCommand("/run/beamOn 1");
     ui->ApplyCommand("/vis/viewer/update");
     ui->ApplyCommand("/vis/sceneHandler/attach");
     ui->ApplyCommand("/vis/viewer/refresh");
@@ -277,6 +315,10 @@ int main(int argc, char** argv) {
           << "  \"geometry_structure\": \"" << cfg.geometry_structure << "\",\n"
           << "  \"material\": \"" << cfg.material << "\",\n"
           << "  \"particle\": \"" << cfg.particle << "\",\n"
+          << "  \"source_position_mm\": [" << cfg.source_x_mm << ", " << cfg.source_y_mm << ", " << cfg.source_z_mm
+          << "],\n"
+          << "  \"source_direction\": [" << cfg.direction_x << ", " << cfg.direction_y << ", " << cfg.direction_z
+          << "],\n"
           << "  \"physics_list\": \"" << cfg.physics_list << "\",\n"
           << "  \"events\": " << events << ",\n"
           << "  \"mode\": \"" << cfg.mode << "\"\n"
