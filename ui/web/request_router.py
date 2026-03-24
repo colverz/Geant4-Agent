@@ -32,7 +32,7 @@ def handle_post_request(
     path: str,
     payload: dict[str, Any],
     *,
-    legacy_sessions: dict[str, Any],
+    legacy_sessions: dict[str, Any] | None,
     solve_fn: Callable[[dict[str, Any]], dict[str, Any]],
     step_fn: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> tuple[int, dict[str, Any]]:
@@ -44,7 +44,7 @@ def handle_post_request(
 
     if path == "/api/reset":
         session_id = payload.get("session_id")
-        if session_id in legacy_sessions:
+        if legacy_sessions is not None and session_id in legacy_sessions:
             del legacy_sessions[session_id]
         handle_strict_reset(str(session_id) if session_id else None)
         return 200, {"ok": True}

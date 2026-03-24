@@ -5,9 +5,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Dict
 
-from ui.web.legacy_api import SESSIONS as LEGACY_SESSIONS
-from ui.web.legacy_api import legacy_solve as _legacy_solve
-from ui.web.legacy_api import legacy_step as _legacy_step
 from ui.web.geant4_api import geant4_state_payload
 from ui.web.request_router import handle_post_request, is_supported_post_path
 from ui.web.runtime_state import runtime_config_payload as _runtime_config_payload
@@ -15,6 +12,12 @@ from ui.web.strict_api import handle_strict_step
 
 
 ROOT = Path(__file__).parent
+
+
+def _load_legacy_api():
+    from ui.web.legacy_api import SESSIONS, legacy_solve, legacy_step
+
+    return SESSIONS, legacy_solve, legacy_step
 
 
 def _respond(handler: BaseHTTPRequestHandler, code: int, payload: Dict[str, Any]) -> None:
@@ -56,11 +59,13 @@ def step(payload: Dict[str, Any], progress_cb=None) -> Dict[str, Any]:
             progress_cb=progress_cb,
         )
 
-    return _legacy_step(payload)
+    _, _, legacy_step = _load_legacy_api()
+    return legacy_step(payload)
 
 
 def solve(payload: Dict[str, Any]) -> Dict[str, Any]:
-    return _legacy_solve(payload)
+    _, legacy_solve, _ = _load_legacy_api()
+    return legacy_solve(payload)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -110,7 +115,7 @@ class Handler(BaseHTTPRequestHandler):
         status, out = handle_post_request(
             path,
             payload,
-            legacy_sessions=LEGACY_SESSIONS,
+            legacy_sessions=None if path != "/api/reset" else _load_legacy_api()[0],
             solve_fn=solve,
             step_fn=step,
         )
