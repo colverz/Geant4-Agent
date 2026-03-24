@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from core.domain.geometry import (
+from .geometry import (
     GEOMETRY_KIND_TO_STRUCTURE,
     GEOMETRY_SLOT_TARGET_TO_PATHS,
+    GEOMETRY_STRUCTURE_ALIASES,
     SUPPORTED_GEOMETRY_KINDS,
 )
 
 __all__ = [
     "GEOMETRY_KIND_TO_STRUCTURE",
     "GEOMETRY_SLOT_TARGET_TO_PATHS",
+    "GEOMETRY_STRUCTURE_ALIASES",
     "SUPPORTED_GEOMETRY_KINDS",
 ]

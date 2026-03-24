@@ -6,44 +6,14 @@ import os
 import random
 from typing import Dict, List, Tuple
 
+from core.domain.geometry import GEOMETRY_STRUCTURE_ALIASES
+
 from .dsl import graph_to_dict
 from .feasibility import check_feasibility
 from .library import SKELETONS
 
 
-STRUCTURE_ALIASES: Dict[str, Tuple[str, ...]] = {
-    "nest": ("nest_box_box", "nest_box_tubs", "stack_in_box", "shell_nested"),
-    "grid": ("grid_modules",),
-    "ring": ("ring_modules",),
-    "stack": ("stack_in_box",),
-    "shell": ("shell_nested",),
-    "box_tubs": ("nest_box_tubs",),
-    "box_box": ("nest_box_box",),
-    "box": ("single_box",),
-    "cube": ("single_box",),
-    "single_box": ("single_box",),
-    "tubs": ("single_tubs",),
-    "cylinder": ("single_tubs",),
-    "single_tubs": ("single_tubs",),
-    "sphere": ("single_sphere",),
-    "single_sphere": ("single_sphere",),
-    "orb": ("single_orb",),
-    "single_orb": ("single_orb",),
-    "cons": ("single_cons",),
-    "single_cons": ("single_cons",),
-    "trd": ("single_trd",),
-    "single_trd": ("single_trd",),
-    "polycone": ("single_polycone",),
-    "single_polycone": ("single_polycone",),
-    "cuttubs": ("single_cuttubs",),
-    "single_cuttubs": ("single_cuttubs",),
-    "boolean": ("boolean_union_boxes",),
-    "boolean_union": ("boolean_union_boxes",),
-    "boolean_subtraction": ("boolean_subtraction_boxes",),
-    "boolean_intersection": ("boolean_intersection_boxes",),
-    "tilted_box": ("tilted_box_in_parent",),
-    "tilted_box_in_parent": ("tilted_box_in_parent",),
-}
+STRUCTURE_ALIASES: Dict[str, Tuple[str, ...]] = GEOMETRY_STRUCTURE_ALIASES
 
 
 def _ensure_outdir(outdir: str) -> None:
