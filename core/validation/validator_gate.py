@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.geometry_family import get_geometry_family
 from core.orchestrator.path_ops import get_path
 from core.orchestrator.types import ValidationReport
 from core.validation.error_codes import E_NAME_BINDING, E_RANGE_INVALID, E_REQUIRED_MISSING, E_TYPE_INVALID
-from core.validation.geometry_registry import get_geometry_family, prune_out_of_scope_params
+from core.validation.geometry_registry import prune_out_of_scope_params
 from core.validation.minimal_schema import get_minimal_required_paths
 
 _POSITIVE_NUMERIC_PATHS = {

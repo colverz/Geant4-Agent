@@ -2,7 +2,7 @@
 
 from core.orchestrator.path_ops import get_path
 from core.orchestrator.types import Phase
-from core.validation.geometry_registry import get_geometry_family
+from core.domain.geometry_family import get_geometry_family
 
 
 _DEFAULT_GEOMETRY_REQUIRED = [
