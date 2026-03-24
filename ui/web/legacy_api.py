@@ -4,7 +4,6 @@ import json
 import re
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.config.defaults import build_legacy_default_config
@@ -12,8 +11,12 @@ from core.config.field_registry import friendly_labels
 from core.config.phase_registry import phase_title, select_phase_fields
 from core.config.prompt_registry import clarification_fallback, completion_message
 from nlu.llm_support.llm_bridge import build_missing_params_prompt, build_missing_params_schema
-from nlu.llm_support.ollama_client import chat, extract_json
 from planner.agent import ask_missing
+from ui.web.legacy_knowledge import (
+    is_physics_recommend_request as _is_physics_recommend_request,
+    load_knowledge,
+    recommend_physics_with_llm as _recommend_physics_with_llm,
+)
 from ui.web.legacy_runtime_mapper import (
     apply_frame as _apply_frame,
     apply_text_overrides as _apply_text_overrides,
@@ -23,11 +26,6 @@ from ui.web.legacy_runtime_mapper import (
     export_min_config as _export_min_config,
 )
 from ui.web.runtime_state import get_ollama_config_path
-
-ROOT = Path(__file__).parent
-KNOWLEDGE_DIR = ROOT.parent.parent / "knowledge" / "data"
-SCHEMA_PATH = ROOT.parent.parent / "core" / "schema" / "geant4_min_config.schema.json"
-
 
 @dataclass
 class SessionState:
@@ -40,28 +38,7 @@ class SessionState:
 SESSIONS: Dict[str, SessionState] = {}
 
 
-def _load_json(path: Path) -> Dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _load_knowledge() -> Dict[str, List[str]]:
-    materials = _load_json(KNOWLEDGE_DIR / "materials_geant4_nist.json").get("materials", [])
-    physics_lists = _load_json(KNOWLEDGE_DIR / "physics_lists.json").get("items", [])
-    particles = _load_json(KNOWLEDGE_DIR / "particles.json").get("items", [])
-    sources = _load_json(KNOWLEDGE_DIR / "source_constraints.json").get("types", [])
-    if not sources:
-        sources = ["point", "beam", "plane", "isotropic"]
-    output_formats = _load_json(KNOWLEDGE_DIR / "output_formats.json").get("items", [])
-    return {
-        "materials": materials,
-        "physics_lists": physics_lists,
-        "particles": particles,
-        "sources": sources,
-        "output_formats": output_formats,
-    }
-
-
-KNOWLEDGE = _load_knowledge()
+KNOWLEDGE = load_knowledge()
 
 
 def _extract_semantic_frame_legacy(*args, **kwargs):
@@ -393,101 +370,6 @@ def _ask_llm(
     return ask_missing(asked_fields, lang, get_ollama_config_path(), temperature=1.0)
 
 
-def _is_physics_recommend_request(text: str) -> bool:
-    low = text.lower()
-    physics_tokens = [
-        "physics list",
-        "physics_list",
-        "物理列表",
-        "物理过程",
-        "预置物理",
-        "预设物理",
-    ]
-    decision_tokens = [
-        "choose",
-        "select",
-        "recommend",
-        "best",
-        "most suitable",
-        "pick",
-        "选择",
-        "推荐",
-        "最合适",
-        "给出名称",
-        "备选",
-    ]
-    has_physics = any(t in low or t in text for t in physics_tokens)
-    has_decision = any(t in low or t in text for t in decision_tokens)
-    return has_physics and has_decision
-
-
-def _pick_known_physics(name: str) -> Optional[str]:
-    val = str(name or "").strip()
-    if not val:
-        return None
-    known = KNOWLEDGE.get("physics_lists", [])
-    for item in known:
-        if item.lower() == val.lower():
-            return item
-    return None
-
-
-def _recommend_physics_with_llm(text: str, context_summary: str, lang: str) -> Dict[str, Any]:
-    choices = KNOWLEDGE.get("physics_lists", [])
-    if not choices:
-        return {}
-    prompt = (
-        "You are a Geant4 physics-list recommender.\n"
-        "Pick the most suitable predefined Geant4 physics list for the request.\n"
-        "Return JSON only with keys:\n"
-        "- physics_list: string (must be one of allowed)\n"
-        "- backup_physics_list: string (optional, from allowed)\n"
-        "- reasons: array of short strings (max 3)\n"
-        "- covered_processes: array of short strings\n"
-        "- confidence: number in [0,1]\n"
-        "Rules:\n"
-        "- Use only allowed list names.\n"
-        "- Do not invent new list names.\n"
-        "- If request is mostly EM (gamma/e-/e+), prefer an option suitable for EM-focused studies.\n"
-        f"Allowed physics lists: {', '.join(choices)}\n"
-        f"Session context: {context_summary}\n"
-        f"User request: {text}\n"
-        "JSON:"
-    )
-    try:
-        resp = chat(prompt, config_path=get_ollama_config_path(), temperature=0.0)
-        raw = str(resp.get("response", ""))
-        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
-        raw = re.sub(r"^```[a-zA-Z0-9_-]*\s*|\s*```$", "", raw, flags=re.DOTALL).strip()
-        parsed = extract_json(raw) or {}
-        if not isinstance(parsed, dict):
-            return {}
-        main = _pick_known_physics(parsed.get("physics_list", ""))
-        if not main:
-            return {}
-        backup = _pick_known_physics(parsed.get("backup_physics_list", "")) or None
-        reasons = parsed.get("reasons", [])
-        covered = parsed.get("covered_processes", [])
-        conf = parsed.get("confidence", None)
-        if not isinstance(reasons, list):
-            reasons = []
-        if not isinstance(covered, list):
-            covered = []
-        if not isinstance(conf, (int, float)):
-            conf = None
-        return {
-            "physics_list": main,
-            "backup_physics_list": backup,
-            "reasons": [str(x).strip() for x in reasons if str(x).strip()][:3],
-            "covered_processes": [str(x).strip() for x in covered if str(x).strip()][:6],
-            "confidence": float(conf) if conf is not None else None,
-            "lang": lang,
-            "source": "llm_recommender",
-        }
-    except Exception:
-        return {}
-
-
 def legacy_step(payload: Dict[str, Any]) -> Dict[str, Any]:
     text = str(payload.get("text", "")).strip()
     session_id = payload.get("session_id")
@@ -579,7 +461,12 @@ def legacy_step(payload: Dict[str, Any]) -> Dict[str, Any]:
     _ensure_material_volume_map(state.config)
     physics_recommendation: Dict[str, Any] = {}
     if _is_physics_recommend_request(text):
-        physics_recommendation = _recommend_physics_with_llm(text, context_summary, lang)
+        physics_recommendation = _recommend_physics_with_llm(
+            text,
+            context_summary,
+            lang,
+            choices=KNOWLEDGE.get("physics_lists", []),
+        )
         if physics_recommendation.get("physics_list"):
             state.config["physics"]["physics_list"] = physics_recommendation["physics_list"]
             state.config["physics"]["backup_physics_list"] = physics_recommendation.get("backup_physics_list")
