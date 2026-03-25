@@ -13,6 +13,15 @@ class GeometryEvidence:
     detail: str = ""
 
 
+@dataclass(frozen=True)
+class GeometryFieldResolution:
+    field: str
+    value: Any
+    status: str
+    evidence_sources: tuple[str, ...] = ()
+    note: str = ""
+
+
 @dataclass
 class GeometryIntent:
     structure: str | None = None
@@ -21,6 +30,7 @@ class GeometryIntent:
     evidence: list[GeometryEvidence] = field(default_factory=list)
     missing_fields: list[str] = field(default_factory=list)
     ambiguities: list[str] = field(default_factory=list)
+    field_resolutions: dict[str, GeometryFieldResolution] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -30,3 +40,5 @@ class GeometrySpec:
     allowed_paths: frozenset[str] = field(default_factory=frozenset)
     required_paths: frozenset[str] = field(default_factory=frozenset)
     confidence: float = 1.0
+    finalization_status: str = "ready"
+    field_resolutions: dict[str, GeometryFieldResolution] = field(default_factory=dict)

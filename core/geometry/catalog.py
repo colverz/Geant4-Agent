@@ -15,20 +15,18 @@ class GeometryParamDefinition:
     runtime_aliases: tuple[str, ...] = ()
     required: bool = False
     unit: str = "mm"
+    value_kind: str = "scalar"
+    arity: int = 1
     description: str = ""
 
     def normalize_value(self, value: Any) -> Any:
         if value is None:
             return None
-        if self.name.endswith("_triplet_mm"):
-            if isinstance(value, (list, tuple)) and len(value) == 3:
+        if self.value_kind == "triplet":
+            if isinstance(value, (list, tuple)) and len(value) == self.arity:
                 return [float(value[0]), float(value[1]), float(value[2])]
             return None
-        if self.name.endswith("_planes_mm") or self.name == "radii_mm":
-            if isinstance(value, (list, tuple)) and len(value) == 3:
-                return [float(value[0]), float(value[1]), float(value[2])]
-            return None
-        if self.name == "polyhedra_sides":
+        if self.value_kind == "integer":
             return int(value)
         return float(value)
 
@@ -36,7 +34,8 @@ class GeometryParamDefinition:
 @dataclass(frozen=True)
 class GeometryCatalogEntry:
     structure: str
-    kind_aliases: tuple[str, ...]
+    user_kind_aliases: tuple[str, ...]
+    structure_aliases: tuple[str, ...]
     required_slot_fields: tuple[str, ...]
     params: tuple[GeometryParamDefinition, ...]
     allowed_paths: frozenset[str] = field(default_factory=frozenset)
@@ -46,7 +45,8 @@ class GeometryCatalogEntry:
 _CATALOG: dict[str, GeometryCatalogEntry] = {
     "single_box": GeometryCatalogEntry(
         structure="single_box",
-        kind_aliases=("box", "cube", "single_box"),
+        user_kind_aliases=("box", "cube"),
+        structure_aliases=("single_box",),
         required_slot_fields=("kind", "size_triplet_mm"),
         params=(
             GeometryParamDefinition(
@@ -55,6 +55,8 @@ _CATALOG: dict[str, GeometryCatalogEntry] = {
                 config_param_keys=("module_x", "module_y", "module_z"),
                 runtime_aliases=("size_x", "size_y", "size_z"),
                 required=True,
+                value_kind="triplet",
+                arity=3,
                 description="Full edge lengths along x/y/z in millimetres.",
             ),
         ),
@@ -63,7 +65,8 @@ _CATALOG: dict[str, GeometryCatalogEntry] = {
     ),
     "single_tubs": GeometryCatalogEntry(
         structure="single_tubs",
-        kind_aliases=("cylinder", "tubs", "single_tubs"),
+        user_kind_aliases=("cylinder", "tubs"),
+        structure_aliases=("single_tubs",),
         required_slot_fields=("kind", "radius_mm", "half_length_mm"),
         params=(
             GeometryParamDefinition(
@@ -88,7 +91,8 @@ _CATALOG: dict[str, GeometryCatalogEntry] = {
     ),
     "single_orb": GeometryCatalogEntry(
         structure="single_orb",
-        kind_aliases=("orb", "single_orb", "sphere"),
+        user_kind_aliases=("orb",),
+        structure_aliases=("single_orb",),
         required_slot_fields=("kind", "radius_mm"),
         params=(
             GeometryParamDefinition(
@@ -105,7 +109,8 @@ _CATALOG: dict[str, GeometryCatalogEntry] = {
     ),
     "single_cons": GeometryCatalogEntry(
         structure="single_cons",
-        kind_aliases=("cons", "single_cons"),
+        user_kind_aliases=("cons",),
+        structure_aliases=("single_cons",),
         required_slot_fields=("kind", "radius1_mm", "radius2_mm", "half_length_mm"),
         params=(
             GeometryParamDefinition(
@@ -136,7 +141,8 @@ _CATALOG: dict[str, GeometryCatalogEntry] = {
     ),
     "single_trd": GeometryCatalogEntry(
         structure="single_trd",
-        kind_aliases=("trd", "single_trd"),
+        user_kind_aliases=("trd",),
+        structure_aliases=("single_trd",),
         required_slot_fields=("kind", "x1_mm", "x2_mm", "y1_mm", "y2_mm", "z_mm"),
         params=(
             GeometryParamDefinition(
@@ -187,11 +193,14 @@ def resolve_geometry_structure(kind_or_structure: str | None) -> str | None:
         return None
     if text in _CATALOG:
         return text
+    for structure, entry in _CATALOG.items():
+        if text in entry.structure_aliases:
+            return structure
     mapped = GEOMETRY_KIND_TO_STRUCTURE.get(text)
     if mapped in _CATALOG:
         return mapped
     for structure, entry in _CATALOG.items():
-        if text in entry.kind_aliases:
+        if text in entry.user_kind_aliases:
             return structure
     return None
 

@@ -4,7 +4,11 @@ import unittest
 
 from core.contracts.semantic import GeometryFrame, SemanticFrame
 from core.contracts.slots import GeometrySlots, SlotFrame
-from core.geometry.adapters import geometry_spec_to_config_fragment, geometry_spec_to_runtime_geometry
+from core.geometry.adapters import (
+    diff_geometry_config_fragment,
+    geometry_spec_to_config_fragment,
+    geometry_spec_to_runtime_geometry,
+)
 from core.geometry.catalog import get_geometry_catalog_entry, resolve_geometry_structure
 from core.geometry.compiler import (
     compile_geometry_spec_from_config,
@@ -20,6 +24,7 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertIsNotNone(entry)
         assert entry is not None
         self.assertEqual(entry.structure, "single_box")
+        self.assertIsNone(resolve_geometry_structure("sphere"))
 
     def test_compile_single_box_from_slot_frame(self) -> None:
         frame = SlotFrame(confidence=0.92, geometry=GeometrySlots(kind="box", size_triplet_mm=[10, 20, 30]))
@@ -30,6 +35,7 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertEqual(result.spec.structure, "single_box")
         self.assertEqual(result.spec.params["size_triplet_mm"], [10.0, 20.0, 30.0])
         self.assertIn("geometry.params.module_x", result.spec.required_paths)
+        self.assertEqual(result.spec.field_resolutions["size_triplet_mm"].status, "user_explicit")
 
     def test_compile_single_tubs_from_slot_frame(self) -> None:
         frame = SlotFrame(confidence=0.88, geometry=GeometrySlots(kind="cylinder", radius_mm=15, half_length_mm=40))
@@ -117,6 +123,7 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertEqual(result.spec.structure, "single_orb")
         self.assertEqual(result.spec.params["radius_mm"], 22.0)
         self.assertEqual(result.spec.confidence, 0.84)
+        self.assertEqual(result.spec.finalization_status, "ready")
 
     def test_compile_single_cons_from_config(self) -> None:
         config = {
@@ -157,6 +164,7 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertEqual(fragment["geometry"]["params"]["module_x"], 5.0)
         self.assertEqual(fragment["geometry"]["params"]["module_y"], 6.0)
         self.assertEqual(fragment["geometry"]["params"]["module_z"], 7.0)
+        self.assertEqual(fragment["geometry"]["size_triplet_mm"], [5.0, 6.0, 7.0])
 
     def test_geometry_spec_to_config_fragment_for_cons(self) -> None:
         config = {
@@ -172,6 +180,32 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertEqual(fragment["geometry"]["params"]["rmax1"], 5.0)
         self.assertEqual(fragment["geometry"]["params"]["rmax2"], 9.0)
         self.assertEqual(fragment["geometry"]["params"]["child_hz"], 12.0)
+
+    def test_diff_geometry_config_fragment_reports_match(self) -> None:
+        frame = SlotFrame(confidence=0.9, geometry=GeometrySlots(kind="box", size_triplet_mm=[5, 6, 7]))
+        result = compile_geometry_spec_from_slot_frame(frame)
+
+        assert result.spec is not None
+        legacy_geometry = {
+            "structure": "single_box",
+            "params": {"module_x": 5.0, "module_y": 6.0, "module_z": 7.0},
+        }
+        diff = diff_geometry_config_fragment(result.spec, legacy_geometry)
+        self.assertTrue(diff["matches"])
+        self.assertEqual(diff["mismatches"], [])
+
+    def test_diff_geometry_config_fragment_reports_mismatch(self) -> None:
+        frame = SlotFrame(confidence=0.9, geometry=GeometrySlots(kind="box", size_triplet_mm=[5, 6, 7]))
+        result = compile_geometry_spec_from_slot_frame(frame)
+
+        assert result.spec is not None
+        legacy_geometry = {
+            "structure": "single_box",
+            "params": {"module_x": 5.0, "module_y": 6.0, "module_z": 9.0},
+        }
+        diff = diff_geometry_config_fragment(result.spec, legacy_geometry)
+        self.assertFalse(diff["matches"])
+        self.assertEqual(diff["mismatches"][0]["field"], "geometry.params.module_z")
 
 
 if __name__ == "__main__":

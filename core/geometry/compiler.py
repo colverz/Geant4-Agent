@@ -7,7 +7,7 @@ from core.contracts.semantic import SemanticFrame
 from core.contracts.slots import SlotFrame
 
 from core.geometry.catalog import GeometryCatalogEntry, get_geometry_catalog_entry, resolve_geometry_structure
-from core.geometry.spec import GeometryEvidence, GeometryIntent, GeometrySpec
+from core.geometry.spec import GeometryEvidence, GeometryFieldResolution, GeometryIntent, GeometrySpec
 
 
 @dataclass(frozen=True)
@@ -22,33 +22,20 @@ class GeometryCompileResult:
         return self.spec is not None and not self.errors
 
 
-def _float_triplet(values: Any) -> list[float] | None:
-    if not isinstance(values, (list, tuple)) or len(values) != 3:
-        return None
-    return [float(values[0]), float(values[1]), float(values[2])]
-
-
-def _coerce_catalog_value(value: Any, field_name: str) -> Any:
-    if value is None:
-        return None
-    if field_name.endswith("_triplet_mm") or field_name.endswith("_planes_mm") or field_name == "radii_mm":
-        return _float_triplet(value)
-    if field_name == "polyhedra_sides":
-        return int(value)
-    return float(value)
-
-
 def _append_param_if_present(
     *,
     params: dict[str, Any],
     evidence: list[GeometryEvidence],
+    field_resolutions: dict[str, GeometryFieldResolution],
+    param_def: GeometryCatalogEntry | Any,
     field_name: str,
     value: Any,
     source: str,
     confidence: float,
     detail: str = "",
+    status: str = "derived",
 ) -> None:
-    normalized = _coerce_catalog_value(value, field_name)
+    normalized = param_def.normalize_value(value)
     if normalized is None:
         return
     params[field_name] = normalized
@@ -61,11 +48,19 @@ def _append_param_if_present(
             detail=detail,
         )
     )
+    field_resolutions[field_name] = GeometryFieldResolution(
+        field=field_name,
+        value=normalized,
+        status=status,
+        evidence_sources=(source,),
+        note=detail,
+    )
 
 
 def _collect_slot_intent_params(entry: GeometryCatalogEntry, frame: SlotFrame) -> tuple[dict[str, Any], list[GeometryEvidence]]:
     params: dict[str, Any] = {}
     evidence: list[GeometryEvidence] = []
+    field_resolutions: dict[str, GeometryFieldResolution] = {}
     confidence = float(frame.confidence or 0.8)
     for param in entry.params:
         for slot_field in param.slot_fields:
@@ -75,25 +70,31 @@ def _collect_slot_intent_params(entry: GeometryCatalogEntry, frame: SlotFrame) -
             _append_param_if_present(
                 params=params,
                 evidence=evidence,
+                field_resolutions=field_resolutions,
+                param_def=param,
                 field_name=param.name,
                 value=value,
                 source="slot_frame",
                 confidence=confidence,
                 detail=slot_field,
+                status="user_explicit",
             )
             break
-    return params, evidence
+    return params, evidence, field_resolutions
 
 
 def build_geometry_intent_from_slot_frame(frame: SlotFrame) -> GeometryIntent:
     structure = resolve_geometry_structure(frame.geometry.kind)
     entry = get_geometry_catalog_entry(structure)
-    params, evidence = _collect_slot_intent_params(entry, frame) if entry is not None else ({}, [])
+    params, evidence, field_resolutions = (
+        _collect_slot_intent_params(entry, frame) if entry is not None else ({}, [], {})
+    )
     intent = GeometryIntent(
         structure=structure,
         kind=frame.geometry.kind,
         params=params,
         evidence=evidence,
+        field_resolutions=field_resolutions,
     )
     if entry is None:
         if frame.geometry.kind:
@@ -113,19 +114,23 @@ def build_geometry_intent_from_semantic_frame(frame: SemanticFrame) -> GeometryI
     entry = get_geometry_catalog_entry(structure)
     params: dict[str, Any] = {}
     evidence: list[GeometryEvidence] = []
+    field_resolutions: dict[str, GeometryFieldResolution] = {}
     if entry is not None:
         for param in entry.params:
-            if len(param.config_param_keys) == 3 and param.name.endswith("_triplet_mm"):
+            if param.value_kind == "triplet" and param.arity == 3 and len(param.config_param_keys) == 3:
                 values = [frame.geometry.params.get(key) for key in param.config_param_keys]
                 if all(value is not None for value in values):
                     _append_param_if_present(
                         params=params,
                         evidence=evidence,
+                        field_resolutions=field_resolutions,
+                        param_def=param,
                         field_name=param.name,
                         value=values,
                         source="semantic_frame",
                         confidence=1.0,
                         detail=",".join(param.config_param_keys),
+                        status="carried_forward",
                     )
                     continue
             for key in param.config_param_keys:
@@ -135,11 +140,14 @@ def build_geometry_intent_from_semantic_frame(frame: SemanticFrame) -> GeometryI
                 _append_param_if_present(
                     params=params,
                     evidence=evidence,
+                    field_resolutions=field_resolutions,
+                    param_def=param,
                     field_name=param.name,
                     value=value,
                     source="semantic_frame",
                     confidence=1.0,
                     detail=key,
+                    status="carried_forward",
                 )
                 break
 
@@ -148,6 +156,7 @@ def build_geometry_intent_from_semantic_frame(frame: SemanticFrame) -> GeometryI
         kind=frame.geometry.structure,
         params=params,
         evidence=evidence,
+        field_resolutions=field_resolutions,
     )
     if entry is None:
         if frame.geometry.structure:
@@ -168,6 +177,7 @@ def build_geometry_intent_from_config(config: dict[str, Any]) -> GeometryIntent:
     params_blob = geometry.get("params", {}) if isinstance(geometry.get("params"), dict) else {}
     params: dict[str, Any] = {}
     evidence: list[GeometryEvidence] = []
+    field_resolutions: dict[str, GeometryFieldResolution] = {}
     if entry is not None:
         for param in entry.params:
             direct_value = geometry.get(param.name)
@@ -175,24 +185,30 @@ def build_geometry_intent_from_config(config: dict[str, Any]) -> GeometryIntent:
                 _append_param_if_present(
                     params=params,
                     evidence=evidence,
+                    field_resolutions=field_resolutions,
+                    param_def=param,
                     field_name=param.name,
                     value=direct_value,
                     source="config",
                     confidence=1.0,
                     detail=param.name,
+                    status="carried_forward",
                 )
                 continue
-            if len(param.config_param_keys) == 3 and param.name.endswith("_triplet_mm"):
+            if param.value_kind == "triplet" and param.arity == 3 and len(param.config_param_keys) == 3:
                 values = [params_blob.get(key) for key in param.config_param_keys]
                 if all(value is not None for value in values):
                     _append_param_if_present(
                         params=params,
                         evidence=evidence,
+                        field_resolutions=field_resolutions,
+                        param_def=param,
                         field_name=param.name,
                         value=values,
                         source="config",
                         confidence=1.0,
                         detail=",".join(param.config_param_keys),
+                        status="carried_forward",
                     )
                     continue
             for key in param.config_param_keys:
@@ -202,11 +218,14 @@ def build_geometry_intent_from_config(config: dict[str, Any]) -> GeometryIntent:
                 _append_param_if_present(
                     params=params,
                     evidence=evidence,
+                    field_resolutions=field_resolutions,
+                    param_def=param,
                     field_name=param.name,
                     value=value,
                     source="config",
                     confidence=1.0,
                     detail=key,
+                    status="carried_forward",
                 )
                 break
 
@@ -215,6 +234,7 @@ def build_geometry_intent_from_config(config: dict[str, Any]) -> GeometryIntent:
         kind=geometry.get("structure"),
         params=params,
         evidence=evidence,
+        field_resolutions=field_resolutions,
     )
     if entry is None:
         if geometry.get("structure"):
@@ -260,6 +280,8 @@ def compile_geometry_intent(intent: GeometryIntent) -> GeometryCompileResult:
         allowed_paths=entry.allowed_paths,
         required_paths=entry.required_paths,
         confidence=max((item.confidence for item in intent.evidence), default=1.0),
+        finalization_status="ready" if not intent.ambiguities else "ambiguous",
+        field_resolutions=dict(intent.field_resolutions),
     )
     return GeometryCompileResult(intent=intent, spec=spec)
 
