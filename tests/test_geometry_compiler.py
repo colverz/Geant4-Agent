@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import unittest
 
+from core.contracts.semantic import GeometryFrame, SemanticFrame
 from core.contracts.slots import GeometrySlots, SlotFrame
+from core.geometry.adapters import geometry_spec_to_runtime_geometry
 from core.geometry.catalog import get_geometry_catalog_entry, resolve_geometry_structure
-from core.geometry.compiler import compile_geometry_spec_from_slot_frame
+from core.geometry.compiler import (
+    compile_geometry_spec_from_config,
+    compile_geometry_spec_from_semantic_frame,
+    compile_geometry_spec_from_slot_frame,
+)
 
 
 class GeometryCompilerTests(unittest.TestCase):
@@ -48,6 +54,59 @@ class GeometryCompilerTests(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertEqual(result.errors, ("missing_geometry_structure",))
+
+    def test_compile_single_box_from_semantic_frame(self) -> None:
+        frame = SemanticFrame(
+            geometry=GeometryFrame(
+                structure="single_box",
+                params={"module_x": 12.0, "module_y": 14.0, "module_z": 16.0},
+            )
+        )
+        result = compile_geometry_spec_from_semantic_frame(frame)
+
+        self.assertTrue(result.ok)
+        assert result.spec is not None
+        self.assertEqual(result.spec.params["size_triplet_mm"], [12.0, 14.0, 16.0])
+
+    def test_compile_single_tubs_from_config(self) -> None:
+        config = {
+            "geometry": {
+                "structure": "single_tubs",
+                "params": {"child_rmax": 8.0, "child_hz": 25.0},
+            }
+        }
+        result = compile_geometry_spec_from_config(config)
+
+        self.assertTrue(result.ok)
+        assert result.spec is not None
+        self.assertEqual(result.spec.params["radius_mm"], 8.0)
+        self.assertEqual(result.spec.params["half_length_mm"], 25.0)
+
+    def test_runtime_geometry_adapter_for_box(self) -> None:
+        frame = SlotFrame(confidence=0.9, geometry=GeometrySlots(kind="box", size_triplet_mm=[5, 6, 7]))
+        result = compile_geometry_spec_from_slot_frame(frame)
+
+        assert result.spec is not None
+        runtime_geometry = geometry_spec_to_runtime_geometry(result.spec)
+        self.assertEqual(runtime_geometry["structure"], "single_box")
+        self.assertEqual(runtime_geometry["size_x"], 5.0)
+        self.assertEqual(runtime_geometry["size_y"], 6.0)
+        self.assertEqual(runtime_geometry["size_z"], 7.0)
+
+    def test_runtime_geometry_adapter_for_tubs(self) -> None:
+        config = {
+            "geometry": {
+                "structure": "single_tubs",
+                "params": {"child_rmax": 9.0, "child_hz": 11.0},
+            }
+        }
+        result = compile_geometry_spec_from_config(config)
+
+        assert result.spec is not None
+        runtime_geometry = geometry_spec_to_runtime_geometry(result.spec)
+        self.assertEqual(runtime_geometry["structure"], "single_tubs")
+        self.assertEqual(runtime_geometry["radius"], 9.0)
+        self.assertEqual(runtime_geometry["half_length"], 11.0)
 
 
 if __name__ == "__main__":
