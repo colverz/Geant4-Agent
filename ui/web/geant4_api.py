@@ -60,6 +60,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
 
     if path == "/api/geant4/viewer/open":
         patch = dict(payload.get("patch", {}))
+        viewer_events = max(1, int(payload.get("events", 30)))
         runtime_payload = build_runtime_payload(patch)
         adapter = server._adapter  # type: ignore[attr-defined]
         if not isinstance(adapter, LocalProcessGeant4Adapter):
@@ -86,6 +87,8 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                 *adapter._command,
                 "--config",
                 config_path,
+                "--events",
+                str(viewer_events),
                 "--mode",
                 "viewer",
             ],
@@ -107,9 +110,14 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
             200 if completed.returncode == 0 else 400,
             {
                 "status": "completed" if completed.returncode == 0 else "failed",
-                "message": "Geant4 viewer launched." if completed.returncode == 0 else "Failed to launch Geant4 viewer.",
+                "message": (
+                    f"Geant4 viewer launched with {viewer_events} events."
+                    if completed.returncode == 0
+                    else "Failed to launch Geant4 viewer."
+                ),
                 "payload": {
                     "viewer_pid": pid,
+                    "viewer_events": viewer_events,
                     "stdout_tail": completed.stdout.splitlines()[-20:],
                     "stderr_tail": completed.stderr.splitlines()[-20:],
                 },

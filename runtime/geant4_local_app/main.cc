@@ -3,6 +3,7 @@
 #include "G4Gamma.hh"
 #include "G4LogicalVolume.hh"
 #include "G4NistManager.hh"
+#include "G4Orb.hh"
 #include "G4ParticleDefinition.hh"
 #include "G4ParticleGun.hh"
 #include "G4ParticleTable.hh"
@@ -178,6 +179,23 @@ class RuntimeDetectorConstruction : public G4VUserDetectorConstruction {
         0,
         true);
 
+    const auto marker_radius_mm = 2.0;
+    auto* solid_source_marker = new G4Orb("SourceMarker", marker_radius_mm * mm);
+    auto* logic_source_marker = new G4LogicalVolume(solid_source_marker, air, "SourceMarker");
+    auto* source_vis = new G4VisAttributes(G4Colour(0.10, 0.45, 0.95));
+    source_vis->SetForceSolid(true);
+    logic_source_marker->SetVisAttributes(source_vis);
+
+    new G4PVPlacement(
+        nullptr,
+        G4ThreeVector(config_.source_x_mm * mm, config_.source_y_mm * mm, config_.source_z_mm * mm),
+        logic_source_marker,
+        "SourceMarker",
+        logic_world,
+        false,
+        0,
+        false);
+
     return new G4PVPlacement(
         nullptr,
         G4ThreeVector(),
@@ -228,12 +246,13 @@ void write_vis_macro(const fs::path& macro_path) {
   out << "/vis/open OGL 800x800-0+0\n";
   out << "/vis/viewer/set/style surface\n";
   out << "/vis/viewer/set/background 1 1 1\n";
+  out << "/vis/verbose warnings\n";
   out << "/tracking/storeTrajectory 1\n";
   out << "/vis/drawVolume\n";
   out << "/vis/scene/add/trajectories smooth\n";
   out << "/vis/scene/endOfEventAction accumulate\n";
-  out << "/vis/viewer/set/viewpointThetaPhi 50 25\n";
-  out << "/vis/viewer/zoom 1.4\n";
+  out << "/vis/viewer/set/viewpointThetaPhi 70 20\n";
+  out << "/vis/viewer/zoom 0.9\n";
   out << "/vis/scene/add/axes 0 0 0 100 mm\n";
   out << "/vis/viewer/flush\n";
 }
@@ -299,7 +318,7 @@ int main(int argc, char** argv) {
   ui->ApplyCommand("/control/execute " + macro_path.string());
   if (cfg.mode == "viewer") {
     ui->ApplyCommand("/run/initialize");
-    ui->ApplyCommand("/run/beamOn 1");
+    ui->ApplyCommand("/run/beamOn " + std::to_string(events));
     ui->ApplyCommand("/vis/viewer/update");
     ui->ApplyCommand("/vis/sceneHandler/attach");
     ui->ApplyCommand("/vis/viewer/refresh");
