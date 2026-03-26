@@ -238,6 +238,9 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
         self.assertNotEqual(out["config"]["source"].get("type"), "point")
         self.assertFalse(out["is_complete"])
+        self.assertIn("source.position", out["missing_fields"])
+        self.assertIn("source.position", out["asked_fields"])
+        self.assertIn("spatial_v2", out["slot_debug"])
 
 
 if __name__ == "__main__":

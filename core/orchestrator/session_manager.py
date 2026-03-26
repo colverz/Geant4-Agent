@@ -17,6 +17,7 @@ from core.dialogue.renderer import render_dialogue_message
 from core.dialogue.state import build_raw_dialogue, collect_available_explanations, sync_dialogue_state
 from core.dialogue.types import build_dialogue_trace
 from core.geometry.adapters.legacy_compare import compare_slot_frame_geometry
+from core.pipelines import build_v2_spatial_updates
 from core.pipelines.selectors import select_pipelines
 from core.source.adapters.legacy_compare import compare_slot_frame_source
 from core.orchestrator.arbiter import arbitrate_candidates
@@ -229,6 +230,33 @@ def _strip_source_updates(candidate: CandidateUpdate | None) -> CandidateUpdate 
         confidence=candidate.confidence,
         rationale=f"{candidate.rationale}_source_stripped",
     )
+
+
+def _spatial_review_missing_paths(spatial_meta: dict[str, Any]) -> list[str]:
+    warnings = {str(item) for item in spatial_meta.get("warnings", [])}
+    if {"source_inside_target", "source_on_target_face"} & warnings:
+        return ["source.position"]
+    return []
+
+
+def _prioritize_spatial_questions(
+    asked_fields: list[str],
+    missing_fields: list[str],
+    slot_debug: dict[str, Any],
+) -> list[str]:
+    spatial_meta = slot_debug.get("spatial_v2")
+    if not isinstance(spatial_meta, dict):
+        return asked_fields
+    spatial_required = _spatial_review_missing_paths(spatial_meta)
+    if not spatial_required:
+        return asked_fields
+    prioritized = [path for path in spatial_required if path in missing_fields]
+    for path in asked_fields:
+        if path not in prioritized:
+            prioritized.append(path)
+        if len(prioritized) >= max(2, len(asked_fields)):
+            break
+    return prioritized[: max(1, len(asked_fields))]
 
 
 def _augment_geometry_targets(
@@ -696,6 +724,7 @@ def process_turn(
             config_path=ollama_config_path,
         )
         if slot_result.ok and slot_result.frame:
+            spatial_v2_meta: dict[str, Any] | None = None
             slot_candidate, user_candidate = slot_frame_to_candidates(
                 slot_result.frame,
                 turn_id=state.turn_id,
@@ -706,6 +735,15 @@ def process_turn(
             normalized_text = slot_result.normalized_text or text
             slot_debug = dict(slot_result.stage_trace or {})
             slot_debug.setdefault("final_status", "ok")
+            if pipeline_selection.geometry == "v2" and pipeline_selection.source == "v2":
+                spatial_result = build_v2_spatial_updates(slot_result.frame, turn_id=state.turn_id)
+                spatial_v2_meta = {
+                    "warnings": list(spatial_result.warnings),
+                    "spatial_meta": dict(spatial_result.spatial_meta),
+                    "geometry_meta": dict(spatial_result.geometry_meta),
+                    "source_meta": dict(spatial_result.source_meta),
+                }
+                slot_debug["spatial_v2"] = spatial_v2_meta
             if enable_compare:
                 geometry_compare = compare_slot_frame_geometry(slot_result.frame, turn_id=state.turn_id)
                 source_compare = compare_slot_frame_source(slot_result.frame, turn_id=state.turn_id)
@@ -740,6 +778,10 @@ def process_turn(
             llm_used = True
             llm_raw = slot_result.llm_raw
             llm_schema_errors = list(slot_result.schema_errors)
+            if spatial_v2_meta is not None:
+                semantic_missing_paths = _dedupe_paths(
+                    list(semantic_missing_paths) + _spatial_review_missing_paths(spatial_v2_meta)
+                )
             fallback_reason = None
             normalization_payload = {
                 "intent": user_candidate.intent.value,
@@ -1061,6 +1103,7 @@ def process_turn(
         last_asked_paths=state.last_asked_paths,
         question_attempts=state.question_attempts,
     )
+    asked_fields = _prioritize_spatial_questions(asked_fields, final_missing_paths, slot_debug)
     if asked_fields:
         for path in asked_fields:
             if path in final_missing_paths and path not in state.open_questions:
