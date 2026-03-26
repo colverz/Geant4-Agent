@@ -15,7 +15,7 @@ from mcp.geant4.server import Geant4McpServer
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-LOCAL_WRAPPER = ROOT / "legacy" / "tooling" / "geant4_local_wrapper.py"
+LOCAL_WRAPPER = ROOT / "mcp" / "geant4" / "local_wrapper.py"
 LOCAL_PROBE = ROOT / "legacy" / "tooling" / "geant4_minimal_probe" / "build" / "Release" / "geant4_minimal_probe.exe"
 GEANT4_ROOT = Path(r"F:\Geant4")
 
