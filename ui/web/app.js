@@ -881,7 +881,7 @@ async function openGeant4Viewer() {
   const res = await fetch("/api/geant4/viewer/open", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch: currentConfigPatch(), events: 30 }),
+    body: JSON.stringify({ patch: currentConfigPatch(), events: 12 }),
   });
   const data = await res.json();
   await refreshGeant4State();

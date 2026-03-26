@@ -11,10 +11,13 @@
 #include "G4PVPlacement.hh"
 #include "G4RunManagerFactory.hh"
 #include "G4SystemOfUnits.hh"
+#include "G4Track.hh"
+#include "G4TrackingManager.hh"
 #include "G4ThreeVector.hh"
 #include "G4Tubs.hh"
 #include "G4UIExecutive.hh"
 #include "G4UImanager.hh"
+#include "G4UserTrackingAction.hh"
 #include "G4VisAttributes.hh"
 #include "G4VisExecutive.hh"
 #include "G4VSolid.hh"
@@ -241,6 +244,16 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
   G4ParticleGun* particle_gun_;
 };
 
+class RuntimeTrackingAction : public G4UserTrackingAction {
+ public:
+  void PreUserTrackingAction(const G4Track* track) override {
+    if (!fpTrackingManager || !track) {
+      return;
+    }
+    fpTrackingManager->SetStoreTrajectory(track->GetParentID() == 0 ? 1 : 0);
+  }
+};
+
 void write_vis_macro(const fs::path& macro_path) {
   std::ofstream out(macro_path, std::ios::trunc);
   out << "/vis/open OGL 800x800-0+0\n";
@@ -302,6 +315,7 @@ int main(int argc, char** argv) {
   }
   run_manager->SetUserInitialization(physics);
   run_manager->SetUserAction(new RuntimePrimaryGeneratorAction(cfg));
+  run_manager->SetUserAction(new RuntimeTrackingAction());
   run_manager->Initialize();
 
   auto* vis_manager = new G4VisExecutive();

@@ -60,7 +60,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
 
     if path == "/api/geant4/viewer/open":
         patch = dict(payload.get("patch", {}))
-        viewer_events = max(1, int(payload.get("events", 30)))
+        viewer_events = max(1, int(payload.get("events", 12)))
         runtime_payload = build_runtime_payload(patch)
         adapter = server._adapter  # type: ignore[attr-defined]
         if not isinstance(adapter, LocalProcessGeant4Adapter):
