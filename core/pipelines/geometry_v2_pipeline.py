@@ -14,6 +14,8 @@ def build_v2_geometry_updates(frame: SlotFrame, *, turn_id: int) -> tuple[list[U
             "finalization_status": result.spec.finalization_status if result.spec else "missing",
             "missing_fields": list(result.missing_fields),
             "errors": list(result.errors),
+            "warnings": list(result.warnings),
+            "runtime_ready": False,
         }
 
     fragment = geometry_spec_to_config_fragment(result.spec).get("geometry", {})
@@ -45,4 +47,5 @@ def build_v2_geometry_updates(frame: SlotFrame, *, turn_id: int) -> tuple[list[U
         "compile_ok": True,
         "structure": result.spec.structure,
         "finalization_status": result.spec.finalization_status,
+        "runtime_ready": result.spec.runtime_ready,
     }

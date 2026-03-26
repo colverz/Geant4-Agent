@@ -17,7 +17,7 @@ from core.dialogue.renderer import render_dialogue_message
 from core.dialogue.state import build_raw_dialogue, collect_available_explanations, sync_dialogue_state
 from core.dialogue.types import build_dialogue_trace
 from core.geometry.adapters.legacy_compare import compare_slot_frame_geometry
-from core.pipelines import build_v2_source_updates, build_v2_spatial_updates
+from core.pipelines import build_v2_geometry_updates, build_v2_source_updates, build_v2_spatial_updates
 from core.pipelines.selectors import select_pipelines
 from core.source.adapters.legacy_compare import compare_slot_frame_source
 from core.orchestrator.arbiter import arbitrate_candidates
@@ -261,6 +261,16 @@ def _prioritize_spatial_questions(
 
 def _v2_missing_field_to_path(domain: str, field: str) -> str:
     mapping = {
+        ("geometry", "size_triplet_mm"): "geometry.params.module_x",
+        ("geometry", "radius_mm"): "geometry.params.child_rmax",
+        ("geometry", "half_length_mm"): "geometry.params.child_hz",
+        ("geometry", "radius1_mm"): "geometry.params.rmax1",
+        ("geometry", "radius2_mm"): "geometry.params.rmax2",
+        ("geometry", "x1_mm"): "geometry.params.x1",
+        ("geometry", "x2_mm"): "geometry.params.x2",
+        ("geometry", "y1_mm"): "geometry.params.y1",
+        ("geometry", "y2_mm"): "geometry.params.y2",
+        ("geometry", "z_mm"): "geometry.params.module_z",
         ("source", "particle"): "source.particle",
         ("source", "energy_mev"): "source.energy",
         ("source", "position_mm"): "source.position",
@@ -268,6 +278,47 @@ def _v2_missing_field_to_path(domain: str, field: str) -> str:
         ("source", "source_type"): "source.type",
     }
     return mapping.get((domain, field), "")
+
+
+def _v2_compile_missing_paths(slot_debug: dict[str, Any]) -> list[str]:
+    paths: list[str] = []
+    geometry_meta = slot_debug.get("geometry_v2")
+    if isinstance(geometry_meta, dict):
+        if "missing_geometry_structure" in geometry_meta.get("errors", []):
+            paths.append("geometry.structure")
+        for field in geometry_meta.get("missing_fields", []) or []:
+            path = _v2_missing_field_to_path("geometry", str(field))
+            if path:
+                paths.append(path)
+    source_meta = slot_debug.get("source_v2")
+    if isinstance(source_meta, dict):
+        for field in source_meta.get("missing_fields", []) or []:
+            path = _v2_missing_field_to_path("source", str(field))
+            if path:
+                paths.append(path)
+    spatial_meta = slot_debug.get("spatial_v2")
+    if isinstance(spatial_meta, dict):
+        source_meta = spatial_meta.get("source_meta")
+        if isinstance(source_meta, dict):
+            for field in source_meta.get("missing_fields", []) or []:
+                path = _v2_missing_field_to_path("source", str(field))
+                if path:
+                    paths.append(path)
+    return _dedupe_paths(paths)
+
+
+def _merge_v2_missing_paths(
+    base_missing_paths: list[str],
+    slot_debug: dict[str, Any],
+    *,
+    include_spatial: bool = True,
+) -> list[str]:
+    merged = _dedupe_paths(list(base_missing_paths) + _v2_compile_missing_paths(slot_debug))
+    if include_spatial:
+        spatial_meta = slot_debug.get("spatial_v2")
+        if isinstance(spatial_meta, dict):
+            merged = _dedupe_paths(merged + _spatial_review_missing_paths(spatial_meta))
+    return merged
 
 
 def _prioritize_v2_compile_questions(
@@ -784,6 +835,11 @@ def process_turn(
                     "source_meta": dict(spatial_result.source_meta),
                 }
                 slot_debug["spatial_v2"] = spatial_v2_meta
+                slot_debug["geometry_v2"] = dict(spatial_result.geometry_meta)
+                slot_debug["source_v2"] = dict(spatial_result.source_meta)
+            elif pipeline_selection.geometry == "v2":
+                _, _, geometry_v2_meta = build_v2_geometry_updates(slot_result.frame, turn_id=state.turn_id)
+                slot_debug["geometry_v2"] = geometry_v2_meta
             elif pipeline_selection.source == "v2":
                 _, _, source_v2_meta = build_v2_source_updates(slot_result.frame, turn_id=state.turn_id)
                 slot_debug["source_v2"] = source_v2_meta
@@ -821,10 +877,11 @@ def process_turn(
             llm_used = True
             llm_raw = slot_result.llm_raw
             llm_schema_errors = list(slot_result.schema_errors)
-            if spatial_v2_meta is not None:
-                semantic_missing_paths = _dedupe_paths(
-                    list(semantic_missing_paths) + _spatial_review_missing_paths(spatial_v2_meta)
-                )
+            semantic_missing_paths = _merge_v2_missing_paths(
+                list(semantic_missing_paths),
+                slot_debug,
+                include_spatial=spatial_v2_meta is not None,
+            )
             fallback_reason = None
             normalization_payload = {
                 "intent": user_candidate.intent.value,
@@ -1101,6 +1158,11 @@ def process_turn(
         user_candidate=user_candidate,
     ):
         semantic_missing_paths = _semantic_missing_from_debug(debug)
+    semantic_missing_paths = _merge_v2_missing_paths(
+        list(semantic_missing_paths),
+        slot_debug,
+        include_spatial=True,
+    )
     final_missing_paths = _dedupe_paths(final_report.missing_required_paths + list(semantic_missing_paths))
     pending_overwrite_required = bool(staged_pending_overwrite and (not applying_pending_overwrite or confirm_apply_failed))
     is_complete = bool(final_report.ok and not final_missing_paths and not pending_overwrite_required and not confirm_apply_failed)

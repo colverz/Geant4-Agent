@@ -5,6 +5,8 @@ from core.geometry.spec import GeometrySpec
 
 
 def geometry_spec_to_runtime_geometry(spec: GeometrySpec) -> dict[str, object]:
+    if not spec.runtime_ready:
+        raise ValueError(f"geometry_spec_not_runtime_ready:{spec.structure}:{spec.finalization_status}")
     payload: dict[str, object] = {"structure": spec.structure}
     entry = get_geometry_catalog_entry(spec.structure)
     if entry is None:
