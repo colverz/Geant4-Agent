@@ -188,6 +188,57 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertNotEqual(out["config"]["source"].get("type"), "isotropic")
         self.assertFalse(out["is_complete"])
 
+    def test_process_turn_v2_spatial_blocks_source_inside_target(self) -> None:
+        frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="10 mm box with source at center",
+            target_slots=[
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+                "source.direction_vec",
+            ],
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 10.0, 10.0]),
+            source=SourceSlots(
+                kind="point",
+                particle="gamma",
+                energy_mev=1.0,
+                position_mm=[0.0, 0.0, 0.0],
+                direction_vec=[0.0, 0.0, 1.0],
+            ),
+        )
+        result = LlmSlotBuildResult(
+            ok=True,
+            frame=frame,
+            normalized_text=frame.normalized_text,
+            confidence=1.0,
+            llm_raw="{}",
+            fallback_reason=None,
+            schema_errors=[],
+            stage_trace={"final_status": "ok"},
+        )
+        with patch("core.orchestrator.session_manager.build_llm_slot_frame", return_value=result):
+            out = process_turn(
+                {
+                    "session_id": "selector-test",
+                    "text": "10 mm copper box target with point source at center",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                },
+                ollama_config_path="",
+            )
+        self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
+        self.assertNotEqual(out["config"]["source"].get("type"), "point")
+        self.assertFalse(out["is_complete"])
+
 
 if __name__ == "__main__":
     unittest.main()

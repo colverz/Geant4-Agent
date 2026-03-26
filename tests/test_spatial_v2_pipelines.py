@@ -70,7 +70,7 @@ class SpatialV2PipelineTests(unittest.TestCase):
                 kind="point",
                 particle="gamma",
                 energy_mev=1.0,
-                position_mm=[0.0, 0.0, -20.0],
+                position_mm=[0.0, 0.0, -60.0],
                 direction_vec=[0.0, 0.0, 1.0],
             ),
         )
@@ -81,7 +81,7 @@ class SpatialV2PipelineTests(unittest.TestCase):
         self.assertEqual(mapped["geometry.structure"], "single_tubs")
         self.assertEqual(mapped["geometry.params.child_rmax"], 15.0)
         self.assertEqual(mapped["source.type"], "point")
-        self.assertEqual(mapped["source.position"]["value"], [0.0, 0.0, -20.0])
+        self.assertEqual(mapped["source.position"]["value"], [0.0, 0.0, -60.0])
 
     def test_slot_mapper_default_remains_legacy(self) -> None:
         selection = select_pipelines()
@@ -121,6 +121,27 @@ class SpatialV2PipelineTests(unittest.TestCase):
         result = build_v2_spatial_updates(frame, turn_id=6)
         self.assertIn("source_inside_target", result.warnings)
         self.assertEqual(result.spatial_meta["source_relation"], "inside_target")
+        self.assertEqual(result.source_meta["finalization_status"], "review")
+        self.assertIn("spatial_source_target_conflict", result.source_meta["errors"])
+        self.assertEqual(result.source_updates, ())
+
+    def test_spatial_v2_pipeline_blocks_source_on_target_face(self) -> None:
+        frame = SlotFrame(
+            confidence=0.9,
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 20.0, 30.0]),
+            source=SourceSlots(
+                kind="point",
+                particle="gamma",
+                energy_mev=1.0,
+                position_mm=[0.0, 0.0, -15.0],
+                direction_vec=[0.0, 0.0, 1.0],
+            ),
+        )
+        result = build_v2_spatial_updates(frame, turn_id=7)
+        self.assertIn("source_on_target_face", result.warnings)
+        self.assertEqual(result.spatial_meta["source_relation"], "on_target_face")
+        self.assertEqual(result.source_meta["finalization_status"], "review")
+        self.assertEqual(result.source_updates, ())
 
 
 if __name__ == "__main__":

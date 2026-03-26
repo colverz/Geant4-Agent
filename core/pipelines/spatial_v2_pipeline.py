@@ -137,9 +137,39 @@ def _analyze_spatial_context(
     relation = spatial_meta.get("source_relation")
     if relation == "inside_target":
         warnings.append("source_inside_target")
+    elif relation == "on_target_face":
+        warnings.append("source_on_target_face")
     elif relation == "near_target_surface":
         warnings.append("source_near_target_surface")
     return tuple(warnings), spatial_meta
+
+
+def _apply_spatial_gates(
+    source_updates: tuple[UpdateOp, ...],
+    source_targets: tuple[str, ...],
+    source_meta: dict[str, Any],
+    warnings: tuple[str, ...],
+    spatial_meta: dict[str, Any],
+) -> tuple[tuple[UpdateOp, ...], tuple[str, ...], dict[str, Any]]:
+    severe = {"source_inside_target", "source_on_target_face"}
+    if not any(item in severe for item in warnings):
+        gated_meta = dict(source_meta)
+        if warnings:
+            gated_meta["spatial_warnings"] = list(warnings)
+        if spatial_meta:
+            gated_meta["spatial_meta"] = dict(spatial_meta)
+        return source_updates, source_targets, gated_meta
+
+    gated_meta = dict(source_meta)
+    gated_meta["compile_ok"] = False
+    gated_meta["finalization_status"] = "review"
+    errors = list(gated_meta.get("errors", []))
+    if "spatial_source_target_conflict" not in errors:
+        errors.append("spatial_source_target_conflict")
+    gated_meta["errors"] = errors
+    gated_meta["spatial_warnings"] = list(warnings)
+    gated_meta["spatial_meta"] = dict(spatial_meta)
+    return (), (), gated_meta
 
 
 def build_v2_spatial_updates(frame: SlotFrame, *, turn_id: int) -> SpatialV2Result:
@@ -150,6 +180,13 @@ def build_v2_spatial_updates(frame: SlotFrame, *, turn_id: int) -> SpatialV2Resu
         tuple(source_updates),
         geometry_meta,
         source_meta,
+    )
+    source_updates, source_targets, source_meta = _apply_spatial_gates(
+        tuple(source_updates),
+        tuple(source_targets),
+        source_meta,
+        warnings,
+        spatial_meta,
     )
     return SpatialV2Result(
         geometry_updates=tuple(geometry_updates),
