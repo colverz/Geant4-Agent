@@ -15,7 +15,7 @@ from nlu.bert_lab.ollama_client import chat, extract_json
 from nlu.runtime_components.postprocess import merge_params
 
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parents[3]
 KNOWLEDGE_DIR = ROOT / "knowledge" / "data"
 MODELS_DIR = ROOT / "nlu" / "training" / "bert_lab" / "models"
 
@@ -33,7 +33,7 @@ MATERIAL_ALIASES: Dict[str, str] = {
     "cesium iodide": "G4_CESIUM_IODIDE",
     "caesium iodide": "G4_CESIUM_IODIDE",
     "csi": "G4_CESIUM_IODIDE",
-    "纰樺寲閾?: "G4_CESIUM_IODIDE",
+    "cesium iodide crystal": "G4_CESIUM_IODIDE",
     "g4_csi": "G4_CESIUM_IODIDE",
     "g4_cesium_iodide": "G4_CESIUM_IODIDE",
     "g4_cesium-iodide": "G4_CESIUM_IODIDE",
