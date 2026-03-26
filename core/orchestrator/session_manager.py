@@ -17,6 +17,7 @@ from core.dialogue.renderer import render_dialogue_message
 from core.dialogue.state import build_raw_dialogue, collect_available_explanations, sync_dialogue_state
 from core.dialogue.types import build_dialogue_trace
 from core.geometry.adapters.legacy_compare import compare_slot_frame_geometry
+from core.pipelines.selectors import select_pipelines
 from core.source.adapters.legacy_compare import compare_slot_frame_source
 from core.orchestrator.arbiter import arbitrate_candidates
 from core.orchestrator.candidate_preprocess import (
@@ -639,6 +640,10 @@ def process_turn(
     before_config = deep_copy(state.config)
     draft = begin_turn(state)
     context_summary = _build_context_summary(state)
+    pipeline_selection = select_pipelines(
+        geometry=str(payload.get("geometry_pipeline", "")).strip() or None,
+        source=str(payload.get("source_pipeline", "")).strip() or None,
+    )
     llm_router = bool(payload.get("llm_router", True))
     llm_question = bool(payload.get("llm_question", True))
     internal_temperature = 0.0
@@ -674,7 +679,12 @@ def process_turn(
             config_path=ollama_config_path,
         )
         if slot_result.ok and slot_result.frame:
-            slot_candidate, user_candidate = slot_frame_to_candidates(slot_result.frame, turn_id=state.turn_id)
+            slot_candidate, user_candidate = slot_frame_to_candidates(
+                slot_result.frame,
+                turn_id=state.turn_id,
+                geometry_mode=pipeline_selection.geometry,
+                source_mode=pipeline_selection.source,
+            )
             user_candidate = _apply_explicit_user_controls(user_candidate, explicit_controls)
             normalized_text = slot_result.normalized_text or text
             slot_debug = dict(slot_result.stage_trace or {})
@@ -1082,6 +1092,7 @@ def process_turn(
             "fallback_reason": fallback_reason,
             "inference_backend": debug.get("inference_backend", "orchestrated"),
             "normalization": normalization_payload,
+            "pipelines": {"geometry": pipeline_selection.geometry, "source": pipeline_selection.source},
             "slot_debug": slot_debug,
             "geometry_compare": geometry_compare,
             "source_compare": source_compare,
@@ -1135,6 +1146,7 @@ def process_turn(
         "question_attempts": state.question_attempts,
         "normalized_text": normalized_text,
         "normalization": normalization_payload,
+        "pipelines": {"geometry": pipeline_selection.geometry, "source": pipeline_selection.source},
         "llm_used": llm_used,
         "fallback_reason": fallback_reason,
         "llm_raw": llm_raw,

@@ -65,6 +65,20 @@
             <input id="llm-question" type="checkbox" checked />
             <span data-i18n="llm_follow_up">LLM follow-up</span>
           </label>
+          <label class="field">
+            <span>Geometry Pipeline</span>
+            <select id="geometry-pipeline-select">
+              <option value="legacy" selected>legacy</option>
+              <option value="v2">v2</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Source Pipeline</span>
+            <select id="source-pipeline-select">
+              <option value="legacy" selected>legacy</option>
+              <option value="v2">v2</option>
+            </select>
+          </label>
           <button id="reset-btn" class="ghost wide" data-i18n="reset">Reset session</button>
         </section>
 
@@ -175,6 +189,11 @@
                 <div id="debug-geometry-block" class="debug-block">
                   <div class="debug-title" data-i18n="geometry_compare">Geometry Compare</div>
                   <pre id="geometry-compare"></pre>
+                </div>
+
+                <div id="debug-source-block" class="debug-block">
+                  <div class="debug-title">Source Compare</div>
+                  <pre id="source-compare"></pre>
                 </div>
 
                 <div id="debug-config-block" class="debug-block">

@@ -13,6 +13,8 @@ const state = {
   sending: false,
   activeThinkingNode: null,
   activeThinkingProgress: [],
+  geometryPipeline: localStorage.getItem("g4_geometry_pipeline") || "legacy",
+  sourcePipeline: localStorage.getItem("g4_source_pipeline") || "legacy",
 };
 
 const i18n = {
@@ -663,6 +665,32 @@ function summarizeGeometryCompare(compare) {
   return lines.join("\n");
 }
 
+function summarizeSourceCompare(compare) {
+  if (!compare) return "";
+  const mismatches = Array.isArray(compare.mismatches) ? compare.mismatches : [];
+  const lines = [
+    `compile_ok: ${compare.compile_ok === true ? "true" : "false"}`,
+    `matches: ${compare.matches === true ? "true" : "false"}`,
+    `spec_source_type: ${compare.spec_source_type || ""}`,
+    `finalization_status: ${compare.finalization_status || ""}`,
+  ];
+  if (Array.isArray(compare.errors) && compare.errors.length) {
+    lines.push(`errors: ${compare.errors.join(", ")}`);
+  }
+  if (Array.isArray(compare.missing_fields) && compare.missing_fields.length) {
+    lines.push(`missing_fields: ${compare.missing_fields.join(", ")}`);
+  }
+  if (mismatches.length) {
+    lines.push("mismatches:");
+    mismatches.slice(0, 12).forEach((item) => {
+      lines.push(`- ${item.field}: expected=${JSON.stringify(item.expected)} actual=${JSON.stringify(item.actual)}`);
+    });
+  } else {
+    lines.push("mismatches: none");
+  }
+  return lines.join("\n");
+}
+
 function buildRuntimeLogSummary(payload) {
   const lines = Array.isArray(payload?.lines)
     ? payload.lines
@@ -716,6 +744,7 @@ function updateDebugPanelVisibility() {
     ["debug-process-block", $("process-log")?.textContent],
     ["debug-trace-block", $("internal-trace")?.textContent],
     ["debug-geometry-block", $("geometry-compare")?.textContent],
+    ["debug-source-block", $("source-compare")?.textContent],
     ["debug-config-block", $("response")?.textContent],
     ["debug-runtime-block", $("geant4-state")?.textContent],
   ];
@@ -959,6 +988,8 @@ async function sendStep() {
       llm_router: $("llm-router").checked,
       llm_question: $("llm-question").checked,
       lang: state.lang,
+      geometry_pipeline: state.geometryPipeline,
+      source_pipeline: state.sourcePipeline,
     };
 
     const kickoff = await fetch("/api/step_async", {
@@ -996,6 +1027,7 @@ async function sendStep() {
       applied_rules: data.applied_rules || [],
       internal_trace: data.internal_trace || null,
       geometry_compare: data.geometry_compare || null,
+      source_compare: data.source_compare || null,
     };
 
     $("summary").textContent = summarizeConfig(data.config);
@@ -1004,6 +1036,7 @@ async function sendStep() {
     $("process-log").textContent = summarizeProcess(state.lastProcess);
     $("internal-trace").textContent = summarizeInternalTrace(state.lastProcess.internal_trace);
     $("geometry-compare").textContent = summarizeGeometryCompare(state.lastProcess.geometry_compare);
+    $("source-compare").textContent = summarizeSourceCompare(state.lastProcess.source_compare);
     updateDebugPanelVisibility();
     renderTopbar();
     await refreshGeant4State();
@@ -1035,6 +1068,7 @@ async function resetSession() {
   $("process-log").textContent = "";
   $("internal-trace").textContent = "";
   $("geometry-compare").textContent = "";
+  $("source-compare").textContent = "";
   $("geant4-state").textContent = "";
   $("geant4-log").textContent = "";
   renderRuntimeLogSummary({});
@@ -1056,6 +1090,8 @@ function bindComposerHotkeys() {
 document.addEventListener("DOMContentLoaded", () => {
   ensureEmptyState();
   $("lang-select").value = state.lang;
+  $("geometry-pipeline-select").value = state.geometryPipeline;
+  $("source-pipeline-select").value = state.sourcePipeline;
   applyI18n();
   bindComposerHotkeys();
 
@@ -1084,6 +1120,14 @@ document.addEventListener("DOMContentLoaded", () => {
         $("summary").textContent = summarizeConfig(cfg);
       } catch (_) {}
     }
+  });
+  $("geometry-pipeline-select").addEventListener("change", (event) => {
+    state.geometryPipeline = event.target.value || "legacy";
+    localStorage.setItem("g4_geometry_pipeline", state.geometryPipeline);
+  });
+  $("source-pipeline-select").addEventListener("change", (event) => {
+    state.sourcePipeline = event.target.value || "legacy";
+    localStorage.setItem("g4_source_pipeline", state.sourcePipeline);
   });
   $("model-config-select").addEventListener("change", async (event) => {
     const nextPath = event.target.value || "";
