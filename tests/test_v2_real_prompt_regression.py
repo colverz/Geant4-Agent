@@ -51,6 +51,29 @@ class V2RealPromptRegressionTests(unittest.TestCase):
         self.assertTrue(out["slot_debug"]["geometry_v2"]["runtime_ready"])
         self.assertFalse(out["slot_debug"]["source_v2"]["runtime_ready"])
 
+    def test_box_side_shorthand_prompt_is_understood_by_v2(self) -> None:
+        out = self._run(
+            "10 mm copper box target; "
+            "gamma point source 1 MeV at (0,0,-20) mm along +z; "
+            "physics FTFP_BERT; output json."
+        )
+        self.assertTrue(out["is_complete"])
+        self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
+        self.assertEqual(out["config"]["geometry"]["params"]["module_x"], 10.0)
+        self.assertEqual(out["config"]["geometry"]["params"]["module_y"], 10.0)
+        self.assertEqual(out["config"]["geometry"]["params"]["module_z"], 10.0)
+
+    def test_relative_target_center_source_phrase_is_understood_by_v2(self) -> None:
+        out = self._run(
+            "10 mm x 10 mm x 10 mm copper box target; "
+            "gamma point source 1 MeV 20 mm outside the target center along -z; "
+            "physics FTFP_BERT; output json."
+        )
+        self.assertTrue(out["is_complete"])
+        self.assertEqual(out["config"]["source"]["type"], "point")
+        self.assertEqual(out["config"]["source"]["position"]["value"], [0.0, 0.0, -20.0])
+        self.assertEqual(out["config"]["source"]["direction"]["value"], [0.0, 0.0, 1.0])
+
 
 if __name__ == "__main__":
     unittest.main()

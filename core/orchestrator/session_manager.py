@@ -477,6 +477,20 @@ def _augment_geometry_targets(
     )
 
 
+def _augment_user_targets(user_candidate: CandidateUpdate, extra_paths: list[str]) -> CandidateUpdate:
+    merged_targets = _dedupe_paths(list(user_candidate.target_paths) + [str(path) for path in extra_paths if str(path)])
+    if merged_targets == list(user_candidate.target_paths):
+        return user_candidate
+    return CandidateUpdate(
+        producer=user_candidate.producer,
+        intent=user_candidate.intent,
+        target_paths=merged_targets,
+        updates=list(user_candidate.updates),
+        confidence=user_candidate.confidence,
+        rationale=f"{user_candidate.rationale}_targets_augmented",
+    )
+
+
 _EXPLICIT_TARGET_DEPENDENCIES = {
     "geometry.structure": {"geometry.chosen_skeleton", "geometry.graph_program", "geometry.root_name"},
 }
@@ -969,7 +983,6 @@ def process_turn(
                 slot_candidate = filter_candidate_by_explicit_targets(slot_candidate, list(user_candidate.target_paths))
             if user_candidate.target_paths:
                 extracted_candidate = filter_candidate_by_explicit_targets(extracted_candidate, list(user_candidate.target_paths))
-                bridge_source_candidate = filter_candidate_by_explicit_targets(bridge_source_candidate, list(user_candidate.target_paths))
             extracted_candidate = drop_updates_shadowed_by_anchor(extracted_candidate, slot_candidate)
             bridge_candidates: list[CandidateUpdate] = []
             bridge_meta: dict[str, Any] = {}
@@ -990,6 +1003,9 @@ def process_turn(
                 if not needs_source_bridge:
                     bridge_candidates = [candidate for candidate in bridge_candidates if not _candidate_has_update_prefix(candidate, "source.")]
                     bridge_meta.pop("source_v2", None)
+                if bridge_candidates:
+                    bridge_paths = [update.path for candidate in bridge_candidates for update in candidate.updates]
+                    user_candidate = _augment_user_targets(user_candidate, bridge_paths)
                 for key, meta in bridge_meta.items():
                     slot_debug[key] = _merge_v2_meta(slot_debug.get(key), meta)
             if slot_candidate is not None and slot_candidate.updates:
@@ -1055,7 +1071,6 @@ def process_turn(
                     semantic_candidate = _strip_source_updates(semantic_candidate)
                 if user_candidate.target_paths:
                     extracted_candidate = filter_candidate_by_explicit_targets(extracted_candidate, list(user_candidate.target_paths))
-                    bridge_source_candidate = filter_candidate_by_explicit_targets(bridge_source_candidate, list(user_candidate.target_paths))
                 bridge_source_candidate = CandidateUpdate(
                     producer=bridge_source_candidate.producer,
                     intent=bridge_source_candidate.intent,
@@ -1073,6 +1088,9 @@ def process_turn(
                     intent=user_candidate.intent,
                     confidence=max(float(semantic_result.confidence or 0.0), float(user_candidate.confidence or 0.0), 0.8),
                 )
+                if bridge_candidates:
+                    bridge_paths = [update.path for candidate in bridge_candidates for update in candidate.updates]
+                    user_candidate = _augment_user_targets(user_candidate, bridge_paths)
                 for key, meta in bridge_meta.items():
                     slot_debug[key] = _merge_v2_meta(slot_debug.get(key), meta)
                 if semantic_candidate.updates:
@@ -1131,7 +1149,6 @@ def process_turn(
             primary_candidate = _strip_source_updates(primary_candidate)
         normalized_text = norm["normalized_text"]
         primary_candidate = filter_candidate_by_explicit_targets(primary_candidate, list(user_candidate.target_paths))
-        bridge_source_candidate = filter_candidate_by_explicit_targets(bridge_source_candidate, list(user_candidate.target_paths))
         bridge_candidates, bridge_meta = _build_v2_bridge_candidates(
             base_config=draft.config,
             bridge_source=bridge_source_candidate,
@@ -1140,6 +1157,9 @@ def process_turn(
             intent=user_candidate.intent,
             confidence=max(float(norm["confidence"] or 0.0), float(user_candidate.confidence or 0.0), 0.8),
         )
+        if bridge_candidates:
+            bridge_paths = [update.path for candidate in bridge_candidates for update in candidate.updates]
+            user_candidate = _augment_user_targets(user_candidate, bridge_paths)
         for key, meta in bridge_meta.items():
             slot_debug[key] = _merge_v2_meta(slot_debug.get(key), meta)
         content_candidates = [*bridge_candidates, primary_candidate]

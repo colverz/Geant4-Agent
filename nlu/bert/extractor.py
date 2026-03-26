@@ -58,6 +58,23 @@ def _parse_module_triplet_mm(text: str) -> tuple[float, float, float] | None:
     )
 
 
+def _parse_box_side_mm(text: str) -> tuple[float, float, float] | None:
+    low = text.lower()
+    patterns = [
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:cube|box|cuboid)\b",
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:[a-z]+\s+){0,3}(?:cube|box|cuboid)\b",
+        r"(?:cube|box|cuboid)\s*(?:with\s*)?([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:side|edge)?",
+        r"(?:side(?:\s+length)?|edge(?:\s+length)?)\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, low, flags=re.IGNORECASE)
+        if not match:
+            continue
+        side = _value_to_mm(float(match.group(1)), match.group(2))
+        return side, side, side
+    return None
+
+
 def _parse_named_length_mm(text: str, keys: list[str]) -> float | None:
     num = r"[-+]?\d*\.?\d+"
     unit = r"(mm|cm|m)"
@@ -266,6 +283,34 @@ def _parse_at_to(text: str) -> tuple[dict | None, dict | None]:
     return pos, direction
 
 
+def _parse_relative_center_source(text: str) -> tuple[dict | None, dict | None]:
+    patterns = [
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:outside|away from|in front of)\s*(?:the\s+)?(?:target\s+)?center(?:\s+along\s*([+-][xyz]))?",
+        r"(?:outside|away from)\s*(?:the\s+)?(?:target\s+)?center\s*by\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s+along\s*([+-][xyz]))?",
+        r"(?:from\s+)?(?:the\s+)?(?:target\s+)?center(?:\s+point)?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:outside|away)(?:\s+along\s*([+-][xyz]))?",
+    ]
+    axis_map = {
+        "+x": ([20.0, 0.0, 0.0], [-1.0, 0.0, 0.0]),
+        "-x": ([-20.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
+        "+y": ([0.0, 20.0, 0.0], [0.0, -1.0, 0.0]),
+        "-y": ([0.0, -20.0, 0.0], [0.0, 1.0, 0.0]),
+        "+z": ([0.0, 0.0, 20.0], [0.0, 0.0, -1.0]),
+        "-z": ([0.0, 0.0, -20.0], [0.0, 0.0, 1.0]),
+    }
+    for pattern in patterns:
+        match = re.search(pattern, text.lower(), flags=re.IGNORECASE)
+        if not match:
+            continue
+        distance = _value_to_mm(float(match.group(1)), match.group(2))
+        axis = (match.group(3) or "-z").lower()
+        position, direction = axis_map.get(axis, axis_map["-z"])
+        scale = distance / 20.0
+        pos = {"type": "vector", "value": [component * scale for component in position]}
+        dir_vec = {"type": "vector", "value": direction}
+        return pos, dir_vec
+    return None, None
+
+
 def extract_candidates_from_normalized_text(
     normalized_text: str,
     *,
@@ -290,7 +335,7 @@ def extract_candidates_from_normalized_text(
     merged_text = f"{raw_text} ; {normalized_text}".strip(" ;")
     resolved_structure = str(frame.geometry.structure or "")
 
-    if frame.geometry.structure:
+    if frame.geometry.structure and resolved_structure != "unknown":
         updates.append(
             UpdateOp(
                 path="geometry.structure",
@@ -363,7 +408,7 @@ def extract_candidates_from_normalized_text(
             )
         if not resolved_structure and graph_structure:
             resolved_structure = graph_structure
-    if not frame.geometry.structure:
+    if not frame.geometry.structure or resolved_structure == "unknown":
         inferred_structure = _infer_structure_from_text(merged_text)
         if inferred_structure:
             updates.append(
@@ -379,6 +424,8 @@ def extract_candidates_from_normalized_text(
             resolved_structure = inferred_structure
     if resolved_structure not in _GRAPH_STRUCTURES:
         triplet = _parse_module_triplet_mm(merged_text)
+        if triplet is None and (resolved_structure == "single_box" or any(token in merged_text.lower() for token in ("box", "cube", "cuboid"))):
+            triplet = _parse_box_side_mm(merged_text)
         if triplet is not None:
             updates.extend(
                 [
@@ -572,7 +619,8 @@ def extract_candidates_from_normalized_text(
                 turn_id=turn_id,
             )
         )
-    pos = _parse_vector(merged_text, "position") or _parse_at_position(merged_text) or _parse_position_shorthand(merged_text)
+    relative_pos, relative_dir = _parse_relative_center_source(merged_text)
+    pos = _parse_vector(merged_text, "position") or _parse_at_position(merged_text) or relative_pos or _parse_position_shorthand(merged_text)
     at_pos, at_dir = _parse_at_to(merged_text)
     if pos is None and at_pos is not None:
         pos = at_pos
@@ -587,9 +635,13 @@ def extract_candidates_from_normalized_text(
                 turn_id=turn_id,
             )
         )
-    direction = _parse_vector(merged_text, "direction") or _parse_direction_shorthand(merged_text)
+    direction = _parse_vector(merged_text, "direction")
+    if direction is None and relative_dir is None:
+        direction = _parse_direction_shorthand(merged_text)
     if direction is None and at_dir is not None:
         direction = at_dir
+    if direction is None and relative_dir is not None:
+        direction = relative_dir
     if direction is not None:
         updates.append(
             UpdateOp(
