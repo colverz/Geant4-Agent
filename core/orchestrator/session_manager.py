@@ -17,7 +17,7 @@ from core.dialogue.renderer import render_dialogue_message
 from core.dialogue.state import build_raw_dialogue, collect_available_explanations, sync_dialogue_state
 from core.dialogue.types import build_dialogue_trace
 from core.geometry.adapters.legacy_compare import compare_slot_frame_geometry
-from core.pipelines import build_v2_spatial_updates
+from core.pipelines import build_v2_source_updates, build_v2_spatial_updates
 from core.pipelines.selectors import select_pipelines
 from core.source.adapters.legacy_compare import compare_slot_frame_source
 from core.orchestrator.arbiter import arbitrate_candidates
@@ -256,6 +256,45 @@ def _prioritize_spatial_questions(
             prioritized.append(path)
         if len(prioritized) >= max(2, len(asked_fields)):
             break
+    return prioritized[: max(1, len(asked_fields))]
+
+
+def _v2_missing_field_to_path(domain: str, field: str) -> str:
+    mapping = {
+        ("source", "particle"): "source.particle",
+        ("source", "energy_mev"): "source.energy",
+        ("source", "position_mm"): "source.position",
+        ("source", "direction_vec"): "source.direction",
+        ("source", "source_type"): "source.type",
+    }
+    return mapping.get((domain, field), "")
+
+
+def _prioritize_v2_compile_questions(
+    asked_fields: list[str],
+    missing_fields: list[str],
+    slot_debug: dict[str, Any],
+) -> list[str]:
+    prioritized: list[str] = []
+    spatial_meta = slot_debug.get("spatial_v2")
+    if isinstance(spatial_meta, dict):
+        source_meta = spatial_meta.get("source_meta")
+        if isinstance(source_meta, dict):
+            for field in source_meta.get("missing_fields", []) or []:
+                path = _v2_missing_field_to_path("source", str(field))
+                if path and path in missing_fields and path not in prioritized:
+                    prioritized.append(path)
+    for domain in ("source_v2", "geometry_v2"):
+        meta = slot_debug.get(domain)
+        if not isinstance(meta, dict):
+            continue
+        for field in meta.get("missing_fields", []) or []:
+            path = _v2_missing_field_to_path("source" if domain == "source_v2" else "geometry", str(field))
+            if path and path in missing_fields and path not in prioritized:
+                prioritized.append(path)
+    for path in asked_fields:
+        if path not in prioritized:
+            prioritized.append(path)
     return prioritized[: max(1, len(asked_fields))]
 
 
@@ -725,6 +764,7 @@ def process_turn(
         )
         if slot_result.ok and slot_result.frame:
             spatial_v2_meta: dict[str, Any] | None = None
+            source_v2_meta: dict[str, Any] | None = None
             slot_candidate, user_candidate = slot_frame_to_candidates(
                 slot_result.frame,
                 turn_id=state.turn_id,
@@ -744,6 +784,9 @@ def process_turn(
                     "source_meta": dict(spatial_result.source_meta),
                 }
                 slot_debug["spatial_v2"] = spatial_v2_meta
+            elif pipeline_selection.source == "v2":
+                _, _, source_v2_meta = build_v2_source_updates(slot_result.frame, turn_id=state.turn_id)
+                slot_debug["source_v2"] = source_v2_meta
             if enable_compare:
                 geometry_compare = compare_slot_frame_geometry(slot_result.frame, turn_id=state.turn_id)
                 source_compare = compare_slot_frame_source(slot_result.frame, turn_id=state.turn_id)
@@ -1103,6 +1146,7 @@ def process_turn(
         last_asked_paths=state.last_asked_paths,
         question_attempts=state.question_attempts,
     )
+    asked_fields = _prioritize_v2_compile_questions(asked_fields, final_missing_paths, slot_debug)
     asked_fields = _prioritize_spatial_questions(asked_fields, final_missing_paths, slot_debug)
     if asked_fields:
         for path in asked_fields:
