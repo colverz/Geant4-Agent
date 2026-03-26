@@ -118,6 +118,76 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(out["config"]["geometry"]["structure"], "single_tubs")
         self.assertEqual(out["config"]["source"]["type"], "beam")
 
+    def test_process_turn_v2_geometry_does_not_accept_incomplete_shape_from_side_candidates(self) -> None:
+        frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="geometry.kind=box",
+            target_slots=["geometry.kind", "geometry.size_triplet_mm"],
+            geometry=GeometrySlots(kind="box"),
+        )
+        result = LlmSlotBuildResult(
+            ok=True,
+            frame=frame,
+            normalized_text=frame.normalized_text,
+            confidence=1.0,
+            llm_raw="{}",
+            fallback_reason=None,
+            schema_errors=[],
+            stage_trace={"final_status": "ok"},
+        )
+        with patch("core.orchestrator.session_manager.build_llm_slot_frame", return_value=result):
+            out = process_turn(
+                {
+                    "session_id": "selector-test",
+                    "text": "make a box target",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "legacy",
+                    "enable_compare": False,
+                },
+                ollama_config_path="",
+            )
+        self.assertFalse(out["is_complete"])
+        self.assertNotEqual(out["config"]["geometry"]["structure"], "single_box")
+
+    def test_process_turn_v2_source_blocks_runtime_unsupported_isotropic(self) -> None:
+        frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="source.kind=isotropic; source.particle=gamma; source.energy_mev=0.8; source.position_mm=[0,0,0]",
+            target_slots=["source.kind", "source.particle", "source.energy_mev", "source.position_mm"],
+            source=SourceSlots(kind="isotropic", particle="gamma", energy_mev=0.8, position_mm=[0.0, 0.0, 0.0]),
+        )
+        result = LlmSlotBuildResult(
+            ok=True,
+            frame=frame,
+            normalized_text=frame.normalized_text,
+            confidence=1.0,
+            llm_raw="{}",
+            fallback_reason=None,
+            schema_errors=[],
+            stage_trace={"final_status": "ok"},
+        )
+        with patch("core.orchestrator.session_manager.build_llm_slot_frame", return_value=result):
+            out = process_turn(
+                {
+                    "session_id": "selector-test",
+                    "text": "isotropic gamma source at center",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "legacy",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                },
+                ollama_config_path="",
+            )
+        self.assertNotEqual(out["config"]["source"].get("type"), "isotropic")
+        self.assertFalse(out["is_complete"])
+
 
 if __name__ == "__main__":
     unittest.main()

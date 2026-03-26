@@ -215,6 +215,22 @@ def _strip_geometry_updates(candidate: CandidateUpdate | None) -> CandidateUpdat
     )
 
 
+def _strip_source_updates(candidate: CandidateUpdate | None) -> CandidateUpdate | None:
+    if candidate is None or not candidate.updates:
+        return candidate
+    filtered = [update for update in candidate.updates if not update.path.startswith("source.")]
+    if len(filtered) == len(candidate.updates):
+        return candidate
+    return CandidateUpdate(
+        producer=candidate.producer,
+        intent=candidate.intent,
+        target_paths=[path for path in candidate.target_paths if not str(path).startswith("source.")],
+        updates=filtered,
+        confidence=candidate.confidence,
+        rationale=f"{candidate.rationale}_source_stripped",
+    )
+
+
 def _augment_geometry_targets(
     user_candidate: CandidateUpdate | None,
     extracted_candidate: CandidateUpdate | None,
@@ -705,6 +721,10 @@ def process_turn(
             )
             slot_structure = _candidate_structure(slot_candidate)
             extracted_structure = _candidate_structure(extracted_candidate)
+            if pipeline_selection.geometry == "v2":
+                extracted_candidate = _strip_geometry_updates(extracted_candidate)
+            if pipeline_selection.source == "v2":
+                extracted_candidate = _strip_source_updates(extracted_candidate)
             if extracted_structure in _GRAPH_STRUCTURES and slot_structure not in _GRAPH_STRUCTURES:
                 user_candidate = _augment_geometry_targets(user_candidate, extracted_candidate)
                 slot_candidate = _strip_geometry_updates(slot_candidate)
@@ -755,6 +775,10 @@ def process_turn(
                     semantic_result.candidate,
                     list(user_candidate.target_paths),
                 )
+                if pipeline_selection.geometry == "v2":
+                    semantic_candidate = _strip_geometry_updates(semantic_candidate)
+                if pipeline_selection.source == "v2":
+                    semantic_candidate = _strip_source_updates(semantic_candidate)
                 if user_candidate.target_paths:
                     extracted_candidate = filter_candidate_by_explicit_targets(extracted_candidate, list(user_candidate.target_paths))
                 extracted_candidate = drop_updates_shadowed_by_anchor(extracted_candidate, semantic_candidate)
@@ -806,6 +830,10 @@ def process_turn(
             config_path=ollama_config_path,
             apply_autofix=apply_autofix,
         )
+        if pipeline_selection.geometry == "v2":
+            primary_candidate = _strip_geometry_updates(primary_candidate)
+        if pipeline_selection.source == "v2":
+            primary_candidate = _strip_source_updates(primary_candidate)
         normalized_text = norm["normalized_text"]
         content_candidates = [
             filter_candidate_by_explicit_targets(primary_candidate, list(user_candidate.target_paths))
