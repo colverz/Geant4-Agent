@@ -227,6 +227,183 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(out["config"]["source"]["particle"], "gamma")
         self.assertEqual(out["slot_debug"]["interpreter_source"]["used"], True)
 
+    def test_process_turn_interpreter_can_fill_geometry_material_without_overriding_shape(self) -> None:
+        frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="10 mm box target",
+            target_slots=["geometry.kind", "geometry.size_triplet_mm"],
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 10.0, 10.0]),
+        )
+        result = LlmSlotBuildResult(
+            ok=True,
+            frame=frame,
+            normalized_text=frame.normalized_text,
+            confidence=1.0,
+            llm_raw="{}",
+            fallback_reason=None,
+            schema_errors=[],
+            stage_trace={"final_status": "ok"},
+        )
+        interpreter_debug = {
+            "ok": True,
+            "turn_summary": {"intent": "set", "explicit_domains": ["geometry"]},
+            "geometry_candidate": {"kind_candidate": "box", "material_candidate": "G4_Cu", "confidence": 0.9},
+            "source_candidate": {},
+            "merged": {
+                "merged_geometry": {
+                    "kind": {"value": "box", "chosen_from": "shared", "confidence": 0.9, "conflict": False, "note": ""},
+                    "material": {"value": "G4_Cu", "chosen_from": "llm", "confidence": 0.9, "conflict": False, "note": ""},
+                    "dimensions": {
+                        "size_triplet_mm": {
+                            "value": [10.0, 10.0, 10.0],
+                            "chosen_from": "shared",
+                            "confidence": 0.9,
+                            "conflict": False,
+                            "note": "",
+                        }
+                    },
+                    "ambiguities": [],
+                },
+                "merged_source": {
+                    "source_type": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "particle": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "energy_mev": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "position": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "direction": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "ambiguities": [],
+                },
+                "open_questions": [],
+                "conflicts": [],
+                "trust_report": {},
+            },
+        }
+        with (
+            patch("core.orchestrator.session_manager.build_llm_slot_frame", return_value=result),
+            patch("core.orchestrator.session_manager._build_interpreter_sidecar", return_value=interpreter_debug),
+        ):
+            out = process_turn(
+                {
+                    "session_id": "selector-test",
+                    "text": "10 mm box copper target",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "legacy",
+                    "enable_compare": False,
+                    "enable_interpreter": True,
+                },
+                ollama_config_path="",
+            )
+        self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
+        self.assertEqual(out["config"]["materials"]["selected_materials"], ["G4_Cu"])
+        self.assertTrue(out["slot_debug"]["interpreter_geometry"]["used"])
+
+    def test_process_turn_interpreter_can_fill_missing_beam_direction(self) -> None:
+        frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="10 mm box target with gamma beam from (0,0,-50) mm",
+            target_slots=[
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+            ],
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 10.0, 10.0]),
+            source=SourceSlots(
+                kind="beam",
+                particle="gamma",
+                energy_mev=2.0,
+                position_mm=[0.0, 0.0, -50.0],
+            ),
+        )
+        result = LlmSlotBuildResult(
+            ok=True,
+            frame=frame,
+            normalized_text=frame.normalized_text,
+            confidence=1.0,
+            llm_raw="{}",
+            fallback_reason=None,
+            schema_errors=[],
+            stage_trace={"final_status": "ok"},
+        )
+        interpreter_debug = {
+            "ok": True,
+            "turn_summary": {"intent": "set", "explicit_domains": ["geometry", "source"]},
+            "geometry_candidate": {"kind_candidate": "box", "confidence": 0.9},
+            "source_candidate": {
+                "source_type_candidate": "beam",
+                "particle_candidate": "gamma",
+                "energy_candidate_mev": 2.0,
+                "confidence": 0.9,
+            },
+            "merged": {
+                "merged_geometry": {
+                    "kind": {"value": "box", "chosen_from": "shared", "confidence": 0.9, "conflict": False, "note": ""},
+                    "material": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "dimensions": {
+                        "size_triplet_mm": {
+                            "value": [10.0, 10.0, 10.0],
+                            "chosen_from": "shared",
+                            "confidence": 0.9,
+                            "conflict": False,
+                            "note": "",
+                        }
+                    },
+                    "ambiguities": [],
+                },
+                "merged_source": {
+                    "source_type": {"value": "beam", "chosen_from": "shared", "confidence": 0.9, "conflict": False, "note": ""},
+                    "particle": {"value": "gamma", "chosen_from": "shared", "confidence": 0.9, "conflict": False, "note": ""},
+                    "energy_mev": {"value": 2.0, "chosen_from": "shared", "confidence": 0.9, "conflict": False, "note": ""},
+                    "position": {
+                        "value": {"position_mm": [0.0, 0.0, -50.0]},
+                        "chosen_from": "shared",
+                        "confidence": 0.9,
+                        "conflict": False,
+                        "note": "",
+                    },
+                    "direction": {
+                        "value": {"mode": "explicit_vector", "hint": {"direction_vec": [0.0, 0.0, 1.0]}},
+                        "chosen_from": "llm",
+                        "confidence": 0.9,
+                        "conflict": False,
+                        "note": "",
+                    },
+                    "ambiguities": [],
+                },
+                "open_questions": [],
+                "conflicts": [],
+                "trust_report": {},
+            },
+        }
+        with (
+            patch("core.orchestrator.session_manager.build_llm_slot_frame", return_value=result),
+            patch("core.orchestrator.session_manager._build_interpreter_sidecar", return_value=interpreter_debug),
+        ):
+            out = process_turn(
+                {
+                    "session_id": "selector-test",
+                    "text": "keep the 10 mm box target but use a 2 MeV gamma beam from (0,0,-50) mm",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": True,
+                },
+                ollama_config_path="",
+            )
+        self.assertEqual(out["config"]["source"]["type"], "beam")
+        self.assertEqual(out["config"]["source"]["particle"], "gamma")
+        self.assertEqual(out["config"]["source"]["direction"], {"type": "vector", "value": [0.0, 0.0, 1.0]})
+        self.assertTrue(out["slot_debug"]["interpreter_source"]["used"])
+
     def test_process_turn_keeps_legacy_default_when_not_selected(self) -> None:
         frame = SlotFrame(
             intent=Intent.SET,

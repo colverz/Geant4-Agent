@@ -22,8 +22,10 @@ from core.interpreter import merge_candidates, run_interpreter
 from core.pipelines import (
     build_v2_geometry_updates,
     build_v2_geometry_updates_from_candidate,
+    build_v2_geometry_updates_from_config,
     build_v2_source_updates,
     build_v2_source_updates_from_candidate,
+    build_v2_source_updates_from_config,
     build_v2_spatial_updates,
 )
 from core.pipelines.selectors import select_pipelines
@@ -541,8 +543,7 @@ def _build_interpreter_bridge_candidates(
     base_config: dict[str, Any],
     turn_id: int,
     intent: Intent,
-    existing_geometry: bool,
-    existing_source: bool,
+    seed_updates: list[UpdateOp],
 ) -> tuple[list[CandidateUpdate], dict[str, Any]]:
     if not isinstance(interpreter_debug, dict):
         return [], {}
@@ -554,6 +555,7 @@ def _build_interpreter_bridge_candidates(
     bridge_meta: dict[str, Any] = {}
     merged_geometry = merged.get("merged_geometry") if isinstance(merged.get("merged_geometry"), dict) else {}
     merged_source = merged.get("merged_source") if isinstance(merged.get("merged_source"), dict) else {}
+    existing_paths = {str(update.path) for update in seed_updates if str(update.path)}
 
     interpreter_confidence = max(
         float(((interpreter_debug.get("geometry_candidate") or {}).get("confidence") or 0.0)),
@@ -561,7 +563,7 @@ def _build_interpreter_bridge_candidates(
         0.65,
     )
 
-    if pipeline_selection.geometry == "v2" and not existing_geometry:
+    if pipeline_selection.geometry == "v2":
         kind_value = _accepted_interpreter_field(merged_geometry.get("kind"))
         material_value = _accepted_interpreter_field(merged_geometry.get("material"))
         dimensions_blob = merged_geometry.get("dimensions") if isinstance(merged_geometry.get("dimensions"), dict) else {}
@@ -569,7 +571,10 @@ def _build_interpreter_bridge_candidates(
         size_triplet = _accepted_interpreter_field(dimensions_blob.get("size_triplet_mm"))
         radius = _accepted_interpreter_field(dimensions_blob.get("radius_mm"))
         half_length = _accepted_interpreter_field(dimensions_blob.get("half_length_mm"))
-
+        geometry_seed_config = deep_copy(base_config)
+        for update in seed_updates:
+            if update.op == "set":
+                set_path(geometry_seed_config, update.path, update.value)
         interp_frame = SlotFrame(intent=intent, confidence=interpreter_confidence)
         if isinstance(kind_value, str) and kind_value:
             interp_frame.geometry.kind = kind_value
@@ -585,12 +590,37 @@ def _build_interpreter_bridge_candidates(
         if half_length is not None:
             interp_frame.geometry.half_length_mm = float(half_length)
 
-        geometry_updates, geometry_targets, geometry_meta = build_v2_geometry_updates(interp_frame, turn_id=turn_id)
-        if geometry_updates:
+        interp_geometry_updates, _, _ = build_v2_geometry_updates(interp_frame, turn_id=turn_id)
+        for update in interp_geometry_updates:
+            if update.op == "set":
+                set_path(geometry_seed_config, update.path, update.value)
+
+        geometry_updates, geometry_targets, geometry_meta = build_v2_geometry_updates_from_config(
+            geometry_seed_config,
+            turn_id=turn_id,
+            confidence=interpreter_confidence,
+        )
+        filtered_geometry_updates = [update for update in geometry_updates if str(update.path) not in existing_paths]
+        geometry_target_paths = [path for path in geometry_targets if str(path) not in existing_paths]
+        if isinstance(material_value, str) and material_value and "materials.selected_materials" not in existing_paths:
+            filtered_geometry_updates.append(
+                UpdateOp(
+                    path="materials.selected_materials",
+                    op="set",
+                    value=[material_value],
+                    producer=Producer.LLM_SEMANTIC_FRAME,
+                    confidence=interpreter_confidence,
+                    turn_id=turn_id,
+                )
+            )
+            geometry_target_paths = _dedupe_paths(
+                list(geometry_target_paths) + ["materials.selected_materials", "materials.volume_material_map"]
+            )
+        if filtered_geometry_updates:
             geometry_candidate = CandidateUpdate(
                 producer=Producer.LLM_SEMANTIC_FRAME,
                 intent=intent,
-                target_paths=list(geometry_targets),
+                target_paths=list(geometry_target_paths),
                 updates=[
                     UpdateOp(
                         path=update.path,
@@ -600,64 +630,67 @@ def _build_interpreter_bridge_candidates(
                         confidence=interpreter_confidence,
                         turn_id=update.turn_id,
                     )
-                    for update in geometry_updates
+                    for update in filtered_geometry_updates
                 ],
                 confidence=interpreter_confidence,
                 rationale="interpreter_geometry_bridge",
             )
-            if interp_frame.materials.primary:
-                geometry_candidate.updates.append(
-                    UpdateOp(
-                        path="materials.selected_materials",
-                        op="set",
-                        value=[interp_frame.materials.primary],
-                        producer=Producer.LLM_SEMANTIC_FRAME,
-                        confidence=interpreter_confidence,
-                        turn_id=turn_id,
-                    )
-                )
-                geometry_candidate.target_paths = _dedupe_paths(
-                    list(geometry_candidate.target_paths) + ["materials.selected_materials", "materials.volume_material_map"]
-                )
             bridge_candidates.append(geometry_candidate)
         bridge_meta["interpreter_geometry"] = {
-            "used": bool(geometry_updates),
+            "used": bool(filtered_geometry_updates),
             "compile_ok": bool(geometry_meta.get("compile_ok")),
             "runtime_ready": bool(geometry_meta.get("runtime_ready")),
         }
 
-    if pipeline_selection.source == "v2" and not existing_source:
+    if pipeline_selection.source == "v2":
         source_type = _accepted_interpreter_field(merged_source.get("source_type"))
         particle = _accepted_interpreter_field(merged_source.get("particle"))
         energy = _accepted_interpreter_field(merged_source.get("energy_mev"))
         position = _accepted_interpreter_field(merged_source.get("position"))
         direction = _accepted_interpreter_field(merged_source.get("direction"))
 
-        interp_frame = SlotFrame(intent=intent, confidence=interpreter_confidence)
+        source_seed_config = deep_copy(base_config)
+        for update in seed_updates:
+            if update.op == "set":
+                set_path(source_seed_config, update.path, update.value)
         if isinstance(source_type, str) and source_type:
-            interp_frame.source.kind = source_type
+            set_path(source_seed_config, "source.type", source_type)
         if isinstance(particle, str) and particle:
-            interp_frame.source.particle = particle
+            set_path(source_seed_config, "source.particle", particle)
         if energy is not None:
-            interp_frame.source.energy_mev = float(energy)
+            set_path(source_seed_config, "source.energy", float(energy))
         if isinstance(position, dict):
             pos_value = position.get("position_mm")
             if isinstance(pos_value, list) and len(pos_value) == 3 and all(v is not None for v in pos_value):
-                interp_frame.source.position_mm = [float(pos_value[0]), float(pos_value[1]), float(pos_value[2])]
+                set_path(
+                    source_seed_config,
+                    "source.position",
+                    {"type": "vector", "value": [float(pos_value[0]), float(pos_value[1]), float(pos_value[2])]},
+                )
         if isinstance(direction, dict):
             hint = direction.get("hint")
             if isinstance(hint, dict):
                 dir_value = hint.get("direction_vec")
                 if isinstance(dir_value, list) and len(dir_value) == 3 and all(v is not None for v in dir_value):
-                    interp_frame.source.direction_vec = [float(dir_value[0]), float(dir_value[1]), float(dir_value[2])]
+                    set_path(
+                        source_seed_config,
+                        "source.direction",
+                        {"type": "vector", "value": [float(dir_value[0]), float(dir_value[1]), float(dir_value[2])]},
+                    )
 
-        source_updates, source_targets, source_meta = build_v2_source_updates(interp_frame, turn_id=turn_id)
-        if source_updates:
+        source_updates, source_targets, source_meta = build_v2_source_updates_from_config(
+            source_seed_config,
+            turn_id=turn_id,
+            confidence=interpreter_confidence,
+        )
+        filtered_source_updates = [update for update in source_updates if str(update.path) not in existing_paths]
+        source_target_paths = [path for path in source_targets if str(path) not in existing_paths]
+        if filtered_source_updates:
             bridge_candidates.append(
                 CandidateUpdate(
                     producer=Producer.LLM_SEMANTIC_FRAME,
                     intent=intent,
-                    target_paths=list(source_targets),
+                    target_paths=list(source_target_paths),
                     updates=[
                         UpdateOp(
                             path=update.path,
@@ -667,14 +700,14 @@ def _build_interpreter_bridge_candidates(
                             confidence=interpreter_confidence,
                             turn_id=update.turn_id,
                         )
-                        for update in source_updates
+                        for update in filtered_source_updates
                     ],
                     confidence=interpreter_confidence,
                     rationale="interpreter_source_bridge",
                 )
             )
         bridge_meta["interpreter_source"] = {
-            "used": bool(source_updates),
+            "used": bool(filtered_source_updates),
             "compile_ok": bool(source_meta.get("compile_ok")),
             "runtime_ready": bool(source_meta.get("runtime_ready")),
             "missing_fields": list(source_meta.get("missing_fields", []) or []),
@@ -1295,14 +1328,10 @@ def process_turn(
                     base_config=draft.config,
                     turn_id=state.turn_id,
                     intent=user_candidate.intent,
-                    existing_geometry=(
-                        _candidate_has_update_prefix(slot_candidate, "geometry.")
-                        or any(_candidate_has_update_prefix(candidate, "geometry.") for candidate in bridge_candidates)
-                    ),
-                    existing_source=(
-                        _candidate_has_update_prefix(slot_candidate, "source.")
-                        or any(_candidate_has_update_prefix(candidate, "source.") for candidate in bridge_candidates)
-                    ),
+                    seed_updates=[
+                        *(slot_candidate.updates if slot_candidate is not None else []),
+                        *[update for candidate in bridge_candidates for update in candidate.updates],
+                    ],
                 )
                 if interpreter_bridge_candidates:
                     bridge_paths = [update.path for candidate in interpreter_bridge_candidates for update in candidate.updates]
