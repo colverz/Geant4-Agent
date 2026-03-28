@@ -890,6 +890,39 @@ class LlmSlotFrameTest(unittest.TestCase):
         assert result.frame is not None
         self.assertEqual(result.frame.source.kind, "beam")
 
+    def test_build_llm_slot_frame_strips_llm_invented_beam_direction_without_text_evidence(self) -> None:
+        llm_payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "source.kind:beam; source.particle:gamma; source.energy_mev:5; source.position_mm:(0,0,-250)",
+            "target_slots": [
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+            ],
+            "slots": {
+                "source": {
+                    "kind": "beam",
+                    "particle": "gamma",
+                    "energy_mev": 5.0,
+                    "position_mm": [0, 0, -250],
+                    "direction_vec": "+z",
+                }
+            },
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(llm_payload)}):
+            result = build_llm_slot_frame(
+                "gamma beam 5 MeV from (0,0,-250) mm",
+                context_summary="phase=source",
+                config_path="",
+            )
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.source.kind, "beam")
+        self.assertIsNone(result.frame.source.direction_vec)
+        self.assertIn("source.direction_vec", result.stage_trace.get("unsupported_llm_fields", []))
+
     def test_parse_slot_payload_inferrs_cylinder_kind_from_dimensions(self) -> None:
         payload = {
             "intent": "SET",

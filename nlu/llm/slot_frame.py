@@ -1362,6 +1362,28 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
     _normalize_inferred_slots(frame)
 
 
+def _user_text_supports_source_direction(user_text: str) -> bool:
+    text = user_text or ""
+    if _source_direction_from_phrase(text) is not None:
+        return True
+    if _source_relative_to_center_phrase(text) is not None:
+        return True
+    return False
+
+
+def _strip_unsupported_source_direction(frame: SlotFrame, user_text: str) -> list[str]:
+    cleared: list[str] = []
+    if frame.source.kind not in {"beam", "plane"}:
+        return cleared
+    if frame.source.direction_vec is None:
+        return cleared
+    if _user_text_supports_source_direction(user_text):
+        return cleared
+    frame.source.direction_vec = None
+    cleared.append("source.direction_vec")
+    return cleared
+
+
 def _coerce_slot_payload(payload: dict[str, Any]) -> tuple[SlotFrame, dict[str, Any]]:
     errors: list[str] = []
     frame = SlotFrame()
@@ -1652,6 +1674,7 @@ def build_llm_slot_frame(
     _normalize_inferred_slots(frame)
     if _has_graph_family_cue(user_text):
         frame.geometry.kind = None
+    stage_trace["unsupported_llm_fields"] = _strip_unsupported_source_direction(frame, user_text)
     raw_after = _present_slot_paths(frame)
     stage_trace["raw_text_backfill_fields"] = sorted(raw_after - raw_before)
     stage_trace["repair_used"] = bool(stage_trace["normalized_backfill_fields"] or stage_trace["raw_text_backfill_fields"])
