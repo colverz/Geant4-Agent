@@ -129,6 +129,140 @@ def _pick_scalar(
     return (MergedField(note=note), False)
 
 
+def _is_empty_dimension_value(value: Any) -> bool:
+    return isinstance(value, list) and value and all(item is None for item in value)
+
+
+def _normalize_geometry_dimension_value(key: str, value: Any) -> Any:
+    if value is None or _is_empty_dimension_value(value):
+        return None
+    if key == "size_triplet_mm" and isinstance(value, list) and len(value) == 3:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    if isinstance(value, (int, float)):
+        return float(value)
+    return value
+
+
+def _geometry_dimension_semantically_equal(key: str, llm_value: Any, evidence_value: Any) -> bool:
+    llm_norm = _normalize_geometry_dimension_value(key, llm_value)
+    evidence_norm = _normalize_geometry_dimension_value(key, evidence_value)
+    if llm_norm == evidence_norm:
+        return True
+    if key == "side_length_mm":
+        if isinstance(evidence_norm, list) and len(evidence_norm) == 3 and len(set(evidence_norm)) == 1:
+            return abs(float(evidence_norm[0]) - float(llm_norm or 0.0)) < 1e-9
+    if key == "size_triplet_mm":
+        if isinstance(llm_norm, list) and isinstance(evidence_norm, (int, float)) and len(set(llm_norm)) == 1:
+            return abs(float(llm_norm[0]) - float(evidence_norm)) < 1e-9
+    return False
+
+
+def _normalize_source_position(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    position_mm = value.get("position_mm")
+    if isinstance(position_mm, list) and len(position_mm) == 3:
+        return {"position_mm": [float(position_mm[0]), float(position_mm[1]), float(position_mm[2])]}
+    return value
+
+
+def _normalize_source_direction(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    mode = value.get("mode")
+    hint = value.get("hint") if isinstance(value.get("hint"), dict) else {}
+    direction_vec = hint.get("direction_vec")
+    if isinstance(direction_vec, list) and len(direction_vec) == 3 and all(item is not None for item in direction_vec):
+        return {
+            "mode": mode or "explicit_vector",
+            "hint": {"direction_vec": [float(direction_vec[0]), float(direction_vec[1]), float(direction_vec[2])]},
+        }
+    axis = hint.get("axis")
+    if mode in {"toward_target_center", "toward_target_face", "toward_target_face_normal", "normal_to_target_face", "unknown"}:
+        return {"mode": mode, "hint": {"axis": axis}}
+    return None
+
+
+def _pick_geometry_dimension(
+    key: str,
+    llm_value: Any,
+    evidence_value: Any,
+    *,
+    llm_confidence: float,
+) -> tuple[MergedField, bool]:
+    llm_norm = _normalize_geometry_dimension_value(key, llm_value)
+    evidence_norm = _normalize_geometry_dimension_value(key, evidence_value)
+    if _geometry_dimension_semantically_equal(key, llm_norm, evidence_norm):
+        chosen = evidence_norm if evidence_norm is not None else llm_norm
+        return (
+            MergedField(
+                value=chosen,
+                chosen_from="shared" if chosen is not None else None,
+                confidence=llm_confidence if chosen is not None else 0.0,
+                conflict=False,
+                note=f"geometry.{key}",
+            ),
+            False,
+        )
+    return _pick_scalar(
+        llm_norm,
+        evidence_norm,
+        llm_confidence=llm_confidence,
+        note=f"geometry.{key}",
+    )
+
+
+def _pick_source_position(source_candidate: SourceCandidate, source_evidence: dict[str, Any]) -> tuple[MergedField, bool]:
+    llm_value = _normalize_source_position(source_candidate.position_hint or None)
+    evidence_value = _normalize_source_position(source_evidence.get("position"))
+    if llm_value == evidence_value:
+        return (
+            MergedField(
+                value=evidence_value,
+                chosen_from="shared" if evidence_value is not None else None,
+                confidence=source_candidate.confidence if evidence_value is not None else 0.0,
+                conflict=False,
+                note="source.position",
+            ),
+            False,
+        )
+    return _pick_scalar(
+        llm_value,
+        evidence_value,
+        llm_confidence=source_candidate.confidence,
+        note="source.position",
+    )
+
+
+def _pick_source_direction(source_candidate: SourceCandidate, source_evidence: dict[str, Any]) -> tuple[MergedField, bool]:
+    llm_value = None
+    if source_candidate.direction_mode or source_candidate.direction_hint:
+        llm_value = _normalize_source_direction(
+            {
+                "mode": source_candidate.direction_mode,
+                "hint": source_candidate.direction_hint,
+            }
+        )
+    evidence_value = _normalize_source_direction(source_evidence.get("direction"))
+    if llm_value == evidence_value:
+        return (
+            MergedField(
+                value=evidence_value,
+                chosen_from="shared" if evidence_value is not None else None,
+                confidence=source_candidate.confidence if evidence_value is not None else 0.0,
+                conflict=False,
+                note="source.direction",
+            ),
+            False,
+        )
+    return _pick_scalar(
+        llm_value,
+        evidence_value,
+        llm_confidence=source_candidate.confidence,
+        note="source.direction",
+    )
+
+
 def _pick_geometry_kind(
     geometry_candidate: GeometryCandidate,
     geometry_evidence: dict[str, Any],
@@ -209,11 +343,11 @@ def merge_candidates(
     merged_geometry.material = material_field
 
     for key, llm_value in geometry_candidate.dimension_hints.items():
-        field, has_conflict = _pick_scalar(
+        field, has_conflict = _pick_geometry_dimension(
+            key,
             llm_value,
             geometry_evidence.get("dimensions", {}).get(key) if isinstance(geometry_evidence.get("dimensions"), dict) else None,
             llm_confidence=geometry_candidate.confidence,
-            note=f"geometry.{key}",
         )
         if has_conflict:
             conflicts.append(f"geometry.{key}")
@@ -249,27 +383,12 @@ def merge_candidates(
         conflicts.append("source.energy_mev")
     merged_source.energy_mev = energy_field
 
-    position_field, position_conflict = _pick_scalar(
-        source_candidate.position_hint or None,
-        source_evidence.get("position"),
-        llm_confidence=source_candidate.confidence,
-        note="source.position",
-    )
+    position_field, position_conflict = _pick_source_position(source_candidate, source_evidence)
     if position_conflict:
         conflicts.append("source.position")
     merged_source.position = position_field
 
-    direction_field, direction_conflict = _pick_scalar(
-        {
-            "mode": source_candidate.direction_mode,
-            "hint": source_candidate.direction_hint,
-        }
-        if source_candidate.direction_mode or source_candidate.direction_hint
-        else None,
-        source_evidence.get("direction"),
-        llm_confidence=source_candidate.confidence,
-        note="source.direction",
-    )
+    direction_field, direction_conflict = _pick_source_direction(source_candidate, source_evidence)
     if direction_conflict:
         conflicts.append("source.direction")
     merged_source.direction = direction_field

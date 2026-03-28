@@ -90,6 +90,52 @@ class InterpreterMergedTests(unittest.TestCase):
         )
         self.assertIn("source.direction", merged.open_questions)
 
+    def test_merge_treats_equivalent_source_position_as_shared(self) -> None:
+        merged = merge_candidates(
+            TurnSummary(intent="set", explicit_domains=["source"]),
+            GeometryCandidate(),
+            SourceCandidate(
+                source_type_candidate="point",
+                position_mode="absolute",
+                position_hint={"position_mm": [0.0, 0.0, -20.0], "offset_mm": None, "axis": None},
+                confidence=0.9,
+            ),
+            source_evidence={"position": {"position_mm": [0.0, 0.0, -20.0]}},
+        )
+        self.assertEqual(merged.merged_source.position.chosen_from, "shared")
+        self.assertFalse(merged.merged_source.position.conflict)
+        self.assertNotIn("source.position", merged.conflicts)
+
+    def test_merge_treats_equivalent_source_direction_as_shared(self) -> None:
+        merged = merge_candidates(
+            TurnSummary(intent="set", explicit_domains=["source"]),
+            GeometryCandidate(),
+            SourceCandidate(
+                source_type_candidate="point",
+                direction_mode="explicit_vector",
+                direction_hint={"direction_vec": [0.0, 0.0, 1.0], "axis": "+z"},
+                confidence=0.9,
+            ),
+            source_evidence={"direction": {"mode": "explicit_vector", "hint": {"direction_vec": [0.0, 0.0, 1.0]}}},
+        )
+        self.assertEqual(merged.merged_source.direction.chosen_from, "shared")
+        self.assertFalse(merged.merged_source.direction.conflict)
+        self.assertNotIn("source.direction", merged.conflicts)
+
+    def test_merge_treats_side_length_and_uniform_triplet_as_equivalent(self) -> None:
+        merged = merge_candidates(
+            TurnSummary(intent="set", explicit_domains=["geometry"]),
+            GeometryCandidate(
+                kind_candidate="box",
+                dimension_hints={"side_length_mm": 10.0},
+                confidence=0.9,
+            ),
+            SourceCandidate(),
+            geometry_evidence={"kind": "box", "dimensions": {"side_length_mm": 10.0}},
+        )
+        self.assertEqual(merged.merged_geometry.dimensions["side_length_mm"].chosen_from, "shared")
+        self.assertNotIn("geometry.side_length_mm", merged.conflicts)
+
 
 if __name__ == "__main__":
     unittest.main()
