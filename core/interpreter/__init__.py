@@ -6,6 +6,7 @@ from core.interpreter.spec import (
 )
 from core.interpreter.prompt import build_interpreter_prompt
 from core.interpreter.parser import InterpreterParseResult, parse_interpreter_response
+from core.interpreter.runner import InterpreterRunResult, run_interpreter
 
 __all__ = [
     "EvidenceSpan",
@@ -13,6 +14,8 @@ __all__ = [
     "SourceCandidate",
     "TurnSummary",
     "InterpreterParseResult",
+    "InterpreterRunResult",
     "build_interpreter_prompt",
     "parse_interpreter_response",
+    "run_interpreter",
 ]
