@@ -58,6 +58,28 @@ def _parse_module_triplet_mm(text: str) -> tuple[float, float, float] | None:
     )
 
 
+def _parse_module_pair_mm(text: str) -> tuple[float, float] | None:
+    num = r"[-+]?\d*\.?\d+"
+    unit = r"(mm|cm|m)"
+    sep = r"(?:x|X|\*|by)"
+    pat1 = rf"({num})\s*{unit}\s*{sep}\s*({num})\s*{unit}"
+    m = re.search(pat1, text)
+    if m:
+        return (
+            _value_to_mm(float(m.group(1)), m.group(2)),
+            _value_to_mm(float(m.group(3)), m.group(4)),
+        )
+    pat2 = rf"({num})\s*{sep}\s*({num})\s*{unit}"
+    m2 = re.search(pat2, text)
+    if not m2:
+        return None
+    u = m2.group(3)
+    return (
+        _value_to_mm(float(m2.group(1)), u),
+        _value_to_mm(float(m2.group(2)), u),
+    )
+
+
 def _parse_box_side_mm(text: str) -> tuple[float, float, float] | None:
     low = text.lower()
     patterns = [
@@ -65,6 +87,8 @@ def _parse_box_side_mm(text: str) -> tuple[float, float, float] | None:
         r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:[a-z]+\s+){0,3}(?:cube|box|cuboid)\b",
         r"(?:cube|box|cuboid)\s*(?:with\s*)?([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:side|edge)?",
         r"(?:side(?:\s+length)?|edge(?:\s+length)?)\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
+        r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*见方",
+        r"边长\s*[:：]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
     ]
     for pattern in patterns:
         match = re.search(pattern, low, flags=re.IGNORECASE)
@@ -73,6 +97,16 @@ def _parse_box_side_mm(text: str) -> tuple[float, float, float] | None:
         side = _value_to_mm(float(match.group(1)), match.group(2))
         return side, side, side
     return None
+
+
+def _parse_box_side_cn_mm(text: str) -> tuple[float, float, float] | None:
+    m = re.search(r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*见方", text)
+    if not m:
+        m = re.search(r"边长\s*[:：]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)", text)
+    if not m:
+        return None
+    side = _value_to_mm(float(m.group(1)), m.group(2))
+    return side, side, side
 
 
 def _parse_named_length_mm(text: str, keys: list[str]) -> float | None:
@@ -140,6 +174,12 @@ def _infer_structure_from_text(text: str) -> str | None:
     return None
 
 
+def _infer_structure_fallback(text: str) -> str | None:
+    if "见方" in text:
+        return "single_box"
+    return None
+
+
 def _infer_particle(text: str) -> str | None:
     low = text.lower()
     if "gamma" in low or "\u5149\u5b50" in low:
@@ -150,6 +190,32 @@ def _infer_particle(text: str) -> str | None:
         return "proton"
     if "neutron" in low or "\u4e2d\u5b50" in low:
         return "neutron"
+    return None
+
+
+def _infer_material_fallback(text: str) -> str | None:
+    if "铜" in text:
+        return "G4_Cu"
+    if "铅" in text:
+        return "G4_Pb"
+    if "铝" in text:
+        return "G4_Al"
+    if "硅" in text:
+        return "G4_Si"
+    if "铁" in text:
+        return "G4_Fe"
+    if "钨" in text:
+        return "G4_W"
+    if "空气" in text:
+        return "G4_AIR"
+    if "混凝土" in text:
+        return "G4_CONCRETE"
+    if "水" in text:
+        return "G4_WATER"
+    if "不锈钢" in text:
+        return "G4_STAINLESS-STEEL"
+    if "碘化铯" in text:
+        return "G4_CESIUM_IODIDE"
     return None
 
 
@@ -272,6 +338,15 @@ def _parse_at_position(text: str) -> dict | None:
     return {"type": "vector", "value": [float(m.group(1)), float(m.group(2)), float(m.group(3))]}
 
 
+def _parse_at_position_cn(text: str) -> dict | None:
+    num = r"[-+]?\d*\.?\d+"
+    pat = rf"(?:位于|位於)\s*\(\s*({num})\s*[,，]\s*({num})\s*[,，]\s*({num})\s*\)\s*(?:mm|cm|m)?"
+    m = re.search(pat, text)
+    if not m:
+        return None
+    return {"type": "vector", "value": [float(m.group(1)), float(m.group(2)), float(m.group(3))]}
+
+
 def _parse_at_to(text: str) -> tuple[dict | None, dict | None]:
     num = r"[-+]?\d*\.?\d+"
     pat = (
@@ -292,6 +367,7 @@ def _parse_relative_center_source(text: str) -> tuple[dict | None, dict | None]:
         r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:outside|away from|in front of)\s*(?:the\s+)?(?:target\s+)?center(?:\s+along\s*([+-][xyz]))?",
         r"(?:outside|away from)\s*(?:the\s+)?(?:target\s+)?center\s*by\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s+along\s*([+-][xyz]))?",
         r"(?:from\s+)?(?:the\s+)?(?:target\s+)?center(?:\s+point)?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:outside|away)(?:\s+along\s*([+-][xyz]))?",
+        r"距(?:靶|靶心|靶中心)(?:中心)?外\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s*(?:沿|朝)\s*([+-][xyz])(?:\s*方向)?)?",
     ]
     axis_map = {
         "+x": ([20.0, 0.0, 0.0], [-1.0, 0.0, 0.0]),
@@ -321,6 +397,8 @@ def _parse_relative_target_source(text: str) -> tuple[dict | None, dict | None]:
         r"(?:in front of|upstream of)\s*(?:the\s+)?target\s*by\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s+along\s*([+-][xyz]))?",
         r"([-+]?\d*\.?\d+)\s*(mm|cm|m)\s*(?:from|off)\s*(?:the\s+)?target\s+surface(?:\s+along\s*([+-][xyz]))?",
         r"(?:from|off)\s*(?:the\s+)?target\s+surface\s*by\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s+along\s*([+-][xyz]))?",
+        r"距靶面前方\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s*(?:沿|朝)\s*([+-][xyz])(?:\s*方向)?)?",
+        r"距(?:靶|目标)表面\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)(?:\s*(?:沿|朝)\s*([+-][xyz])(?:\s*方向)?)?",
     ]
     axis_map = {
         "+x": ([20.0, 0.0, 0.0], [-1.0, 0.0, 0.0]),
@@ -369,6 +447,8 @@ def _parse_direction_relation_from_axis(text: str) -> dict | None:
     low = text.lower()
     axis_match = re.search(r"\balong\s*([+-][xyz])", low)
     if not axis_match:
+        axis_match = re.search(r"(?:沿|朝)\s*([+-][xyz])(?:\s*方向)?", text.lower())
+    if not axis_match:
         return None
     axis = axis_match.group(1).lower()
     axis_map = {
@@ -385,6 +465,9 @@ def _parse_direction_relation_from_axis(text: str) -> dict | None:
         or "normal to target face" in low
         or "toward target surface normal" in low
         or "towards target surface normal" in low
+        or "朝靶面法线方向" in text
+        or "沿靶面法线方向" in text
+        or "朝靶面方向" in text
     ):
         value = axis_map.get(axis)
         if value is not None:
@@ -490,7 +573,7 @@ def extract_candidates_from_normalized_text(
         if not resolved_structure and graph_structure:
             resolved_structure = graph_structure
     if not frame.geometry.structure or resolved_structure == "unknown":
-        inferred_structure = _infer_structure_from_text(merged_text)
+        inferred_structure = _infer_structure_from_text(merged_text) or _infer_structure_fallback(merged_text)
         if inferred_structure:
             updates.append(
                 UpdateOp(
@@ -507,6 +590,14 @@ def extract_candidates_from_normalized_text(
         triplet = _parse_module_triplet_mm(merged_text)
         if triplet is None and (resolved_structure == "single_box" or any(token in merged_text.lower() for token in ("box", "cube", "cuboid"))):
             triplet = _parse_box_side_mm(merged_text)
+        if triplet is None and resolved_structure == "single_box":
+            triplet = _parse_box_side_cn_mm(merged_text)
+        if triplet is None and resolved_structure == "single_box":
+            pair = _parse_module_pair_mm(merged_text)
+            if pair is not None and any(token in merged_text.lower() for token in ("plate", "slab")):
+                triplet = [pair[0], pair[1], 1.0]
+            elif pair is not None and any(token in merged_text for token in ("板", "薄片", "薄板")):
+                triplet = [pair[0], pair[1], 1.0]
         if triplet is None and resolved_structure == "single_box":
             thickness = _parse_named_length_mm(
                 merged_text,
@@ -626,7 +717,7 @@ def extract_candidates_from_normalized_text(
             )
         )
     else:
-        m = _infer_material(merged_text)
+        m = _infer_material(merged_text) or _infer_material_fallback(merged_text)
         if m:
             updates.append(
                 UpdateOp(
@@ -741,6 +832,7 @@ def extract_candidates_from_normalized_text(
     pos = (
         _parse_vector(merged_text, "position")
         or _parse_at_position(merged_text)
+        or _parse_at_position_cn(merged_text)
         or relative_pos
         or relative_target_pos
         or _parse_position_shorthand(merged_text)

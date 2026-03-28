@@ -154,6 +154,38 @@ class V2RealPromptRegressionTests(unittest.TestCase):
         self.assertTrue(out["is_complete"])
         self.assertEqual(out["config"]["source"]["direction"]["value"], [0.0, 0.0, 1.0])
 
+    def test_chinese_square_target_phrase_is_understood_by_v2(self) -> None:
+        out = self._run(
+            "10 mm 见方铜靶；"
+            "gamma 点源 1 MeV，位于 (0,0,-20) mm，沿 +z 方向；"
+            "物理列表 FTFP_BERT；输出 json。"
+        )
+        self.assertTrue(out["is_complete"])
+        self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
+        self.assertEqual(out["config"]["geometry"]["params"]["module_x"], 10.0)
+        self.assertEqual(out["config"]["geometry"]["params"]["module_y"], 10.0)
+        self.assertEqual(out["config"]["geometry"]["params"]["module_z"], 10.0)
+
+    def test_chinese_thick_slab_phrase_is_understood_by_v2(self) -> None:
+        out = self._run(
+            "厚 2 mm 的铅板；"
+            "gamma 点源 1 MeV，位于 (0,0,-20) mm，沿 +z 方向；"
+            "物理列表 FTFP_BERT；输出 json。"
+        )
+        self.assertTrue(out["is_complete"])
+        self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
+        self.assertEqual(out["config"]["geometry"]["params"]["module_z"], 2.0)
+
+    def test_chinese_front_of_target_phrase_is_understood_by_v2(self) -> None:
+        out = self._run(
+            "10 mm x 10 mm x 10 mm copper box target; "
+            "gamma point source 1 MeV 距靶面前方 5 mm，朝靶面法线方向，沿 -z； "
+            "physics FTFP_BERT; output json."
+        )
+        self.assertTrue(out["is_complete"])
+        self.assertEqual(out["config"]["source"]["position"]["value"], [0.0, 0.0, -5.0])
+        self.assertEqual(out["config"]["source"]["direction"]["value"], [0.0, 0.0, 1.0])
+
 
 if __name__ == "__main__":
     unittest.main()
