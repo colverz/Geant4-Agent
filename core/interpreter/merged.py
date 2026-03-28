@@ -129,6 +129,55 @@ def _pick_scalar(
     return (MergedField(note=note), False)
 
 
+def _pick_geometry_kind(
+    geometry_candidate: GeometryCandidate,
+    geometry_evidence: dict[str, Any],
+) -> tuple[MergedField, bool]:
+    llm_value = geometry_candidate.kind_candidate
+    evidence_value = geometry_evidence.get("kind")
+    evidence_dimensions = geometry_evidence.get("dimensions")
+    evidence_has_dimensions = isinstance(evidence_dimensions, dict) and bool(evidence_dimensions)
+    llm_has_dimensions = bool(geometry_candidate.dimension_hints)
+
+    if llm_value is not None and evidence_value is not None and llm_value != evidence_value:
+        # If the slot/evidence side only guessed a kind but carries no concrete dimensions,
+        # prefer the richer LLM interpretation while keeping the conflict visible.
+        if llm_has_dimensions and not evidence_has_dimensions:
+            return (
+                MergedField(
+                    value=llm_value,
+                    chosen_from="llm",
+                    confidence=geometry_candidate.confidence,
+                    conflict=True,
+                    note="geometry.kind prefers llm because evidence lacks dimension support",
+                ),
+                True,
+            )
+    return _pick_scalar(
+        llm_value,
+        evidence_value,
+        llm_confidence=geometry_candidate.confidence,
+        note="geometry.kind",
+    )
+
+
+def _should_ask_source_direction(
+    turn_summary: TurnSummary,
+    source_candidate: SourceCandidate,
+    merged_source: MergedSource,
+) -> bool:
+    if "source" not in turn_summary.explicit_domains:
+        return False
+    source_type = merged_source.source_type.value or source_candidate.source_type_candidate
+    if source_type not in {"beam", "plane"}:
+        return False
+    if merged_source.direction.value is not None:
+        return False
+    if source_candidate.direction_mode:
+        return False
+    return True
+
+
 def merge_candidates(
     turn_summary: TurnSummary,
     geometry_candidate: GeometryCandidate,
@@ -144,12 +193,7 @@ def merge_candidates(
     merged_geometry = MergedGeometry(ambiguities=list(geometry_candidate.ambiguities))
     merged_source = MergedSource(ambiguities=list(source_candidate.ambiguities))
 
-    kind_field, kind_conflict = _pick_scalar(
-        geometry_candidate.kind_candidate,
-        geometry_evidence.get("kind"),
-        llm_confidence=geometry_candidate.confidence,
-        note="geometry.kind",
-    )
+    kind_field, kind_conflict = _pick_geometry_kind(geometry_candidate, geometry_evidence)
     if kind_conflict:
         conflicts.append("geometry.kind")
     merged_geometry.kind = kind_field
@@ -235,6 +279,8 @@ def merge_candidates(
         open_questions.append("geometry.kind")
     if merged_source.source_type.value is None and "source" in turn_summary.explicit_domains:
         open_questions.append("source.type")
+    if _should_ask_source_direction(turn_summary, source_candidate, merged_source):
+        open_questions.append("source.direction")
 
     trust_report = {
         "geometry_from_llm": sum(1 for field in [merged_geometry.kind, merged_geometry.material, *merged_geometry.dimensions.values()] if field.chosen_from == "llm"),

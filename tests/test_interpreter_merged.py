@@ -53,6 +53,43 @@ class InterpreterMergedTests(unittest.TestCase):
         )
         self.assertIn("source.type", merged.open_questions)
 
+    def test_merge_prefers_richer_llm_geometry_when_evidence_kind_is_weak(self) -> None:
+        merged = merge_candidates(
+            TurnSummary(intent="set", explicit_domains=["geometry"]),
+            GeometryCandidate(
+                kind_candidate="box",
+                dimension_hints={"size_triplet_mm": [10.0, 10.0, 10.0]},
+                confidence=0.85,
+            ),
+            SourceCandidate(),
+            geometry_evidence={"kind": "sphere", "dimensions": {}},
+        )
+        self.assertIn("geometry.kind", merged.conflicts)
+        self.assertEqual(merged.merged_geometry.kind.value, "box")
+        self.assertEqual(merged.merged_geometry.kind.chosen_from, "llm")
+        self.assertTrue(merged.merged_geometry.kind.conflict)
+
+    def test_merge_opens_direction_question_for_beam_without_direction(self) -> None:
+        merged = merge_candidates(
+            TurnSummary(intent="set", explicit_domains=["source"]),
+            GeometryCandidate(),
+            SourceCandidate(
+                source_type_candidate="beam",
+                particle_candidate="gamma",
+                energy_candidate_mev=5.0,
+                position_mode="absolute",
+                position_hint={"position_mm": [0.0, 0.0, -250.0]},
+                confidence=0.8,
+            ),
+            source_evidence={
+                "source_type": "beam",
+                "particle": "gamma",
+                "energy_mev": 5.0,
+                "position": {"position_mm": [0.0, 0.0, -250.0]},
+            },
+        )
+        self.assertIn("source.direction", merged.open_questions)
+
 
 if __name__ == "__main__":
     unittest.main()
