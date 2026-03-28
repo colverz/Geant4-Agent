@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.interpreter import build_interpreter_prompt, parse_interpreter_response
+from core.interpreter import build_interpreter_prompt, detect_prompt_language, parse_interpreter_response
 
 
 class InterpreterPromptTests(unittest.TestCase):
@@ -16,6 +16,20 @@ class InterpreterPromptTests(unittest.TestCase):
         self.assertIn('"geometry_candidate"', prompt)
         self.assertIn('"source_candidate"', prompt)
         self.assertIn("Geometry and source are interpreted candidates only", prompt)
+
+    def test_prompt_switches_to_chinese_template(self) -> None:
+        prompt = build_interpreter_prompt(
+            "做一个铜靶，10 mm 见方，gamma点源1 MeV，位于(0,0,-20) mm，朝+z方向。",
+            "phase=geometry source=missing",
+        )
+        self.assertIn("请解释这轮 Geant4 配置请求真正表达的意思", prompt)
+        self.assertIn("不要输出最终 config path", prompt)
+        self.assertIn('用户: "10 mm x 20 mm x 30 mm 铜盒靶"', prompt)
+
+    def test_language_detector_distinguishes_en_zh_and_mixed(self) -> None:
+        self.assertEqual(detect_prompt_language("copper box target"), "en")
+        self.assertEqual(detect_prompt_language("铜盒靶"), "zh")
+        self.assertEqual(detect_prompt_language("10 mm copper box 铜靶"), "mixed")
 
     def test_parser_builds_candidate_objects(self) -> None:
         raw = """
