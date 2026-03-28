@@ -156,6 +156,9 @@ docs/demo/release/
 docs/demo/release/*.zip
 docs/archive/20*/
 docs/datasets/casebank/eval_casebank_multiturn_live_*.json
+docs/guides/*.pdf
+docs/guides/*.aux
+docs/guides/*.out
 
 # Local scratch
 tmp_*.txt
@@ -185,6 +188,7 @@ nlu/training/bert_lab/data/audit_report.json
 nlu/training/bert_lab/data/eval/
 nlu/training/bert_lab/configs/_tmp.json
 nlu/training/bert_lab/configs/*.local.json
+nlu/llm_support/configs/*.local.json
 
 # Legacy compatibility copies / old local artifacts
 nlu/bert_lab/archive/
