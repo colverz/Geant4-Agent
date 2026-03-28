@@ -27,6 +27,16 @@ class InterpreterPromptTests(unittest.TestCase):
         self.assertIn("\u4e0d\u8981\u8f93\u51fa\u6700\u7ec8 config path", prompt)
         self.assertIn("\u201c10 mm \u89c1\u65b9\u9776\u201d", prompt)
         self.assertIn("\u5982\u679c\u540c\u4e00\u53e5\u91cc\u65e2\u6709\u9776\u53c8\u6709\u6e90", prompt)
+        self.assertIn("\u201c\u94dc\u9776\u201d", prompt)
+        self.assertIn("geometry_candidate.material_candidate = \"G4_Cu\"", prompt)
+
+    def test_prompt_mentions_material_plus_target_binding_rule(self) -> None:
+        prompt = build_interpreter_prompt(
+            "copper target with gamma source",
+            "phase=geometry source=missing",
+        )
+        self.assertIn("treat that material as geometry_candidate.material_candidate", prompt)
+        self.assertIn('User: "copper target"', prompt)
 
     def test_language_detector_distinguishes_en_zh_and_mixed(self) -> None:
         self.assertEqual(detect_prompt_language("copper box target"), "en")

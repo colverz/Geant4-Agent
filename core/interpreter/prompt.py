@@ -77,6 +77,8 @@ def _build_interpreter_prompt_en(user_text: str, context_summary: str) -> str:
         "- If a sentence mentions both target and source, do not mix their properties.\n"
         "- Relative phrases such as 'in front of target', 'outside target center', or 'toward target center' belong to source placement or source direction, not target size.\n"
         "- If the user says '10 mm square target' or '10 mm cube', prefer box plus side_length_mm rather than slab thickness.\n"
+        "- If the user says a material together with target/object words such as 'copper target', 'lead slab', or 'tungsten box', treat that material as geometry_candidate.material_candidate unless the sentence clearly assigns it to source or something else.\n"
+        "- Words like 'target', '靶', '靶体', 'box target', or 'target box' usually describe the geometry object, not the source.\n"
         "Examples:\n"
         '- User: "10 mm x 20 mm x 30 mm copper box target"\n'
         '  geometry_candidate.kind_candidate = "box"\n'
@@ -85,6 +87,10 @@ def _build_interpreter_prompt_en(user_text: str, context_summary: str) -> str:
         '- User: "10 mm square copper target"\n'
         '  geometry_candidate.kind_candidate = "box"\n'
         '  geometry_candidate.dimension_hints.side_length_mm = 10\n'
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        '- User: "copper target"\n'
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        '  geometry_candidate.kind_candidate should stay null if the shape is not actually specified\n'
         '- User: "gamma point source 1 MeV at (0,0,-20) mm along +z"\n'
         '  source_candidate.source_type_candidate = "point"\n'
         '  source_candidate.particle_candidate = "gamma"\n'
@@ -165,6 +171,8 @@ def _build_interpreter_prompt_zh(user_text: str, context_summary: str) -> str:
         "- \u5982\u679c\u540c\u4e00\u53e5\u91cc\u65e2\u6709\u9776\u53c8\u6709\u6e90\uff0c\u4e0d\u8981\u628a\u6e90\u7684\u5c5e\u6027\u89e3\u91ca\u6210\u51e0\u4f55\uff0c\u4e5f\u4e0d\u8981\u628a\u51e0\u4f55\u5c3a\u5bf8\u89e3\u91ca\u6210 source \u3002\n"
         "- \u201c\u8ddd\u9776\u524d\u8868\u9762\u5916 5 mm\u201d\u3001\u201c\u5728\u9776\u524d\u65b9\u201d\u3001\u201c\u671d\u9776\u5fc3\u201d\u3001\u201c\u671d\u9776\u9762\u6cd5\u7ebf\u65b9\u5411\u201d\u8fd9\u7c7b\u8868\u8fbe\u9ed8\u8ba4\u5c5e\u4e8e source \u7684\u4f4d\u7f6e\u6216\u65b9\u5411\uff0c\u4e0d\u662f geometry \u7684\u5c3a\u5bf8\u3002\n"
         "- \u201c10 mm \u89c1\u65b9\u9776\u201d\u6216\u201c10 mm \u7acb\u65b9\u4f53\u201d\u66f4\u503e\u5411\u4e8e box \u7684 side_length_mm\uff0c\u4e0d\u662f slab \u539a\u5ea6\u3002\n"
+        "- \u5982\u679c\u201c\u94dc\u9776\u201d\u3001\u201c\u94c5\u677f\u201d\u3001\u201c\u94a8\u76d2\u9776\u201d\u8fd9\u79cd\u201c\u6750\u6599 + \u9776/\u677f/\u9776\u4f53/\u76ee\u6807\u7269\u4f53\u201d\u7684\u8bf4\u6cd5\u4e00\u8d77\u51fa\u73b0\uff0c\u9ed8\u8ba4\u628a\u6750\u6599\u7406\u89e3\u6210 geometry_candidate.material_candidate\uff0c\u4e0d\u8981\u628a\u6750\u6599\u5f52\u5230 source \u3002\n"
+        "- \u201c\u9776\u201d\u3001\u201c\u9776\u4f53\u201d\u3001\u201c\u76d2\u9776\u201d\u3001\u201c\u9776\u6750\u201d\u8fd9\u7c7b\u8bcd\u9ed8\u8ba4\u63cf\u8ff0 geometry \u5bf9\u8c61\uff0c\u800c\u4e0d\u662f source\u3002\n"
         "\u793a\u4f8b\uff1a\n"
         '- \u7528\u6237: "10 mm x 20 mm x 30 mm \u94dc\u76d2\u9776"\n'
         '  geometry_candidate.kind_candidate = "box"\n'
@@ -173,6 +181,10 @@ def _build_interpreter_prompt_zh(user_text: str, context_summary: str) -> str:
         '- \u7528\u6237: "10 mm \u89c1\u65b9\u94dc\u9776"\n'
         '  geometry_candidate.kind_candidate = "box"\n'
         '  geometry_candidate.dimension_hints.side_length_mm = 10\n'
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        '- \u7528\u6237: "\u94dc\u9776"\n'
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        '  geometry_candidate.kind_candidate \u53ef\u4ee5\u4e3a null\uff0c\u56e0\u4e3a\u53ea\u8bf4\u4e86\u6750\u6599\u548c\u9776\uff0c\u6ca1\u6709\u771f\u6b63\u8bf4\u6e05\u51e0\u4f55\u5f62\u72b6\n'
         '- \u7528\u6237: "gamma \u70b9\u6e90 1 MeV\uff0c\u4f4d\u4e8e (0,0,-20) mm\uff0c\u6cbf +z \u65b9\u5411"\n'
         '  source_candidate.source_type_candidate = "point"\n'
         '  source_candidate.particle_candidate = "gamma"\n'
