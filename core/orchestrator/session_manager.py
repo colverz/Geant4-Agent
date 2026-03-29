@@ -186,6 +186,12 @@ def _build_context_summary(state: SessionState) -> str:
         parts.append(f"memory_materials={json.dumps(material_memory, ensure_ascii=False)}")
     if source_memory:
         parts.append(f"memory_source={json.dumps(source_memory, ensure_ascii=False)}")
+    open_questions = [str(path) for path in getattr(state, "open_questions", []) if str(path)]
+    if open_questions:
+        parts.append(f"open_questions={json.dumps(open_questions, ensure_ascii=False)}")
+    last_asked_paths = [str(path) for path in getattr(state, "last_asked_paths", []) if str(path)]
+    if last_asked_paths:
+        parts.append(f"last_asked_paths={json.dumps(last_asked_paths, ensure_ascii=False)}")
     return "; ".join(parts)
 
 
