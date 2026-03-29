@@ -106,6 +106,22 @@ class InterpreterMergedTests(unittest.TestCase):
         self.assertFalse(merged.merged_source.position.conflict)
         self.assertNotIn("source.position", merged.conflicts)
 
+    def test_merge_ignores_invalid_source_position_hint_with_null_entries(self) -> None:
+        merged = merge_candidates(
+            TurnSummary(intent="set", explicit_domains=["source"]),
+            GeometryCandidate(),
+            SourceCandidate(
+                source_type_candidate="point",
+                position_mode="absolute",
+                position_hint={"position_mm": [None, None, None]},
+                confidence=0.9,
+            ),
+            source_evidence={"position": {"position_mm": [0.0, 0.0, -20.0]}},
+        )
+        self.assertEqual(merged.merged_source.position.value, {"position_mm": [0.0, 0.0, -20.0]})
+        self.assertEqual(merged.merged_source.position.chosen_from, "evidence")
+        self.assertFalse(merged.merged_source.position.conflict)
+
     def test_merge_treats_equivalent_source_direction_as_shared(self) -> None:
         merged = merge_candidates(
             TurnSummary(intent="set", explicit_domains=["source"]),

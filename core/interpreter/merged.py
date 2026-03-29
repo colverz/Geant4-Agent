@@ -161,9 +161,9 @@ def _normalize_source_position(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     position_mm = value.get("position_mm")
-    if isinstance(position_mm, list) and len(position_mm) == 3:
+    if isinstance(position_mm, list) and len(position_mm) == 3 and all(item is not None for item in position_mm):
         return {"position_mm": [float(position_mm[0]), float(position_mm[1]), float(position_mm[2])]}
-    return value
+    return None
 
 
 def _normalize_source_direction(value: Any) -> Any:
