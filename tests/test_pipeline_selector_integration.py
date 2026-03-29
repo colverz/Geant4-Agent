@@ -301,6 +301,96 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(out["config"]["materials"]["selected_materials"], ["G4_Cu"])
         self.assertTrue(out["slot_debug"]["interpreter_geometry"]["used"])
 
+    def test_process_turn_interpreter_geometry_bridge_prefers_resolved_geometry_draft(self) -> None:
+        frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="10 mm target",
+            target_slots=[],
+        )
+        result = LlmSlotBuildResult(
+            ok=True,
+            frame=frame,
+            normalized_text=frame.normalized_text,
+            confidence=1.0,
+            llm_raw="{}",
+            fallback_reason=None,
+            schema_errors=[],
+            stage_trace={"final_status": "ok"},
+        )
+        interpreter_debug = {
+            "ok": True,
+            "turn_summary": {"intent": "set", "explicit_domains": ["geometry"]},
+            "geometry_candidate": {"kind_candidate": "slab", "material_candidate": None, "confidence": 0.7},
+            "source_candidate": {},
+            "merged": {
+                "merged_geometry": {
+                    "kind": {"value": "slab", "chosen_from": "llm", "confidence": 0.7, "conflict": False, "note": ""},
+                    "material": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "dimensions": {
+                        "thickness_mm": {
+                            "value": 10.0,
+                            "chosen_from": "llm",
+                            "confidence": 0.7,
+                            "conflict": False,
+                            "note": "",
+                        }
+                    },
+                    "ambiguities": [],
+                },
+                "merged_source": {
+                    "source_type": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "particle": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "energy_mev": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "position": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "direction": {"value": None, "chosen_from": None, "confidence": 0.0, "conflict": False, "note": ""},
+                    "ambiguities": [],
+                },
+                "open_questions": [],
+                "conflicts": [],
+                "trust_report": {},
+            },
+            "geometry_resolution": {
+                "draft": {
+                    "structure": "single_box",
+                    "material": "G4_Cu",
+                    "params": {"size_triplet_mm": [10.0, 10.0, 10.0]},
+                    "conflicts": [],
+                    "ambiguities": [],
+                    "open_questions": [],
+                    "trust_report": {},
+                },
+                "intent": {
+                    "structure": "single_box",
+                    "kind": "single_box",
+                    "params": {"size_triplet_mm": [10.0, 10.0, 10.0]},
+                    "missing_fields": [],
+                    "ambiguities": [],
+                },
+            },
+        }
+        with (
+            patch("core.orchestrator.session_manager.build_llm_slot_frame", return_value=result),
+            patch("core.orchestrator.session_manager._build_interpreter_sidecar", return_value=interpreter_debug),
+        ):
+            out = process_turn(
+                {
+                    "session_id": "selector-test",
+                    "text": "10 mm copper target",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "legacy",
+                    "enable_compare": False,
+                    "enable_interpreter": True,
+                },
+                ollama_config_path="",
+            )
+        self.assertEqual(out["config"]["geometry"]["structure"], "single_box")
+        self.assertEqual(out["config"]["materials"]["selected_materials"], ["G4_Cu"])
+        self.assertTrue(out["slot_debug"]["interpreter_geometry"]["used_resolution"])
+
     def test_process_turn_interpreter_can_fill_missing_beam_direction(self) -> None:
         frame = SlotFrame(
             intent=Intent.SET,

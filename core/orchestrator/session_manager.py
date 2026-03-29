@@ -18,6 +18,7 @@ from core.dialogue.state import build_raw_dialogue, collect_available_explanatio
 from core.dialogue.types import build_dialogue_trace
 from core.contracts.slots import GeometrySlots, MaterialsSlots, SlotFrame, SourceSlots
 from core.geometry.adapters.legacy_compare import compare_slot_frame_geometry
+from core.geometry.resolver import build_geometry_intent_from_resolved_draft, resolve_geometry_from_merged
 from core.interpreter import merge_candidates, run_interpreter
 from core.pipelines import (
     build_v2_geometry_updates,
@@ -729,6 +730,31 @@ def _build_interpreter_sidecar(
         source_evidence=_build_source_evidence_from_slot_frame(slot_frame),
     )
     payload["merged"] = merged.to_payload()
+    try:
+        geometry_resolution = resolve_geometry_from_merged(merged.merged_geometry)
+        payload["geometry_resolution"] = {
+            "draft": {
+                "structure": geometry_resolution.structure,
+                "material": geometry_resolution.material,
+                "params": dict(geometry_resolution.params),
+                "conflicts": list(geometry_resolution.conflicts),
+                "ambiguities": list(geometry_resolution.ambiguities),
+                "open_questions": list(geometry_resolution.open_questions),
+                "trust_report": dict(geometry_resolution.trust_report),
+            },
+            "intent": build_geometry_intent_from_resolved_draft(geometry_resolution),
+        }
+        payload["geometry_resolution"]["intent"] = {
+            "structure": payload["geometry_resolution"]["intent"].structure,
+            "kind": payload["geometry_resolution"]["intent"].kind,
+            "params": dict(payload["geometry_resolution"]["intent"].params),
+            "missing_fields": list(payload["geometry_resolution"]["intent"].missing_fields),
+            "ambiguities": list(payload["geometry_resolution"]["intent"].ambiguities),
+        }
+    except Exception as exc:
+        payload["geometry_resolution"] = {
+            "error": f"geometry_resolution_error:{type(exc).__name__}",
+        }
     return payload
 
 
@@ -792,13 +818,43 @@ def _build_interpreter_bridge_candidates(
     )
 
     if pipeline_selection.geometry == "v2":
-        kind_value = _accepted_interpreter_field(merged_geometry.get("kind"))
-        material_value = _accepted_interpreter_field(merged_geometry.get("material"))
+        geometry_resolution = interpreter_debug.get("geometry_resolution") if isinstance(interpreter_debug, dict) else None
+        geometry_draft = geometry_resolution.get("draft") if isinstance(geometry_resolution, dict) else None
+        kind_value = None
+        material_value = None
+        side_length = None
+        size_triplet = None
+        radius = None
+        half_length = None
+        if isinstance(geometry_draft, dict):
+            draft_structure = geometry_draft.get("structure")
+            if isinstance(draft_structure, str) and draft_structure:
+                if draft_structure == "single_box":
+                    kind_value = "box"
+                elif draft_structure == "single_tubs":
+                    kind_value = "cylinder"
+                else:
+                    kind_value = draft_structure
+            material_value = geometry_draft.get("material") if isinstance(geometry_draft.get("material"), str) else None
+            draft_params = geometry_draft.get("params") if isinstance(geometry_draft.get("params"), dict) else {}
+            size_triplet = draft_params.get("size_triplet_mm")
+            radius = draft_params.get("radius_mm")
+            half_length = draft_params.get("half_length_mm")
+            if isinstance(size_triplet, list) and len(size_triplet) == 3 and len(set(float(v) for v in size_triplet)) == 1:
+                side_length = float(size_triplet[0])
+        if kind_value is None:
+            kind_value = _accepted_interpreter_field(merged_geometry.get("kind"))
+        if material_value is None:
+            material_value = _accepted_interpreter_field(merged_geometry.get("material"))
         dimensions_blob = merged_geometry.get("dimensions") if isinstance(merged_geometry.get("dimensions"), dict) else {}
-        side_length = _accepted_interpreter_field(dimensions_blob.get("side_length_mm"))
-        size_triplet = _accepted_interpreter_field(dimensions_blob.get("size_triplet_mm"))
-        radius = _accepted_interpreter_field(dimensions_blob.get("radius_mm"))
-        half_length = _accepted_interpreter_field(dimensions_blob.get("half_length_mm"))
+        if side_length is None:
+            side_length = _accepted_interpreter_field(dimensions_blob.get("side_length_mm"))
+        if size_triplet is None:
+            size_triplet = _accepted_interpreter_field(dimensions_blob.get("size_triplet_mm"))
+        if radius is None:
+            radius = _accepted_interpreter_field(dimensions_blob.get("radius_mm"))
+        if half_length is None:
+            half_length = _accepted_interpreter_field(dimensions_blob.get("half_length_mm"))
         geometry_seed_config = deep_copy(base_config)
         for update in seed_updates:
             if update.op == "set":
@@ -868,6 +924,7 @@ def _build_interpreter_bridge_candidates(
             "used": bool(filtered_geometry_updates),
             "compile_ok": bool(geometry_meta.get("compile_ok")),
             "runtime_ready": bool(geometry_meta.get("runtime_ready")),
+            "used_resolution": isinstance(geometry_draft, dict) and not geometry_draft.get("error"),
         }
 
     if pipeline_selection.source == "v2":
