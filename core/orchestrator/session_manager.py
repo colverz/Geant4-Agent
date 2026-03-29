@@ -18,7 +18,13 @@ from core.dialogue.state import build_raw_dialogue, collect_available_explanatio
 from core.dialogue.types import build_dialogue_trace
 from core.contracts.slots import GeometrySlots, MaterialsSlots, SlotFrame, SourceSlots
 from core.geometry.adapters.legacy_compare import compare_slot_frame_geometry
-from core.geometry.resolver import build_geometry_intent_from_resolved_draft, resolve_geometry_from_merged
+from core.geometry.resolver import (
+    GeometryResolutionDraft,
+    build_geometry_bridge_seed,
+    build_slot_frame_from_geometry_bridge_seed,
+    geometry_resolution_to_payload,
+    resolve_geometry_from_merged,
+)
 from core.interpreter import merge_candidates, run_interpreter
 from core.pipelines import (
     build_v2_geometry_updates,
@@ -732,25 +738,7 @@ def _build_interpreter_sidecar(
     payload["merged"] = merged.to_payload()
     try:
         geometry_resolution = resolve_geometry_from_merged(merged.merged_geometry)
-        payload["geometry_resolution"] = {
-            "draft": {
-                "structure": geometry_resolution.structure,
-                "material": geometry_resolution.material,
-                "params": dict(geometry_resolution.params),
-                "conflicts": list(geometry_resolution.conflicts),
-                "ambiguities": list(geometry_resolution.ambiguities),
-                "open_questions": list(geometry_resolution.open_questions),
-                "trust_report": dict(geometry_resolution.trust_report),
-            },
-            "intent": build_geometry_intent_from_resolved_draft(geometry_resolution),
-        }
-        payload["geometry_resolution"]["intent"] = {
-            "structure": payload["geometry_resolution"]["intent"].structure,
-            "kind": payload["geometry_resolution"]["intent"].kind,
-            "params": dict(payload["geometry_resolution"]["intent"].params),
-            "missing_fields": list(payload["geometry_resolution"]["intent"].missing_fields),
-            "ambiguities": list(payload["geometry_resolution"]["intent"].ambiguities),
-        }
+        payload["geometry_resolution"] = geometry_resolution_to_payload(geometry_resolution)
     except Exception as exc:
         payload["geometry_resolution"] = {
             "error": f"geometry_resolution_error:{type(exc).__name__}",
@@ -820,59 +808,30 @@ def _build_interpreter_bridge_candidates(
     if pipeline_selection.geometry == "v2":
         geometry_resolution = interpreter_debug.get("geometry_resolution") if isinstance(interpreter_debug, dict) else None
         geometry_draft = geometry_resolution.get("draft") if isinstance(geometry_resolution, dict) else None
-        kind_value = None
-        material_value = None
-        side_length = None
-        size_triplet = None
-        radius = None
-        half_length = None
+        draft_obj = None
         if isinstance(geometry_draft, dict):
-            draft_structure = geometry_draft.get("structure")
-            if isinstance(draft_structure, str) and draft_structure:
-                if draft_structure == "single_box":
-                    kind_value = "box"
-                elif draft_structure == "single_tubs":
-                    kind_value = "cylinder"
-                else:
-                    kind_value = draft_structure
-            material_value = geometry_draft.get("material") if isinstance(geometry_draft.get("material"), str) else None
-            draft_params = geometry_draft.get("params") if isinstance(geometry_draft.get("params"), dict) else {}
-            size_triplet = draft_params.get("size_triplet_mm")
-            radius = draft_params.get("radius_mm")
-            half_length = draft_params.get("half_length_mm")
-            if isinstance(size_triplet, list) and len(size_triplet) == 3 and len(set(float(v) for v in size_triplet)) == 1:
-                side_length = float(size_triplet[0])
-        if kind_value is None:
-            kind_value = _accepted_interpreter_field(merged_geometry.get("kind"))
-        if material_value is None:
-            material_value = _accepted_interpreter_field(merged_geometry.get("material"))
-        dimensions_blob = merged_geometry.get("dimensions") if isinstance(merged_geometry.get("dimensions"), dict) else {}
-        if side_length is None:
-            side_length = _accepted_interpreter_field(dimensions_blob.get("side_length_mm"))
-        if size_triplet is None:
-            size_triplet = _accepted_interpreter_field(dimensions_blob.get("size_triplet_mm"))
-        if radius is None:
-            radius = _accepted_interpreter_field(dimensions_blob.get("radius_mm"))
-        if half_length is None:
-            half_length = _accepted_interpreter_field(dimensions_blob.get("half_length_mm"))
+            draft_obj = GeometryResolutionDraft(
+                structure=geometry_draft.get("structure"),
+                material=geometry_draft.get("material"),
+                params=dict(geometry_draft.get("params") or {}),
+                conflicts=tuple(geometry_draft.get("conflicts") or ()),
+                ambiguities=tuple(geometry_draft.get("ambiguities") or ()),
+                open_questions=tuple(geometry_draft.get("open_questions") or ()),
+                trust_report=dict(geometry_draft.get("trust_report") or {}),
+            )
+        geometry_seed = build_geometry_bridge_seed(
+            draft=draft_obj,
+            merged_geometry_payload=merged_geometry,
+        )
         geometry_seed_config = deep_copy(base_config)
         for update in seed_updates:
             if update.op == "set":
                 set_path(geometry_seed_config, update.path, update.value)
-        interp_frame = SlotFrame(intent=intent, confidence=interpreter_confidence)
-        if isinstance(kind_value, str) and kind_value:
-            interp_frame.geometry.kind = kind_value
-        if isinstance(material_value, str) and material_value:
-            interp_frame.materials.primary = material_value
-        if isinstance(size_triplet, list) and len(size_triplet) == 3 and all(value is not None for value in size_triplet):
-            interp_frame.geometry.size_triplet_mm = [float(size_triplet[0]), float(size_triplet[1]), float(size_triplet[2])]
-        elif side_length is not None and kind_value == "box":
-            edge = float(side_length)
-            interp_frame.geometry.size_triplet_mm = [edge, edge, edge]
-        if radius is not None:
-            interp_frame.geometry.radius_mm = float(radius)
-        if half_length is not None:
-            interp_frame.geometry.half_length_mm = float(half_length)
+        interp_frame = build_slot_frame_from_geometry_bridge_seed(
+            geometry_seed,
+            intent=intent,
+            confidence=interpreter_confidence,
+        )
 
         interp_geometry_updates, _, _ = build_v2_geometry_updates(interp_frame, turn_id=turn_id)
         for update in interp_geometry_updates:
@@ -886,12 +845,12 @@ def _build_interpreter_bridge_candidates(
         )
         filtered_geometry_updates = [update for update in geometry_updates if str(update.path) not in existing_paths]
         geometry_target_paths = [path for path in geometry_targets if str(path) not in existing_paths]
-        if isinstance(material_value, str) and material_value and "materials.selected_materials" not in existing_paths:
+        if isinstance(geometry_seed.material, str) and geometry_seed.material and "materials.selected_materials" not in existing_paths:
             filtered_geometry_updates.append(
                 UpdateOp(
                     path="materials.selected_materials",
                     op="set",
-                    value=[material_value],
+                    value=[geometry_seed.material],
                     producer=Producer.LLM_SEMANTIC_FRAME,
                     confidence=interpreter_confidence,
                     turn_id=turn_id,

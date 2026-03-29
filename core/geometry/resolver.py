@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.geometry.catalog import get_geometry_catalog_entry, resolve_geometry_structure
+from core.contracts.slots import GeometrySlots, MaterialsSlots, SlotFrame
+from core.orchestrator.types import Intent
 from core.geometry.spec import GeometryEvidence, GeometryFieldResolution, GeometryIntent
 from core.interpreter.merged import MergedField, MergedGeometry
 
@@ -17,6 +19,15 @@ class GeometryResolutionDraft:
     ambiguities: tuple[str, ...] = field(default_factory=tuple)
     open_questions: tuple[str, ...] = field(default_factory=tuple)
     trust_report: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class GeometryBridgeSeed:
+    kind: str | None = None
+    material: str | None = None
+    size_triplet_mm: list[float] | None = None
+    radius_mm: float | None = None
+    half_length_mm: float | None = None
 
 
 def _normalize_scalar(value: Any) -> float | None:
@@ -177,3 +188,115 @@ def build_geometry_intent_from_resolved_draft(draft: GeometryResolutionDraft) ->
         ambiguities=list(draft.ambiguities),
         field_resolutions=field_resolutions,
     )
+
+
+def geometry_resolution_to_payload(draft: GeometryResolutionDraft) -> dict[str, Any]:
+    intent = build_geometry_intent_from_resolved_draft(draft)
+    return {
+        "draft": {
+            "structure": draft.structure,
+            "material": draft.material,
+            "params": dict(draft.params),
+            "conflicts": list(draft.conflicts),
+            "ambiguities": list(draft.ambiguities),
+            "open_questions": list(draft.open_questions),
+            "trust_report": dict(draft.trust_report),
+        },
+        "intent": {
+            "structure": intent.structure,
+            "kind": intent.kind,
+            "params": dict(intent.params),
+            "missing_fields": list(intent.missing_fields),
+            "ambiguities": list(intent.ambiguities),
+        },
+    }
+
+
+def build_geometry_bridge_seed(
+    *,
+    draft: GeometryResolutionDraft | None,
+    merged_geometry_payload: dict[str, Any] | None = None,
+) -> GeometryBridgeSeed:
+    kind: str | None = None
+    material: str | None = None
+    size_triplet: list[float] | None = None
+    radius: float | None = None
+    half_length: float | None = None
+
+    if isinstance(draft, GeometryResolutionDraft):
+        if draft.structure == "single_box":
+            kind = "box"
+        elif draft.structure == "single_tubs":
+            kind = "cylinder"
+        elif draft.structure:
+            kind = draft.structure
+        material = draft.material
+        raw_triplet = draft.params.get("size_triplet_mm")
+        if isinstance(raw_triplet, list) and len(raw_triplet) == 3 and all(v is not None for v in raw_triplet):
+            size_triplet = [float(raw_triplet[0]), float(raw_triplet[1]), float(raw_triplet[2])]
+        radius = _normalize_scalar(draft.params.get("radius_mm"))
+        half_length = _normalize_scalar(draft.params.get("half_length_mm"))
+
+    if isinstance(merged_geometry_payload, dict):
+        if kind is None:
+            field = merged_geometry_payload.get("kind")
+            if isinstance(field, dict) and not field.get("conflict"):
+                value = field.get("value")
+                if isinstance(value, str) and value:
+                    kind = value
+        if material is None:
+            field = merged_geometry_payload.get("material")
+            if isinstance(field, dict) and not field.get("conflict"):
+                value = field.get("value")
+                if isinstance(value, str) and value:
+                    material = value
+        dimensions = merged_geometry_payload.get("dimensions")
+        if isinstance(dimensions, dict):
+            if size_triplet is None:
+                field = dimensions.get("size_triplet_mm")
+                if isinstance(field, dict) and not field.get("conflict"):
+                    value = field.get("value")
+                    if isinstance(value, list) and len(value) == 3 and all(v is not None for v in value):
+                        size_triplet = [float(value[0]), float(value[1]), float(value[2])]
+            if size_triplet is None:
+                field = dimensions.get("side_length_mm")
+                if isinstance(field, dict) and not field.get("conflict"):
+                    value = _normalize_scalar(field.get("value"))
+                    if value is not None and kind == "box":
+                        size_triplet = [value, value, value]
+            if radius is None:
+                field = dimensions.get("radius_mm")
+                if isinstance(field, dict) and not field.get("conflict"):
+                    radius = _normalize_scalar(field.get("value"))
+            if half_length is None:
+                field = dimensions.get("half_length_mm")
+                if isinstance(field, dict) and not field.get("conflict"):
+                    half_length = _normalize_scalar(field.get("value"))
+
+    return GeometryBridgeSeed(
+        kind=kind,
+        material=material,
+        size_triplet_mm=size_triplet,
+        radius_mm=radius,
+        half_length_mm=half_length,
+    )
+
+
+def build_slot_frame_from_geometry_bridge_seed(
+    seed: GeometryBridgeSeed,
+    *,
+    intent: Intent,
+    confidence: float,
+) -> SlotFrame:
+    frame = SlotFrame(intent=intent, confidence=confidence)
+    if isinstance(seed.kind, str) and seed.kind:
+        frame.geometry.kind = seed.kind
+    if isinstance(seed.material, str) and seed.material:
+        frame.materials.primary = seed.material
+    if isinstance(seed.size_triplet_mm, list) and len(seed.size_triplet_mm) == 3:
+        frame.geometry.size_triplet_mm = [float(seed.size_triplet_mm[0]), float(seed.size_triplet_mm[1]), float(seed.size_triplet_mm[2])]
+    if seed.radius_mm is not None:
+        frame.geometry.radius_mm = float(seed.radius_mm)
+    if seed.half_length_mm is not None:
+        frame.geometry.half_length_mm = float(seed.half_length_mm)
+    return frame
