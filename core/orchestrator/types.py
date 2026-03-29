@@ -106,3 +106,4 @@ class SessionState:
     dialogue_memory: list[dict[str, Any]] = field(default_factory=list)
     pending_overwrite: list[dict[str, Any]] = field(default_factory=list)
     semantic_missing_paths: list[str] = field(default_factory=list)
+    slot_memory: dict[str, Any] = field(default_factory=dict)

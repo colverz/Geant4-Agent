@@ -20,6 +20,7 @@ from nlu.llm.slot_frame import LlmSlotBuildResult
 class PipelineSelectorIntegrationTests(unittest.TestCase):
     def tearDown(self) -> None:
         reset_session("selector-test")
+        reset_session("selector-memory-test")
 
     def test_process_turn_can_run_v2_geometry_and_source_pipelines(self) -> None:
         frame = SlotFrame(
@@ -403,6 +404,94 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(out["config"]["source"]["particle"], "gamma")
         self.assertEqual(out["config"]["source"]["direction"], {"type": "vector", "value": [0.0, 0.0, 1.0]})
         self.assertTrue(out["slot_debug"]["interpreter_source"]["used"])
+
+    def test_process_turn_preserves_partial_source_slots_across_rounds(self) -> None:
+        turn1_frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="partial source turn 1",
+            target_slots=[
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "materials.primary",
+                "source.kind",
+                "source.particle",
+                "source.position_mm",
+            ],
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 10.0, 10.0]),
+            source=SourceSlots(kind="point", particle="gamma", position_mm=[0.0, 0.0, -20.0]),
+        )
+        turn2_frame = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="partial source turn 2",
+            target_slots=[
+                "source.energy_mev",
+                "source.direction_vec",
+            ],
+            source=SourceSlots(energy_mev=1.0, direction_vec=[0.0, 0.0, 1.0]),
+        )
+        with patch(
+            "core.orchestrator.session_manager.build_llm_slot_frame",
+            side_effect=[
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=turn1_frame,
+                    normalized_text=turn1_frame.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=turn2_frame,
+                    normalized_text=turn2_frame.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+            ],
+        ):
+            first = process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "做一个铜靶，10 mm 见方，gamma点源，位于(0,0,-20) mm。",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+            second = process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "能量 1 MeV，朝 +z。",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+
+        self.assertEqual(first["config"]["geometry"]["structure"], "single_box")
+        self.assertIsNone(first["config"]["source"]["type"])
+        self.assertEqual(second["config"]["source"]["type"], "point")
+        self.assertEqual(second["config"]["source"]["particle"], "gamma")
+        self.assertEqual(second["config"]["source"]["energy"], 1.0)
+        self.assertEqual(second["config"]["source"]["position"]["value"], [0.0, 0.0, -20.0])
+        self.assertEqual(second["config"]["source"]["direction"]["value"], [0.0, 0.0, 1.0])
 
     def test_process_turn_keeps_legacy_default_when_not_selected(self) -> None:
         frame = SlotFrame(
