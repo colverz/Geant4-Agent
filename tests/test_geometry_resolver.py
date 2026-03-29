@@ -23,6 +23,7 @@ class GeometryResolverTests(unittest.TestCase):
         self.assertEqual(draft.material, "G4_Cu")
         self.assertEqual(draft.params["size_triplet_mm"], [10.0, 10.0, 10.0])
         self.assertEqual(draft.open_questions, ())
+        self.assertTrue(draft.bridge_allowed)
 
     def test_resolver_prefers_cylinder_when_radius_and_half_length_exist(self) -> None:
         merged = MergedGeometry(
@@ -38,6 +39,7 @@ class GeometryResolverTests(unittest.TestCase):
         self.assertEqual(draft.params["radius_mm"], 5.0)
         self.assertEqual(draft.params["half_length_mm"], 20.0)
         self.assertIn("geometry.kind", draft.conflicts)
+        self.assertFalse(draft.bridge_allowed)
 
     def test_resolver_keeps_box_open_when_only_thickness_exists(self) -> None:
         merged = MergedGeometry(
@@ -50,6 +52,7 @@ class GeometryResolverTests(unittest.TestCase):
         self.assertEqual(draft.structure, "single_box")
         self.assertIn("geometry.size_triplet_mm", draft.open_questions)
         self.assertIn("box_thickness_without_face_dimensions", draft.ambiguities)
+        self.assertTrue(draft.bridge_allowed)
 
     def test_build_geometry_intent_from_draft_keeps_resolved_params(self) -> None:
         merged = MergedGeometry(

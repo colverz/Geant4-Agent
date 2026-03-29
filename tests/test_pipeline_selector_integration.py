@@ -359,6 +359,7 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
                     "ambiguities": [],
                     "open_questions": [],
                     "trust_report": {},
+                    "bridge_allowed": True,
                 },
                 "intent": {
                     "structure": "single_box",

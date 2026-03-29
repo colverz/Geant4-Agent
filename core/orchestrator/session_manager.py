@@ -818,6 +818,7 @@ def _build_interpreter_bridge_candidates(
                 ambiguities=tuple(geometry_draft.get("ambiguities") or ()),
                 open_questions=tuple(geometry_draft.get("open_questions") or ()),
                 trust_report=dict(geometry_draft.get("trust_report") or {}),
+                bridge_allowed=bool(geometry_draft.get("bridge_allowed", False)),
             )
         geometry_seed = build_geometry_bridge_seed(
             draft=draft_obj,
@@ -884,6 +885,7 @@ def _build_interpreter_bridge_candidates(
             "compile_ok": bool(geometry_meta.get("compile_ok")),
             "runtime_ready": bool(geometry_meta.get("runtime_ready")),
             "used_resolution": isinstance(geometry_draft, dict) and not geometry_draft.get("error"),
+            "bridge_allowed": bool(geometry_draft.get("bridge_allowed", False)) if isinstance(geometry_draft, dict) else False,
         }
 
     if pipeline_selection.source == "v2":

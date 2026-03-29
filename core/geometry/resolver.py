@@ -19,6 +19,7 @@ class GeometryResolutionDraft:
     ambiguities: tuple[str, ...] = field(default_factory=tuple)
     open_questions: tuple[str, ...] = field(default_factory=tuple)
     trust_report: dict[str, Any] = field(default_factory=dict)
+    bridge_allowed: bool = False
 
 
 @dataclass(frozen=True)
@@ -218,14 +219,17 @@ def select_geometry_draft(
     signals: GeometrySignals,
     assessment: GeometrySignalAssessment,
 ) -> GeometryResolutionDraft:
+    structure = assessment.structure_candidate
+    bridge_allowed = structure in {"single_box", "single_tubs"} and "geometry.kind" not in assessment.conflicts
     return GeometryResolutionDraft(
-        structure=assessment.structure_candidate,
+        structure=structure,
         material=signals.material_value,
         params=dict(assessment.normalized_params),
         conflicts=tuple(assessment.conflicts),
         ambiguities=tuple(assessment.ambiguities),
         open_questions=tuple(assessment.open_questions),
         trust_report=dict(assessment.trust_report),
+        bridge_allowed=bridge_allowed,
     )
 
 
@@ -281,6 +285,7 @@ def geometry_resolution_to_payload(draft: GeometryResolutionDraft) -> dict[str, 
             "ambiguities": list(draft.ambiguities),
             "open_questions": list(draft.open_questions),
             "trust_report": dict(draft.trust_report),
+            "bridge_allowed": draft.bridge_allowed,
         },
         "intent": {
             "structure": intent.structure,
@@ -303,7 +308,7 @@ def build_geometry_bridge_seed(
     radius: float | None = None
     half_length: float | None = None
 
-    if isinstance(draft, GeometryResolutionDraft):
+    if isinstance(draft, GeometryResolutionDraft) and draft.bridge_allowed:
         if draft.structure == "single_box":
             kind = "box"
         elif draft.structure == "single_tubs":
@@ -317,7 +322,7 @@ def build_geometry_bridge_seed(
         radius = _normalize_scalar(draft.params.get("radius_mm"))
         half_length = _normalize_scalar(draft.params.get("half_length_mm"))
 
-    if isinstance(merged_geometry_payload, dict):
+    if isinstance(merged_geometry_payload, dict) and draft is None:
         if kind is None:
             field = merged_geometry_payload.get("kind")
             if isinstance(field, dict) and not field.get("conflict"):
