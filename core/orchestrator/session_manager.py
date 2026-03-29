@@ -234,16 +234,39 @@ def _merge_slot_frame_with_memory(frame: SlotFrame, slot_memory: dict[str, Any])
             frame.materials.primary = material_memory["primary"]
 
     if _source_frame_has_content(frame):
-        if frame.source.kind is None and isinstance(source_memory.get("kind"), str):
-            frame.source.kind = source_memory["kind"]
-        if frame.source.particle is None and isinstance(source_memory.get("particle"), str):
-            frame.source.particle = source_memory["particle"]
-        if frame.source.energy_mev is None and source_memory.get("energy_mev") is not None:
-            frame.source.energy_mev = float(source_memory["energy_mev"])
-        if frame.source.position_mm is None and isinstance(source_memory.get("position_mm"), list):
-            frame.source.position_mm = list(source_memory["position_mm"])
-        if frame.source.direction_vec is None and isinstance(source_memory.get("direction_vec"), list):
-            frame.source.direction_vec = list(source_memory["direction_vec"])
+        memory_kind = source_memory.get("kind")
+        explicit_kind = frame.source.kind
+        memory_position = source_memory.get("position_mm")
+        explicit_position = frame.source.position_mm
+        source_changed = bool(
+            isinstance(explicit_kind, str)
+            and isinstance(memory_kind, str)
+            and explicit_kind
+            and memory_kind
+            and explicit_kind != memory_kind
+        )
+        position_changed = bool(
+            isinstance(explicit_position, list)
+            and isinstance(memory_position, list)
+            and explicit_position
+            and memory_position
+            and list(explicit_position) != list(memory_position)
+        )
+        if not source_changed:
+            if frame.source.kind is None and isinstance(memory_kind, str):
+                frame.source.kind = memory_kind
+            if frame.source.particle is None and isinstance(source_memory.get("particle"), str):
+                frame.source.particle = source_memory["particle"]
+            if frame.source.energy_mev is None and source_memory.get("energy_mev") is not None:
+                frame.source.energy_mev = float(source_memory["energy_mev"])
+            if frame.source.position_mm is None and isinstance(memory_position, list):
+                frame.source.position_mm = list(memory_position)
+            if (
+                frame.source.direction_vec is None
+                and not position_changed
+                and isinstance(source_memory.get("direction_vec"), list)
+            ):
+                frame.source.direction_vec = list(source_memory["direction_vec"])
 
     return frame
 
@@ -255,10 +278,10 @@ def _refresh_slot_memory(
     slot_frame: SlotFrame | None,
     allow_frame_overlay: bool,
 ) -> dict[str, Any]:
-    memory: dict[str, Any] = deep_copy(existing_memory or {})
-    geometry = memory.setdefault("geometry", {})
-    materials = memory.setdefault("materials", {})
-    source = memory.setdefault("source", {})
+    memory: dict[str, Any] = {}
+    geometry: dict[str, Any] = {}
+    materials: dict[str, Any] = {}
+    source: dict[str, Any] = {}
 
     structure = get_path(config, "geometry.structure")
     params = get_path(config, "geometry.params", {})
@@ -325,13 +348,57 @@ def _refresh_slot_memory(
         if isinstance(slot_frame.source.direction_vec, list):
             source["direction_vec"] = list(slot_frame.source.direction_vec)
 
-    if not geometry:
-        memory.pop("geometry", None)
-    if not materials:
-        memory.pop("materials", None)
-    if not source:
-        memory.pop("source", None)
+    if geometry:
+        memory["geometry"] = geometry
+    if materials:
+        memory["materials"] = materials
+    if source:
+        memory["source"] = source
     return memory
+
+
+def _build_source_pending_dependency_items(
+    state_like: Any,
+    staged_pending_overwrite: list[dict[str, Any]],
+    *,
+    lang: str,
+) -> list[dict[str, Any]]:
+    pending_paths = {str(item.get("path", "")).strip() for item in staged_pending_overwrite}
+    trigger_paths = {"source.type", "source.position"}
+    if not (pending_paths & trigger_paths):
+        return []
+    if "source.direction" in pending_paths:
+        return []
+    old_direction = get_path(state_like.config, "source.direction")
+    if _is_unset_for_overwrite(old_direction):
+        return []
+    return [
+        {
+            "path": "source.direction",
+            "field": friendly_label("source.direction", lang),
+            "old": old_direction,
+            "new": None,
+            "producer": Producer.RULE_DEFAULT.value,
+        }
+    ]
+
+
+def _stage_dependent_source_updates_for_pending(
+    state_like: Any,
+    candidates: list[CandidateUpdate],
+    staged_pending_overwrite: list[dict[str, Any]],
+    *,
+    lang: str,
+) -> tuple[list[CandidateUpdate], list[dict[str, Any]]]:
+    dependency_items = _build_source_pending_dependency_items(
+        state_like,
+        staged_pending_overwrite,
+        lang=lang,
+    )
+    if not dependency_items:
+        return candidates, staged_pending_overwrite
+    staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, dependency_items)
+    return candidates, staged_pending_overwrite
 
 def _apply_updates(config: dict, updates: list) -> None:
     for upd in updates:
@@ -1768,6 +1835,12 @@ def process_turn(
         if new_pending_overwrite:
             staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, new_pending_overwrite)
         candidates, staged_pending_overwrite = _stage_dependent_geometry_updates_for_pending(
+            draft,
+            candidates,
+            staged_pending_overwrite,
+            lang=lang,
+        )
+        candidates, staged_pending_overwrite = _stage_dependent_source_updates_for_pending(
             draft,
             candidates,
             staged_pending_overwrite,

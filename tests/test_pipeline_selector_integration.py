@@ -493,6 +493,137 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(second["config"]["source"]["position"]["value"], [0.0, 0.0, -20.0])
         self.assertEqual(second["config"]["source"]["direction"]["value"], [0.0, 0.0, 1.0])
 
+    def test_process_turn_confirmed_source_overwrite_clears_stale_direction(self) -> None:
+        initial = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="initial complete source",
+            target_slots=[
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "materials.primary",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+                "source.direction_vec",
+            ],
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 10.0, 10.0]),
+            source=SourceSlots(
+                kind="point",
+                particle="gamma",
+                energy_mev=1.0,
+                position_mm=[0.0, 0.0, -20.0],
+                direction_vec=[0.0, 0.0, 1.0],
+            ),
+        )
+        overwrite = SlotFrame(
+            intent=Intent.MODIFY,
+            confidence=1.0,
+            normalized_text="overwrite source without direction",
+            target_slots=[
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+            ],
+            source=SourceSlots(
+                kind="beam",
+                particle="gamma",
+                energy_mev=2.0,
+                position_mm=[0.0, 0.0, -50.0],
+            ),
+        )
+        confirm = SlotFrame(
+            intent=Intent.CONFIRM,
+            confidence=1.0,
+            normalized_text="confirm overwrite",
+            target_slots=[],
+        )
+        with patch(
+            "core.orchestrator.session_manager.build_llm_slot_frame",
+            side_effect=[
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=initial,
+                    normalized_text=initial.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=overwrite,
+                    normalized_text=overwrite.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=confirm,
+                    normalized_text=confirm.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+            ],
+        ):
+            process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "initial full point source",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+            second = process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "change source to beam from (0,0,-50) mm with 2 MeV",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+            third = process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "确认",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+
+        self.assertTrue(second["pending_overwrite_required"])
+        self.assertEqual(third["config"]["source"]["type"], "beam")
+        self.assertEqual(third["config"]["source"]["energy"], 2.0)
+        self.assertEqual(third["config"]["source"]["position"]["value"], [0.0, 0.0, -50.0])
+        self.assertIsNone(third["config"]["source"]["direction"])
+
     def test_process_turn_keeps_legacy_default_when_not_selected(self) -> None:
         frame = SlotFrame(
             intent=Intent.SET,
