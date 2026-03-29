@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.contracts.slots import SlotFrame
 from core.geometry.catalog import get_geometry_catalog_entry, resolve_geometry_structure
-from core.contracts.slots import GeometrySlots, MaterialsSlots, SlotFrame
-from core.orchestrator.types import Intent
 from core.geometry.spec import GeometryEvidence, GeometryFieldResolution, GeometryIntent
 from core.interpreter.merged import MergedField, MergedGeometry
+from core.orchestrator.types import Intent
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,34 @@ class GeometryBridgeSeed:
     size_triplet_mm: list[float] | None = None
     radius_mm: float | None = None
     half_length_mm: float | None = None
+
+
+@dataclass(frozen=True)
+class GeometrySignals:
+    kind_value: str | None = None
+    kind_source: str = ""
+    kind_conflict: bool = False
+    material_value: str | None = None
+    material_source: str = ""
+    material_conflict: bool = False
+    size_triplet_mm: list[float] | None = None
+    side_length_mm: float | None = None
+    radius_mm: float | None = None
+    diameter_mm: float | None = None
+    half_length_mm: float | None = None
+    full_length_mm: float | None = None
+    thickness_mm: float | None = None
+    ambiguities: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class GeometrySignalAssessment:
+    structure_candidate: str | None = None
+    normalized_params: dict[str, Any] = field(default_factory=dict)
+    conflicts: tuple[str, ...] = field(default_factory=tuple)
+    ambiguities: tuple[str, ...] = field(default_factory=tuple)
+    open_questions: tuple[str, ...] = field(default_factory=tuple)
+    trust_report: dict[str, Any] = field(default_factory=dict)
 
 
 def _normalize_scalar(value: Any) -> float | None:
@@ -73,73 +101,97 @@ def _build_geometry_resolution(field: str, value: Any, source: str, note: str) -
     )
 
 
-def resolve_geometry_from_merged(merged_geometry: MergedGeometry) -> GeometryResolutionDraft:
-    conflicts = []
-    ambiguities = list(merged_geometry.ambiguities)
+def collect_geometry_signals(merged_geometry: MergedGeometry) -> GeometrySignals:
+    dims = merged_geometry.dimensions or {}
+    raw_triplet = _field_value(dims.get("size_triplet_mm"))
+    size_triplet = None
+    if isinstance(raw_triplet, list) and len(raw_triplet) == 3 and all(v is not None for v in raw_triplet):
+        size_triplet = [float(raw_triplet[0]), float(raw_triplet[1]), float(raw_triplet[2])]
+
+    material_value = _field_value(merged_geometry.material)
+    material = str(material_value) if material_value else None
+
+    return GeometrySignals(
+        kind_value=_field_value(merged_geometry.kind),
+        kind_source=_field_source(merged_geometry.kind),
+        kind_conflict=bool(getattr(merged_geometry.kind, "conflict", False)),
+        material_value=material,
+        material_source=_field_source(merged_geometry.material),
+        material_conflict=bool(getattr(merged_geometry.material, "conflict", False)),
+        size_triplet_mm=size_triplet,
+        side_length_mm=_normalize_scalar(_field_value(dims.get("side_length_mm"))),
+        radius_mm=_normalize_scalar(_field_value(dims.get("radius_mm"))),
+        diameter_mm=_normalize_scalar(_field_value(dims.get("diameter_mm"))),
+        half_length_mm=_normalize_scalar(_field_value(dims.get("half_length_mm"))),
+        full_length_mm=_normalize_scalar(_field_value(dims.get("full_length_mm"))),
+        thickness_mm=_normalize_scalar(_field_value(dims.get("thickness_mm"))),
+        ambiguities=tuple(dict.fromkeys(merged_geometry.ambiguities)),
+    )
+
+
+def assess_geometry_signals(signals: GeometrySignals) -> GeometrySignalAssessment:
+    conflicts: list[str] = []
+    ambiguities = list(signals.ambiguities)
     open_questions: list[str] = []
     params: dict[str, Any] = {}
     trust_report = {
-        "kind_source": _field_source(merged_geometry.kind),
-        "material_source": _field_source(merged_geometry.material),
+        "kind_source": signals.kind_source,
+        "material_source": signals.material_source,
     }
 
-    kind_value = _field_value(merged_geometry.kind)
-    if bool(getattr(merged_geometry.kind, "conflict", False)):
+    if signals.kind_conflict:
         conflicts.append("geometry.kind")
-    structure = resolve_geometry_structure(kind_value)
+    if signals.material_conflict:
+        conflicts.append("geometry.material")
 
-    dims = merged_geometry.dimensions or {}
-    side_length = _normalize_scalar(_field_value(dims.get("side_length_mm")))
-    size_triplet = _field_value(dims.get("size_triplet_mm"))
-    radius = _normalize_scalar(_field_value(dims.get("radius_mm")))
-    diameter = _normalize_scalar(_field_value(dims.get("diameter_mm")))
-    half_length = _normalize_scalar(_field_value(dims.get("half_length_mm")))
-    full_length = _normalize_scalar(_field_value(dims.get("full_length_mm")))
-    thickness = _normalize_scalar(_field_value(dims.get("thickness_mm")))
+    structure = resolve_geometry_structure(signals.kind_value)
 
-    if isinstance(size_triplet, list) and len(size_triplet) == 3 and all(v is not None for v in size_triplet):
-        params["size_triplet_mm"] = [float(size_triplet[0]), float(size_triplet[1]), float(size_triplet[2])]
-    elif side_length is not None:
-        params["size_triplet_mm"] = [side_length, side_length, side_length]
+    if signals.size_triplet_mm is not None:
+        params["size_triplet_mm"] = list(signals.size_triplet_mm)
+    elif signals.side_length_mm is not None:
+        params["size_triplet_mm"] = [
+            signals.side_length_mm,
+            signals.side_length_mm,
+            signals.side_length_mm,
+        ]
 
-    if diameter is not None and radius is None:
-        radius = diameter / 2.0
-    if full_length is not None and half_length is None:
-        half_length = full_length / 2.0
+    radius = signals.radius_mm
+    if radius is None and signals.diameter_mm is not None:
+        radius = signals.diameter_mm / 2.0
+
+    half_length = signals.half_length_mm
+    if half_length is None and signals.full_length_mm is not None:
+        half_length = signals.full_length_mm / 2.0
 
     if radius is not None:
         params["radius_mm"] = radius
     if half_length is not None:
         params["half_length_mm"] = half_length
 
+    # Let strong cylinder dimensions override a conflicting box-like kind.
     if structure == "single_box" and "radius_mm" in params and "half_length_mm" in params:
         structure = "single_tubs"
 
-    if structure == "single_box" and "size_triplet_mm" not in params:
-        if thickness is not None:
-            ambiguities.append("box_thickness_without_face_dimensions")
-        open_questions.append("geometry.size_triplet_mm")
+    if structure == "single_box":
+        if "size_triplet_mm" not in params:
+            if signals.thickness_mm is not None:
+                ambiguities.append("box_thickness_without_face_dimensions")
+            open_questions.append("geometry.size_triplet_mm")
     elif structure == "single_tubs":
         if "radius_mm" not in params:
             open_questions.append("geometry.radius_mm")
         if "half_length_mm" not in params:
             open_questions.append("geometry.half_length_mm")
     elif structure is None:
-        if radius is not None and half_length is not None:
+        if "radius_mm" in params and "half_length_mm" in params:
             structure = "single_tubs"
-            params["radius_mm"] = radius
-            params["half_length_mm"] = half_length
         elif "size_triplet_mm" in params:
             structure = "single_box"
-        elif thickness is not None:
+        elif signals.thickness_mm is not None:
             ambiguities.append("geometry_kind_unresolved_from_thickness_only")
             open_questions.append("geometry.kind")
         else:
             open_questions.append("geometry.kind")
-
-    material = _field_value(merged_geometry.material)
-    if bool(getattr(merged_geometry.material, "conflict", False)):
-        conflicts.append("geometry.material")
 
     if structure:
         entry = get_geometry_catalog_entry(structure)
@@ -152,15 +204,43 @@ def resolve_geometry_from_merged(merged_geometry: MergedGeometry) -> GeometryRes
                 if "half_length_mm" not in params:
                     open_questions.append("geometry.half_length_mm")
 
-    return GeometryResolutionDraft(
-        structure=structure,
-        material=str(material) if material else None,
-        params=params,
+    return GeometrySignalAssessment(
+        structure_candidate=structure,
+        normalized_params=params,
         conflicts=tuple(dict.fromkeys(conflicts)),
         ambiguities=tuple(dict.fromkeys(item for item in ambiguities if item)),
         open_questions=tuple(dict.fromkeys(item for item in open_questions if item)),
         trust_report=trust_report,
     )
+
+
+def select_geometry_draft(
+    signals: GeometrySignals,
+    assessment: GeometrySignalAssessment,
+) -> GeometryResolutionDraft:
+    return GeometryResolutionDraft(
+        structure=assessment.structure_candidate,
+        material=signals.material_value,
+        params=dict(assessment.normalized_params),
+        conflicts=tuple(assessment.conflicts),
+        ambiguities=tuple(assessment.ambiguities),
+        open_questions=tuple(assessment.open_questions),
+        trust_report=dict(assessment.trust_report),
+    )
+
+
+def resolve_geometry_with_trace(
+    merged_geometry: MergedGeometry,
+) -> tuple[GeometrySignals, GeometrySignalAssessment, GeometryResolutionDraft]:
+    signals = collect_geometry_signals(merged_geometry)
+    assessment = assess_geometry_signals(signals)
+    draft = select_geometry_draft(signals, assessment)
+    return signals, assessment, draft
+
+
+def resolve_geometry_from_merged(merged_geometry: MergedGeometry) -> GeometryResolutionDraft:
+    _, _, draft = resolve_geometry_with_trace(merged_geometry)
+    return draft
 
 
 def build_geometry_intent_from_resolved_draft(draft: GeometryResolutionDraft) -> GeometryIntent:
@@ -294,7 +374,11 @@ def build_slot_frame_from_geometry_bridge_seed(
     if isinstance(seed.material, str) and seed.material:
         frame.materials.primary = seed.material
     if isinstance(seed.size_triplet_mm, list) and len(seed.size_triplet_mm) == 3:
-        frame.geometry.size_triplet_mm = [float(seed.size_triplet_mm[0]), float(seed.size_triplet_mm[1]), float(seed.size_triplet_mm[2])]
+        frame.geometry.size_triplet_mm = [
+            float(seed.size_triplet_mm[0]),
+            float(seed.size_triplet_mm[1]),
+            float(seed.size_triplet_mm[2]),
+        ]
     if seed.radius_mm is not None:
         frame.geometry.radius_mm = float(seed.radius_mm)
     if seed.half_length_mm is not None:

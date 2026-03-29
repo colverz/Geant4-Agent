@@ -24,11 +24,17 @@ from core.geometry.compiler import (
 from core.geometry.resolver import (
     GeometryBridgeSeed,
     GeometryResolutionDraft,
+    GeometrySignalAssessment,
+    GeometrySignals,
+    assess_geometry_signals,
     build_geometry_bridge_seed,
     build_geometry_intent_from_resolved_draft,
     build_slot_frame_from_geometry_bridge_seed,
+    collect_geometry_signals,
     geometry_resolution_to_payload,
     resolve_geometry_from_merged,
+    resolve_geometry_with_trace,
+    select_geometry_draft,
 )
 from core.geometry.spec import GeometryEvidence, GeometryIntent, GeometrySpec
 
@@ -39,8 +45,11 @@ __all__ = [
     "GeometryEvidence",
     "GeometryIntent",
     "GeometryResolutionDraft",
+    "GeometrySignalAssessment",
+    "GeometrySignals",
     "GeometryParamDefinition",
     "GeometrySpec",
+    "assess_geometry_signals",
     "build_geometry_bridge_seed",
     "build_geometry_intent_from_config",
     "build_geometry_intent_from_resolved_draft",
@@ -51,6 +60,7 @@ __all__ = [
     "compile_geometry_spec_from_semantic_frame",
     "compile_geometry_spec_from_slot_frame",
     "compare_slot_frame_geometry",
+    "collect_geometry_signals",
     "diff_geometry_config_fragment",
     "geometry_spec_to_config_fragment",
     "geometry_spec_to_runtime_geometry",
@@ -59,5 +69,7 @@ __all__ = [
     "iter_geometry_catalog",
     "legacy_geometry_from_candidate",
     "resolve_geometry_from_merged",
+    "resolve_geometry_with_trace",
     "resolve_geometry_structure",
+    "select_geometry_draft",
 ]
