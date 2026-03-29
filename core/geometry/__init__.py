@@ -21,6 +21,11 @@ from core.geometry.compiler import (
     compile_geometry_spec_from_semantic_frame,
     compile_geometry_spec_from_slot_frame,
 )
+from core.geometry.resolver import (
+    GeometryResolutionDraft,
+    build_geometry_intent_from_resolved_draft,
+    resolve_geometry_from_merged,
+)
 from core.geometry.spec import GeometryEvidence, GeometryIntent, GeometrySpec
 
 __all__ = [
@@ -28,9 +33,11 @@ __all__ = [
     "GeometryCompileResult",
     "GeometryEvidence",
     "GeometryIntent",
+    "GeometryResolutionDraft",
     "GeometryParamDefinition",
     "GeometrySpec",
     "build_geometry_intent_from_config",
+    "build_geometry_intent_from_resolved_draft",
     "build_geometry_intent_from_semantic_frame",
     "compile_geometry_intent",
     "compile_geometry_spec_from_config",
@@ -43,5 +50,6 @@ __all__ = [
     "get_geometry_catalog_entry",
     "iter_geometry_catalog",
     "legacy_geometry_from_candidate",
+    "resolve_geometry_from_merged",
     "resolve_geometry_structure",
 ]
