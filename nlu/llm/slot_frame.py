@@ -1371,6 +1371,11 @@ def _user_text_supports_source_direction(user_text: str) -> bool:
     return False
 
 
+def _user_text_supports_source_energy(user_text: str) -> bool:
+    text = (user_text or "").lower()
+    return re.search(r"([-+]?\d*\.?\d+)\s*(mev|gev|kev)", text, flags=re.IGNORECASE) is not None
+
+
 def _strip_unsupported_source_direction(frame: SlotFrame, user_text: str) -> list[str]:
     cleared: list[str] = []
     if frame.source.kind not in {"beam", "plane"}:
@@ -1381,6 +1386,17 @@ def _strip_unsupported_source_direction(frame: SlotFrame, user_text: str) -> lis
         return cleared
     frame.source.direction_vec = None
     cleared.append("source.direction_vec")
+    return cleared
+
+
+def _strip_unsupported_source_energy(frame: SlotFrame, user_text: str) -> list[str]:
+    cleared: list[str] = []
+    if frame.source.energy_mev is None:
+        return cleared
+    if _user_text_supports_source_energy(user_text):
+        return cleared
+    frame.source.energy_mev = None
+    cleared.append("source.energy_mev")
     return cleared
 
 
@@ -1674,7 +1690,9 @@ def build_llm_slot_frame(
     _normalize_inferred_slots(frame)
     if _has_graph_family_cue(user_text):
         frame.geometry.kind = None
-    stage_trace["unsupported_llm_fields"] = _strip_unsupported_source_direction(frame, user_text)
+    unsupported_fields = _strip_unsupported_source_direction(frame, user_text)
+    unsupported_fields.extend(_strip_unsupported_source_energy(frame, user_text))
+    stage_trace["unsupported_llm_fields"] = unsupported_fields
     raw_after = _present_slot_paths(frame)
     stage_trace["raw_text_backfill_fields"] = sorted(raw_after - raw_before)
     stage_trace["repair_used"] = bool(stage_trace["normalized_backfill_fields"] or stage_trace["raw_text_backfill_fields"])

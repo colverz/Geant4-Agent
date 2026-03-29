@@ -923,6 +923,40 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertIsNone(result.frame.source.direction_vec)
         self.assertIn("source.direction_vec", result.stage_trace.get("unsupported_llm_fields", []))
 
+    def test_build_llm_slot_frame_strips_llm_invented_source_energy_without_text_evidence(self) -> None:
+        llm_payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "source.kind:point; source.particle:gamma; source.energy_mev:5; source.position_mm:(0,0,-20); source.direction_vec:+z",
+            "target_slots": [
+                "source.kind",
+                "source.particle",
+                "source.position_mm",
+                "source.direction_vec",
+            ],
+            "slots": {
+                "source": {
+                    "kind": "point",
+                    "particle": "gamma",
+                    "energy_mev": 5.0,
+                    "position_mm": [0, 0, -20],
+                    "direction_vec": "+z",
+                }
+            },
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(llm_payload)}):
+            result = build_llm_slot_frame(
+                "在靶前表面外5 mm放一个gamma点源，朝靶心入射。",
+                context_summary="phase=source",
+                config_path="",
+            )
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.source.kind, "point")
+        self.assertEqual(result.frame.source.particle, "gamma")
+        self.assertIsNone(result.frame.source.energy_mev)
+        self.assertIn("source.energy_mev", result.stage_trace.get("unsupported_llm_fields", []))
+
     def test_parse_slot_payload_inferrs_cylinder_kind_from_dimensions(self) -> None:
         payload = {
             "intent": "SET",
