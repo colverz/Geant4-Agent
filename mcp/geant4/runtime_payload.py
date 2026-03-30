@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from core.simulation import SimulationSpec, build_simulation_spec
+
 
 def _coerce_vector3(value: Any, fallback: list[float]) -> list[float]:
     if isinstance(value, dict):
@@ -56,41 +58,68 @@ def _physics_list_name(config: dict[str, Any]) -> str:
     return "FTFP_BERT"
 
 
-def build_runtime_payload(config: dict[str, Any]) -> dict[str, Any]:
-    raw = deepcopy(config) if isinstance(config, dict) else {}
-
-    geometry = raw.get("geometry", {}) if isinstance(raw.get("geometry"), dict) else {}
-    params = geometry.get("params", {}) if isinstance(geometry.get("params"), dict) else {}
-    source = raw.get("source", {}) if isinstance(raw.get("source"), dict) else {}
-    structure = str(geometry.get("structure") or "single_box")
-
-    position = _coerce_vector3(source.get("position"), [0.0, 0.0, -100.0])
-    direction = _coerce_vector3(source.get("direction"), [0.0, 0.0, 1.0])
+def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, Any]:
+    if isinstance(config, SimulationSpec):
+        spec = config
+        raw_config: dict[str, Any] = {}
+    else:
+        raw_config = deepcopy(config) if isinstance(config, dict) else {}
+        spec = build_simulation_spec(raw_config)
 
     payload = {
-        "structure": structure,
-        "material": _first_material(raw),
-        "particle": str(source.get("particle") or "gamma"),
-        "source_type": str(source.get("type") or "point"),
-        "physics_list": _physics_list_name(raw),
-        "energy": float(source.get("energy") or 1.0),
-        "position": {"x": position[0], "y": position[1], "z": position[2]},
-        "direction": {"x": direction[0], "y": direction[1], "z": direction[2]},
-        "raw_config": raw,
+        "geometry": {
+            "structure": spec.geometry.structure,
+            "material": spec.geometry.material,
+            "size_x_mm": spec.geometry.size_x_mm,
+            "size_y_mm": spec.geometry.size_y_mm,
+            "size_z_mm": spec.geometry.size_z_mm,
+            "radius_mm": spec.geometry.radius_mm,
+            "half_length_mm": spec.geometry.half_length_mm,
+        },
+        "source": {
+            "type": spec.source.source_type,
+            "particle": spec.source.particle,
+            "energy_mev": spec.source.energy_mev,
+            "position_mm": list(spec.source.position_mm),
+            "direction_vec": list(spec.source.direction_vec),
+        },
+        "physics": {
+            "list": spec.physics.physics_list,
+        },
+        "run": {
+            "events": spec.run.events,
+            "mode": spec.run.mode,
+        },
+        "scoring": {
+            "target_edep": spec.scoring.target_edep,
+            "volume_names": list(spec.scoring.volume_names),
+        },
+        # Legacy flat fields kept for compatibility with current wrappers and tests.
+        "structure": spec.geometry.structure,
+        "material": spec.geometry.material,
+        "particle": spec.source.particle,
+        "source_type": spec.source.source_type,
+        "physics_list": spec.physics.physics_list,
+        "energy": spec.source.energy_mev,
+        "position": {
+            "x": spec.source.position_mm[0],
+            "y": spec.source.position_mm[1],
+            "z": spec.source.position_mm[2],
+        },
+        "direction": {
+            "x": spec.source.direction_vec[0],
+            "y": spec.source.direction_vec[1],
+            "z": spec.source.direction_vec[2],
+        },
+        "raw_config": raw_config,
     }
 
-    if structure == "single_tubs":
-        payload["radius"] = float(params.get("child_rmax") or geometry.get("radius_mm") or 25.0)
-        payload["half_length"] = float(params.get("child_hz") or geometry.get("half_length_mm") or 50.0)
+    if spec.geometry.structure == "single_tubs":
+        payload["radius"] = float(spec.geometry.radius_mm or 25.0)
+        payload["half_length"] = float(spec.geometry.half_length_mm or 50.0)
     else:
-        size_triplet = geometry.get("size_triplet_mm")
-        if isinstance(size_triplet, (list, tuple)) and len(size_triplet) >= 3:
-            payload["size_x"] = float(size_triplet[0])
-            payload["size_y"] = float(size_triplet[1])
-            payload["size_z"] = float(size_triplet[2])
-        else:
-            payload["size_x"] = float(params.get("module_x") or 50.0)
-            payload["size_y"] = float(params.get("module_y") or 50.0)
-            payload["size_z"] = float(params.get("module_z") or 50.0)
+        payload["size_x"] = float(spec.geometry.size_x_mm or 50.0)
+        payload["size_y"] = float(spec.geometry.size_y_mm or 50.0)
+        payload["size_z"] = float(spec.geometry.size_z_mm or 50.0)
 
     return payload

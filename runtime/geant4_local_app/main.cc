@@ -10,6 +10,7 @@
 #include "G4PhysListFactory.hh"
 #include "G4PVPlacement.hh"
 #include "G4RunManagerFactory.hh"
+#include "G4Step.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4Track.hh"
 #include "G4TrackingManager.hh"
@@ -17,6 +18,7 @@
 #include "G4Tubs.hh"
 #include "G4UIExecutive.hh"
 #include "G4UImanager.hh"
+#include "G4UserSteppingAction.hh"
 #include "G4UserTrackingAction.hh"
 #include "G4VisAttributes.hh"
 #include "G4VisExecutive.hh"
@@ -53,6 +55,7 @@ struct RuntimeConfig {
   double half_length_mm = 50.0;
   std::string physics_list = "FTFP_BERT";
   int events = 1;
+  bool score_target_edep = true;
   std::string artifact_dir;
   std::string mode = "batch";
 };
@@ -105,6 +108,27 @@ double extract_top_level_object_number(
   return fallback;
 }
 
+bool extract_nested_bool(
+    const std::string& text,
+    const std::string& object_key,
+    const std::string& key,
+    bool fallback) {
+  const std::regex pattern(
+      "(?:^|[\\r\\n])\\s*\"" + object_key +
+          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*(true|false)",
+      std::regex::icase);
+  std::smatch match;
+  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
+    const auto value = match[1].str();
+    return value == "true" || value == "TRUE";
+  }
+  return fallback;
+}
+
+struct RuntimeScoringState {
+  double target_edep_mev = 0.0;
+};
+
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
   RuntimeConfig cfg;
   cfg.events = events;
@@ -128,6 +152,7 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.size_z_mm = extract_top_level_number(text, "size_z", cfg.size_z_mm);
   cfg.radius_mm = extract_top_level_number(text, "radius", cfg.radius_mm);
   cfg.half_length_mm = extract_top_level_number(text, "half_length", cfg.half_length_mm);
+  cfg.score_target_edep = extract_nested_bool(text, "scoring", "target_edep", cfg.score_target_edep);
   return cfg;
 }
 
@@ -254,6 +279,38 @@ class RuntimeTrackingAction : public G4UserTrackingAction {
   }
 };
 
+class RuntimeSteppingAction : public G4UserSteppingAction {
+ public:
+  RuntimeSteppingAction(RuntimeConfig config, RuntimeScoringState* scoring_state)
+      : config_(std::move(config)), scoring_state_(scoring_state) {}
+
+  void UserSteppingAction(const G4Step* step) override {
+    if (!step || !scoring_state_ || !config_.score_target_edep) {
+      return;
+    }
+    const auto* pre_point = step->GetPreStepPoint();
+    if (!pre_point) {
+      return;
+    }
+    const auto touchable = pre_point->GetTouchableHandle();
+    if (!touchable) {
+      return;
+    }
+    const auto* volume = touchable->GetVolume();
+    if (!volume || volume->GetName() != "Target") {
+      return;
+    }
+    const auto edep = step->GetTotalEnergyDeposit();
+    if (edep > 0.0) {
+      scoring_state_->target_edep_mev += edep / MeV;
+    }
+  }
+
+ private:
+  RuntimeConfig config_;
+  RuntimeScoringState* scoring_state_ = nullptr;
+};
+
 void write_vis_macro(const fs::path& macro_path) {
   std::ofstream out(macro_path, std::ios::trunc);
   out << "/vis/open OGL 800x800-0+0\n";
@@ -314,8 +371,10 @@ int main(int argc, char** argv) {
     physics = phys_factory.GetReferencePhysList("FTFP_BERT");
   }
   run_manager->SetUserInitialization(physics);
+  RuntimeScoringState scoring_state;
   run_manager->SetUserAction(new RuntimePrimaryGeneratorAction(cfg));
   run_manager->SetUserAction(new RuntimeTrackingAction());
+  run_manager->SetUserAction(new RuntimeSteppingAction(cfg, &scoring_state));
   run_manager->Initialize();
 
   auto* vis_manager = new G4VisExecutive();
@@ -351,6 +410,9 @@ int main(int argc, char** argv) {
 
   std::ofstream summary(artifact_dir / "run_summary.json", std::ios::trunc);
   summary << "{\n"
+          << "  \"run_ok\": true,\n"
+          << "  \"events_requested\": " << events << ",\n"
+          << "  \"events_completed\": " << events << ",\n"
           << "  \"geometry_structure\": \"" << cfg.geometry_structure << "\",\n"
           << "  \"material\": \"" << cfg.material << "\",\n"
           << "  \"particle\": \"" << cfg.particle << "\",\n"
@@ -361,7 +423,13 @@ int main(int argc, char** argv) {
           << "],\n"
           << "  \"physics_list\": \"" << cfg.physics_list << "\",\n"
           << "  \"events\": " << events << ",\n"
-          << "  \"mode\": \"" << cfg.mode << "\"\n"
+          << "  \"mode\": \"" << cfg.mode << "\",\n"
+          << "  \"scoring\": {\n"
+          << "    \"target_edep_enabled\": " << (cfg.score_target_edep ? "true" : "false") << ",\n"
+          << "    \"target_edep_total_mev\": " << scoring_state.target_edep_mev << ",\n"
+          << "    \"target_edep_mean_mev_per_event\": "
+          << (events > 0 ? (scoring_state.target_edep_mev / static_cast<double>(events)) : 0.0) << "\n"
+          << "  }\n"
           << "}\n";
 
   delete vis_manager;

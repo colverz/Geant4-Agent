@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class GeometryRuntimeSpec:
+    structure: str
+    material: str
+    size_x_mm: float | None = None
+    size_y_mm: float | None = None
+    size_z_mm: float | None = None
+    radius_mm: float | None = None
+    half_length_mm: float | None = None
+
+
+@dataclass(frozen=True)
+class SourceRuntimeSpec:
+    source_type: str
+    particle: str
+    energy_mev: float
+    position_mm: tuple[float, float, float]
+    direction_vec: tuple[float, float, float]
+
+
+@dataclass(frozen=True)
+class PhysicsRuntimeSpec:
+    physics_list: str
+
+
+@dataclass(frozen=True)
+class RunControlSpec:
+    events: int = 1
+    mode: str = "batch"
+
+
+@dataclass(frozen=True)
+class ScoringSpec:
+    target_edep: bool = True
+    volume_names: tuple[str, ...] = field(default_factory=lambda: ("Target",))
+
+
+@dataclass(frozen=True)
+class SimulationSpec:
+    geometry: GeometryRuntimeSpec
+    source: SourceRuntimeSpec
+    physics: PhysicsRuntimeSpec
+    run: RunControlSpec = field(default_factory=RunControlSpec)
+    scoring: ScoringSpec = field(default_factory=ScoringSpec)
