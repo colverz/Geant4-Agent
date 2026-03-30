@@ -20,6 +20,17 @@ class DialogueAgentTest(unittest.TestCase):
         )
         self.assertEqual(decision.action, DialogueAction.FINALIZE)
 
+    def test_policy_answers_status_for_question_when_complete(self) -> None:
+        decision = decide_dialogue_action(
+            user_intent="QUESTION",
+            is_complete=True,
+            asked_fields=[],
+            missing_fields=[],
+            updated_paths=[],
+            answered_this_turn=[],
+        )
+        self.assertEqual(decision.action, DialogueAction.ANSWER_STATUS)
+
     def test_policy_asks_clarification_when_fields_missing(self) -> None:
         decision = decide_dialogue_action(
             user_intent="SET",
@@ -213,6 +224,30 @@ class DialogueAgentTest(unittest.TestCase):
         )
         self.assertIn("Updated", msg)
         self.assertIn("Still needed:", msg)
+
+    def test_renderer_can_emit_answer_status_summary(self) -> None:
+        decision = decide_dialogue_action(
+            user_intent="QUESTION",
+            is_complete=True,
+            asked_fields=[],
+            missing_fields=[],
+            updated_paths=[],
+            answered_this_turn=[],
+        )
+        msg = render_dialogue_message(
+            decision,
+            lang="en",
+            use_llm_question=False,
+            ollama_config="",
+            user_temperature=1.0,
+            dialogue_summary={
+                "recent_confirmed": ["box target", "copper material", "gamma point source"],
+                "pending_fields": [],
+                "grouped_status": {},
+            },
+        )
+        self.assertIn("Current confirmed configuration:", msg)
+        self.assertIn("box target", msg)
 
     def test_renderer_can_emit_progress_summary(self) -> None:
         decision = decide_dialogue_action(

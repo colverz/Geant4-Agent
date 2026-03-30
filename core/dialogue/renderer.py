@@ -129,6 +129,30 @@ def _render_grouped_progress(summary: dict, *, lang: str) -> str:
     return render_grouped_progress_template(lang=lang, grouped=grouped)
 
 
+def _render_answer_status(decision: DialogueDecision, *, lang: str, dialogue_summary: dict | None) -> str:
+    summary = dialogue_summary or {}
+    grouped = _render_grouped_progress(summary, lang=lang)
+    recent = list(summary.get("recent_confirmed") or [])
+    pending = list(summary.get("pending_fields") or [])
+    if grouped:
+        return grouped
+    if lang == "zh":
+        if recent and pending:
+            return f"当前已确认：{', '.join(recent[:4])}。仍待补充：{', '.join(pending[:2])}。"
+        if recent:
+            return f"当前已确认配置：{', '.join(recent[:4])}。"
+        if pending:
+            return f"当前仍待补充：{', '.join(pending[:2])}。"
+        return "当前配置已同步。"
+    if recent and pending:
+        return f"Current confirmed configuration: {', '.join(recent[:4])}. Still needed: {', '.join(pending[:2])}."
+    if recent:
+        return f"Current confirmed configuration: {', '.join(recent[:4])}."
+    if pending:
+        return f"Still needed: {', '.join(pending[:2])}."
+    return "Current configuration is synchronized."
+
+
 def _render_structured_clarification(paths: list[str], *, lang: str) -> str:
     if not paths:
         return clarification_fallback([], lang)
@@ -222,6 +246,8 @@ def render_dialogue_message(
         if pending:
             parts.append(f"Still needed: {', '.join(pending[:2])}.")
         return _maybe_naturalize(" ".join(parts) or "Configuration is converging.")
-    if decision.action in {DialogueAction.CONFIRM_UPDATE, DialogueAction.ANSWER_STATUS}:
+    if decision.action == DialogueAction.ANSWER_STATUS:
+        return _maybe_naturalize(_render_answer_status(decision, lang=lang, dialogue_summary=dialogue_summary))
+    if decision.action == DialogueAction.CONFIRM_UPDATE:
         return _maybe_naturalize(_render_update_status(decision, lang=lang))
     return _maybe_naturalize(completion_message(lang))
