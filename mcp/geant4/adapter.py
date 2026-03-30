@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
+import json
 from pathlib import Path
 import os
 import subprocess
@@ -14,6 +15,7 @@ from core.runtime.types import (
     RuntimeActionStatus,
     RuntimeStateSnapshot,
 )
+from core.simulation import load_simulation_result
 from mcp.geant4.runtime_payload import build_runtime_payload
 
 
@@ -25,6 +27,37 @@ def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
         else:
             merged[key] = deepcopy(value)
     return merged
+
+
+def _extract_artifact_dir(lines: list[str]) -> Path | None:
+    for line in reversed(lines):
+        if not line.startswith("artifact_dir="):
+            continue
+        raw_value = line.split("=", 1)[1].strip()
+        if not raw_value:
+            return None
+        return Path(raw_value)
+    return None
+
+
+def _load_run_summary_payload(stdout_lines: list[str], stderr_lines: list[str]) -> dict[str, Any] | None:
+    artifact_dir = _extract_artifact_dir(stdout_lines) or _extract_artifact_dir(stderr_lines)
+    if artifact_dir is None:
+        return None
+    summary_path = artifact_dir / "run_summary.json"
+    if not summary_path.exists():
+        return {"artifact_dir": str(artifact_dir)}
+    try:
+        result = load_simulation_result(summary_path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {
+            "artifact_dir": str(artifact_dir),
+            "run_summary_path": str(summary_path),
+        }
+    payload = result.to_payload()
+    payload["artifact_dir"] = str(artifact_dir)
+    payload["run_summary_path"] = str(summary_path)
+    return payload
 
 
 class Geant4RuntimeAdapter(ABC):
@@ -295,6 +328,7 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
                     "returncode": completed.returncode,
                     "stdout_tail": stdout_lines[-20:],
                     "stderr_tail": stderr_lines[-20:],
+                    "simulation_result": _load_run_summary_payload(stdout_lines, stderr_lines),
                 },
                 runtime_phase=self._snapshot.runtime_phase,
             )

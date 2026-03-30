@@ -82,6 +82,22 @@ The runtime writes:
 - geometry/source/physics summary
 - `target_edep_total_mev`
 - `target_edep_mean_mev_per_event`
+- `target_hit_events`
+- `target_step_count`
+- `target_track_entries`
+
+### `run_summary.json -> SimulationResult`
+
+Implemented in:
+
+- [results.py](/f:/geant4agent/core/simulation/results.py)
+- [adapter.py](/f:/geant4agent/mcp/geant4/adapter.py)
+
+This layer turns the runtime artifact back into a stable app-side result object.
+
+That keeps the bridge symmetrical:
+
+`config -> SimulationSpec -> RuntimePayload -> Geant4 run -> SimulationResult`
 
 ## References
 

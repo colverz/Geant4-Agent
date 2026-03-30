@@ -18,6 +18,7 @@
 #include "G4Tubs.hh"
 #include "G4UIExecutive.hh"
 #include "G4UImanager.hh"
+#include "G4UserEventAction.hh"
 #include "G4UserSteppingAction.hh"
 #include "G4UserTrackingAction.hh"
 #include "G4VisAttributes.hh"
@@ -127,6 +128,10 @@ bool extract_nested_bool(
 
 struct RuntimeScoringState {
   double target_edep_mev = 0.0;
+  double current_event_target_edep_mev = 0.0;
+  int target_hit_events = 0;
+  int target_step_count = 0;
+  int target_track_entries = 0;
 };
 
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
@@ -300,14 +305,44 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
     if (!volume || volume->GetName() != "Target") {
       return;
     }
+    scoring_state_->target_step_count += 1;
+    if (pre_point->GetStepStatus() == fGeomBoundary) {
+      scoring_state_->target_track_entries += 1;
+    }
     const auto edep = step->GetTotalEnergyDeposit();
     if (edep > 0.0) {
-      scoring_state_->target_edep_mev += edep / MeV;
+      const auto edep_mev = edep / MeV;
+      scoring_state_->target_edep_mev += edep_mev;
+      scoring_state_->current_event_target_edep_mev += edep_mev;
     }
   }
 
  private:
   RuntimeConfig config_;
+  RuntimeScoringState* scoring_state_ = nullptr;
+};
+
+class RuntimeEventAction : public G4UserEventAction {
+ public:
+  explicit RuntimeEventAction(RuntimeScoringState* scoring_state) : scoring_state_(scoring_state) {}
+
+  void BeginOfEventAction(const G4Event*) override {
+    if (!scoring_state_) {
+      return;
+    }
+    scoring_state_->current_event_target_edep_mev = 0.0;
+  }
+
+  void EndOfEventAction(const G4Event*) override {
+    if (!scoring_state_) {
+      return;
+    }
+    if (scoring_state_->current_event_target_edep_mev > 0.0) {
+      scoring_state_->target_hit_events += 1;
+    }
+  }
+
+ private:
   RuntimeScoringState* scoring_state_ = nullptr;
 };
 
@@ -373,6 +408,7 @@ int main(int argc, char** argv) {
   run_manager->SetUserInitialization(physics);
   RuntimeScoringState scoring_state;
   run_manager->SetUserAction(new RuntimePrimaryGeneratorAction(cfg));
+  run_manager->SetUserAction(new RuntimeEventAction(&scoring_state));
   run_manager->SetUserAction(new RuntimeTrackingAction());
   run_manager->SetUserAction(new RuntimeSteppingAction(cfg, &scoring_state));
   run_manager->Initialize();
@@ -428,7 +464,10 @@ int main(int argc, char** argv) {
           << "    \"target_edep_enabled\": " << (cfg.score_target_edep ? "true" : "false") << ",\n"
           << "    \"target_edep_total_mev\": " << scoring_state.target_edep_mev << ",\n"
           << "    \"target_edep_mean_mev_per_event\": "
-          << (events > 0 ? (scoring_state.target_edep_mev / static_cast<double>(events)) : 0.0) << "\n"
+          << (events > 0 ? (scoring_state.target_edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
+          << "    \"target_hit_events\": " << scoring_state.target_hit_events << ",\n"
+          << "    \"target_step_count\": " << scoring_state.target_step_count << ",\n"
+          << "    \"target_track_entries\": " << scoring_state.target_track_entries << "\n"
           << "  }\n"
           << "}\n";
 

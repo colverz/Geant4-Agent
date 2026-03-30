@@ -1,4 +1,10 @@
 from core.simulation.bridge import build_simulation_spec
+from core.simulation.results import (
+    SimulationResult,
+    SimulationScoringResult,
+    load_simulation_result,
+    simulation_result_from_dict,
+)
 from core.simulation.spec import (
     GeometryRuntimeSpec,
     PhysicsRuntimeSpec,
@@ -13,7 +19,11 @@ __all__ = [
     "GeometryRuntimeSpec",
     "PhysicsRuntimeSpec",
     "RunControlSpec",
+    "SimulationResult",
+    "SimulationScoringResult",
     "ScoringSpec",
     "SimulationSpec",
     "SourceRuntimeSpec",
+    "load_simulation_result",
+    "simulation_result_from_dict",
 ]
