@@ -57,6 +57,7 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(payload["source"]["type"], "beam")
         self.assertEqual(payload["physics"]["list"], "QGSP_BERT")
         self.assertTrue(payload["scoring"]["target_edep"])
+        self.assertEqual(payload["scoring"]["volume_names"], ["Target"])
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
 

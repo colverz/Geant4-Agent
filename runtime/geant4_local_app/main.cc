@@ -30,10 +30,12 @@
 
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -57,6 +59,7 @@ struct RuntimeConfig {
   std::string physics_list = "FTFP_BERT";
   int events = 1;
   bool score_target_edep = true;
+  std::vector<std::string> scoring_volume_names = {"Target"};
   std::string artifact_dir;
   std::string mode = "batch";
 };
@@ -126,12 +129,47 @@ bool extract_nested_bool(
   return fallback;
 }
 
+std::vector<std::string> extract_nested_string_list(
+    const std::string& text,
+    const std::string& object_key,
+    const std::string& key,
+    const std::vector<std::string>& fallback) {
+  const std::regex pattern(
+      "(?:^|[\\r\\n])\\s*\"" + object_key +
+          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*\\[([^\\]]*)\\]",
+      std::regex::icase);
+  std::smatch match;
+  if (!(std::regex_search(text, match, pattern) && match.size() >= 2)) {
+    return fallback;
+  }
+  const auto body = match[1].str();
+  const std::regex item_pattern("\"([^\"]+)\"");
+  std::sregex_iterator begin(body.begin(), body.end(), item_pattern);
+  std::sregex_iterator end;
+  std::vector<std::string> values;
+  for (auto it = begin; it != end; ++it) {
+    if (it->size() >= 2 && !(*it)[1].str().empty()) {
+      values.push_back((*it)[1].str());
+    }
+  }
+  return values.empty() ? fallback : values;
+}
+
+struct VolumeScoringMetrics {
+  double edep_mev = 0.0;
+  double current_event_edep_mev = 0.0;
+  int hit_events = 0;
+  int step_count = 0;
+  int track_entries = 0;
+};
+
 struct RuntimeScoringState {
   double target_edep_mev = 0.0;
   double current_event_target_edep_mev = 0.0;
   int target_hit_events = 0;
   int target_step_count = 0;
   int target_track_entries = 0;
+  std::map<std::string, VolumeScoringMetrics> volume_stats;
 };
 
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
@@ -158,6 +196,8 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.radius_mm = extract_top_level_number(text, "radius", cfg.radius_mm);
   cfg.half_length_mm = extract_top_level_number(text, "half_length", cfg.half_length_mm);
   cfg.score_target_edep = extract_nested_bool(text, "scoring", "target_edep", cfg.score_target_edep);
+  cfg.scoring_volume_names =
+      extract_nested_string_list(text, "scoring", "volume_names", cfg.scoring_volume_names);
   return cfg;
 }
 
@@ -302,18 +342,24 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
       return;
     }
     const auto* volume = touchable->GetVolume();
-    if (!volume || volume->GetName() != "Target") {
+    if (!volume) {
       return;
     }
-    scoring_state_->target_step_count += 1;
+    const auto volume_name = volume->GetName();
+    auto it = scoring_state_->volume_stats.find(volume_name);
+    if (it == scoring_state_->volume_stats.end()) {
+      return;
+    }
+    auto& metrics = it->second;
+    metrics.step_count += 1;
     if (pre_point->GetStepStatus() == fGeomBoundary) {
-      scoring_state_->target_track_entries += 1;
+      metrics.track_entries += 1;
     }
     const auto edep = step->GetTotalEnergyDeposit();
     if (edep > 0.0) {
       const auto edep_mev = edep / MeV;
-      scoring_state_->target_edep_mev += edep_mev;
-      scoring_state_->current_event_target_edep_mev += edep_mev;
+      metrics.edep_mev += edep_mev;
+      metrics.current_event_edep_mev += edep_mev;
     }
   }
 
@@ -331,14 +377,26 @@ class RuntimeEventAction : public G4UserEventAction {
       return;
     }
     scoring_state_->current_event_target_edep_mev = 0.0;
+    for (auto& [_, metrics] : scoring_state_->volume_stats) {
+      metrics.current_event_edep_mev = 0.0;
+    }
   }
 
   void EndOfEventAction(const G4Event*) override {
     if (!scoring_state_) {
       return;
     }
-    if (scoring_state_->current_event_target_edep_mev > 0.0) {
-      scoring_state_->target_hit_events += 1;
+    for (auto& [volume_name, metrics] : scoring_state_->volume_stats) {
+      if (metrics.current_event_edep_mev > 0.0) {
+        metrics.hit_events += 1;
+      }
+      if (volume_name == "Target") {
+        scoring_state_->target_edep_mev = metrics.edep_mev;
+        scoring_state_->current_event_target_edep_mev = metrics.current_event_edep_mev;
+        scoring_state_->target_hit_events = metrics.hit_events;
+        scoring_state_->target_step_count = metrics.step_count;
+        scoring_state_->target_track_entries = metrics.track_entries;
+      }
     }
   }
 
@@ -407,6 +465,11 @@ int main(int argc, char** argv) {
   }
   run_manager->SetUserInitialization(physics);
   RuntimeScoringState scoring_state;
+  for (const auto& volume_name : cfg.scoring_volume_names) {
+    if (!volume_name.empty()) {
+      scoring_state.volume_stats.emplace(volume_name, VolumeScoringMetrics{});
+    }
+  }
   run_manager->SetUserAction(new RuntimePrimaryGeneratorAction(cfg));
   run_manager->SetUserAction(new RuntimeEventAction(&scoring_state));
   run_manager->SetUserAction(new RuntimeTrackingAction());
@@ -467,7 +530,25 @@ int main(int argc, char** argv) {
           << (events > 0 ? (scoring_state.target_edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
           << "    \"target_hit_events\": " << scoring_state.target_hit_events << ",\n"
           << "    \"target_step_count\": " << scoring_state.target_step_count << ",\n"
-          << "    \"target_track_entries\": " << scoring_state.target_track_entries << "\n"
+          << "    \"target_track_entries\": " << scoring_state.target_track_entries << ",\n"
+          << "    \"volume_stats\": {\n";
+  bool first_volume = true;
+  for (const auto& [volume_name, metrics] : scoring_state.volume_stats) {
+    if (!first_volume) {
+      summary << ",\n";
+    }
+    first_volume = false;
+    summary << "      \"" << volume_name << "\": {\n"
+            << "        \"edep_total_mev\": " << metrics.edep_mev << ",\n"
+            << "        \"edep_mean_mev_per_event\": "
+            << (events > 0 ? (metrics.edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
+            << "        \"hit_events\": " << metrics.hit_events << ",\n"
+            << "        \"step_count\": " << metrics.step_count << ",\n"
+            << "        \"track_entries\": " << metrics.track_entries << "\n"
+            << "      }";
+  }
+  summary << "\n"
+          << "    }\n"
           << "  }\n"
           << "}\n";
 

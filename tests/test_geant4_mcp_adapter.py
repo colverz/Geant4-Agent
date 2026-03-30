@@ -108,6 +108,15 @@ class Geant4McpAdapterTest(unittest.TestCase):
                             "target_hit_events": 2,
                             "target_step_count": 12,
                             "target_track_entries": 3,
+                            "volume_stats": {
+                                "Target": {
+                                    "edep_total_mev": 1.5,
+                                    "edep_mean_mev_per_event": 0.5,
+                                    "hit_events": 2,
+                                    "step_count": 12,
+                                    "track_entries": 3,
+                                }
+                            },
                         },
                     }
                 ),
@@ -144,6 +153,7 @@ class Geant4McpAdapterTest(unittest.TestCase):
         result = run_obs.payload["simulation_result"]
         self.assertEqual(result["geometry_structure"], "single_box")
         self.assertEqual(result["scoring"]["target_hit_events"], 2)
+        self.assertEqual(result["scoring"]["volume_stats"]["Target"]["step_count"], 12)
 
 
 if __name__ == "__main__":

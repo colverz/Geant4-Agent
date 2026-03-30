@@ -38,6 +38,7 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertEqual(result.scoring.target_hit_events, 3)
         self.assertEqual(result.scoring.target_step_count, 18)
+        self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
 
     def test_load_simulation_result_reads_run_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -62,7 +63,16 @@ class SimulationResultTest(unittest.TestCase):
     "target_edep_mean_mev_per_event": 0.625,
     "target_hit_events": 2,
     "target_step_count": 9,
-    "target_track_entries": 2
+    "target_track_entries": 2,
+    "volume_stats": {
+      "Target": {
+        "edep_total_mev": 1.25,
+        "edep_mean_mev_per_event": 0.625,
+        "hit_events": 2,
+        "step_count": 9,
+        "track_entries": 2
+      }
+    }
   }
 }""",
                 encoding="utf-8",
@@ -71,4 +81,4 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.geometry_structure, "single_tubs")
         self.assertEqual(result.source_type, "beam")
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
-
+        self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)

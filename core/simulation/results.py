@@ -23,6 +23,7 @@ class SimulationScoringResult:
     target_hit_events: int = 0
     target_step_count: int = 0
     target_track_entries: int = 0
+    volume_stats: dict[str, dict[str, float | int]] | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,27 @@ class SimulationResult:
 
 def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
     scoring_data = data.get("scoring", {}) if isinstance(data.get("scoring"), dict) else {}
+    raw_volume_stats = scoring_data.get("volume_stats", {})
+    volume_stats: dict[str, dict[str, float | int]] = {}
+    if isinstance(raw_volume_stats, dict):
+        for volume_name, raw_stats in raw_volume_stats.items():
+            if not isinstance(volume_name, str) or not isinstance(raw_stats, dict):
+                continue
+            volume_stats[volume_name] = {
+                "edep_total_mev": float(raw_stats.get("edep_total_mev", 0.0) or 0.0),
+                "edep_mean_mev_per_event": float(raw_stats.get("edep_mean_mev_per_event", 0.0) or 0.0),
+                "hit_events": int(raw_stats.get("hit_events", 0) or 0),
+                "step_count": int(raw_stats.get("step_count", 0) or 0),
+                "track_entries": int(raw_stats.get("track_entries", 0) or 0),
+            }
+    if not volume_stats:
+        volume_stats["Target"] = {
+            "edep_total_mev": float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),
+            "edep_mean_mev_per_event": float(scoring_data.get("target_edep_mean_mev_per_event", 0.0) or 0.0),
+            "hit_events": int(scoring_data.get("target_hit_events", 0) or 0),
+            "step_count": int(scoring_data.get("target_step_count", 0) or 0),
+            "track_entries": int(scoring_data.get("target_track_entries", 0) or 0),
+        }
     scoring = SimulationScoringResult(
         target_edep_enabled=bool(scoring_data.get("target_edep_enabled", False)),
         target_edep_total_mev=float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),
@@ -54,6 +76,7 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         target_hit_events=int(scoring_data.get("target_hit_events", 0) or 0),
         target_step_count=int(scoring_data.get("target_step_count", 0) or 0),
         target_track_entries=int(scoring_data.get("target_track_entries", 0) or 0),
+        volume_stats=volume_stats or None,
     )
     return SimulationResult(
         run_ok=bool(data.get("run_ok", False)),

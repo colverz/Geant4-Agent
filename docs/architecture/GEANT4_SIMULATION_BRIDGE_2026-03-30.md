@@ -85,6 +85,7 @@ The runtime writes:
 - `target_hit_events`
 - `target_step_count`
 - `target_track_entries`
+- `scoring.volume_stats`
 
 ### `run_summary.json -> SimulationResult`
 
