@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 class GeometryRuntimeSpec:
     structure: str
     material: str
+    root_volume_name: str = "Target"
     size_x_mm: float | None = None
     size_y_mm: float | None = None
     size_z_mm: float | None = None
@@ -38,6 +39,7 @@ class RunControlSpec:
 class ScoringSpec:
     target_edep: bool = True
     volume_names: tuple[str, ...] = field(default_factory=lambda: ("Target",))
+    volume_roles: dict[str, tuple[str, ...]] = field(default_factory=lambda: {"target": ("Target",)})
 
 
 @dataclass(frozen=True)

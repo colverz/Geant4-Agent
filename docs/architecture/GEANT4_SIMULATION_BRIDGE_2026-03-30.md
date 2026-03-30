@@ -86,6 +86,7 @@ The runtime writes:
 - `target_step_count`
 - `target_track_entries`
 - `scoring.volume_stats`
+- app-side derived `scoring.role_stats`
 
 ### `run_summary.json -> SimulationResult`
 

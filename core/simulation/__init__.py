@@ -2,6 +2,7 @@ from core.simulation.bridge import build_simulation_spec
 from core.simulation.results import (
     SimulationResult,
     SimulationScoringResult,
+    derive_role_stats,
     load_simulation_result,
     simulation_result_from_dict,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "ScoringSpec",
     "SimulationSpec",
     "SourceRuntimeSpec",
+    "derive_role_stats",
     "load_simulation_result",
     "simulation_result_from_dict",
 ]

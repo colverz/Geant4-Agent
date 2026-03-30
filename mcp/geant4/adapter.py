@@ -15,7 +15,7 @@ from core.runtime.types import (
     RuntimeActionStatus,
     RuntimeStateSnapshot,
 )
-from core.simulation import load_simulation_result
+from core.simulation import derive_role_stats, load_simulation_result
 from mcp.geant4.runtime_payload import build_runtime_payload
 
 
@@ -40,7 +40,11 @@ def _extract_artifact_dir(lines: list[str]) -> Path | None:
     return None
 
 
-def _load_run_summary_payload(stdout_lines: list[str], stderr_lines: list[str]) -> dict[str, Any] | None:
+def _load_run_summary_payload(
+    stdout_lines: list[str],
+    stderr_lines: list[str],
+    runtime_payload: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     artifact_dir = _extract_artifact_dir(stdout_lines) or _extract_artifact_dir(stderr_lines)
     if artifact_dir is None:
         return None
@@ -55,6 +59,14 @@ def _load_run_summary_payload(stdout_lines: list[str], stderr_lines: list[str]) 
             "run_summary_path": str(summary_path),
         }
     payload = result.to_payload()
+    role_map = None
+    if isinstance(runtime_payload, dict):
+        scoring = runtime_payload.get("scoring", {})
+        if isinstance(scoring, dict) and isinstance(scoring.get("volume_roles"), dict):
+            role_map = scoring["volume_roles"]
+    role_stats = derive_role_stats(payload.get("scoring", {}).get("volume_stats"), role_map)
+    if role_stats:
+        payload["scoring"]["role_stats"] = role_stats
     payload["artifact_dir"] = str(artifact_dir)
     payload["run_summary_path"] = str(summary_path)
     return payload
@@ -328,7 +340,11 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
                     "returncode": completed.returncode,
                     "stdout_tail": stdout_lines[-20:],
                     "stderr_tail": stderr_lines[-20:],
-                    "simulation_result": _load_run_summary_payload(stdout_lines, stderr_lines),
+                    "simulation_result": _load_run_summary_payload(
+                        stdout_lines,
+                        stderr_lines,
+                        runtime_payload,
+                    ),
                 },
                 runtime_phase=self._snapshot.runtime_phase,
             )

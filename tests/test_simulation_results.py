@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from core.simulation import load_simulation_result, simulation_result_from_dict
+from core.simulation import derive_role_stats, load_simulation_result, simulation_result_from_dict
 
 
 class SimulationResultTest(unittest.TestCase):
@@ -82,3 +82,26 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.source_type, "beam")
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
+
+    def test_derive_role_stats_aggregates_named_volumes(self) -> None:
+        role_stats = derive_role_stats(
+            {
+                "target_core": {
+                    "edep_total_mev": 1.0,
+                    "edep_mean_mev_per_event": 0.5,
+                    "hit_events": 2,
+                    "step_count": 10,
+                    "track_entries": 2,
+                },
+                "target_shell": {
+                    "edep_total_mev": 0.5,
+                    "edep_mean_mev_per_event": 0.25,
+                    "hit_events": 1,
+                    "step_count": 6,
+                    "track_entries": 1,
+                },
+            },
+            {"target": ["target_core", "target_shell"]},
+        )
+        self.assertAlmostEqual(role_stats["target"]["edep_total_mev"], 1.5)
+        self.assertEqual(role_stats["target"]["step_count"], 16)

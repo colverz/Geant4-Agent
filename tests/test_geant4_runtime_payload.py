@@ -28,6 +28,7 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["material"], "G4_Cu")
         self.assertEqual(payload["particle"], "gamma")
         self.assertEqual(payload["physics_list"], "FTFP_BERT")
+        self.assertEqual(payload["root_volume_name"], "Target")
         self.assertEqual(payload["size_x"], 10.0)
         self.assertEqual(payload["size_y"], 20.0)
         self.assertEqual(payload["size_z"], 30.0)
@@ -39,6 +40,7 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
             {
                 "geometry": {
                     "structure": "single_tubs",
+                    "root_name": "target",
                     "params": {"child_rmax": 5.0, "child_hz": 40.0},
                 },
                 "materials": {
@@ -51,6 +53,7 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         )
         self.assertEqual(payload["structure"], "single_tubs")
         self.assertEqual(payload["material"], "G4_W")
+        self.assertEqual(payload["root_volume_name"], "target")
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
         self.assertEqual(payload["physics_list"], "QGSP_BERT")

@@ -74,17 +74,67 @@ def _physics_list_name(config: dict[str, Any]) -> str:
     return "FTFP_BERT"
 
 
+def _root_volume_name(config: dict[str, Any]) -> str:
+    geometry = config.get("geometry", {}) if isinstance(config.get("geometry"), dict) else {}
+    raw = geometry.get("root_name")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return "Target"
+
+
+def _scoring_spec(config: dict[str, Any], root_volume_name: str) -> ScoringSpec:
+    scoring = config.get("scoring", {}) if isinstance(config.get("scoring"), dict) else {}
+    scoring_enabled = bool(scoring.get("target_edep", True))
+    volume_names = scoring.get("volume_names")
+    if isinstance(volume_names, (list, tuple)):
+        cleaned = tuple(str(name).strip() for name in volume_names if str(name).strip())
+    else:
+        cleaned = ()
+
+    role_map: dict[str, tuple[str, ...]] = {"target": (root_volume_name,)}
+    raw_roles = scoring.get("volume_roles")
+    if isinstance(raw_roles, dict):
+        for role, raw_names in raw_roles.items():
+            role_name = str(role).strip()
+            if not role_name:
+                continue
+            if isinstance(raw_names, (list, tuple)):
+                names = tuple(str(name).strip() for name in raw_names if str(name).strip())
+            elif isinstance(raw_names, str) and raw_names.strip():
+                names = (raw_names.strip(),)
+            else:
+                names = ()
+            if names:
+                role_map[role_name] = names
+
+    all_names: list[str] = []
+    for names in role_map.values():
+        for name in names:
+            if name not in all_names:
+                all_names.append(name)
+    for name in cleaned:
+        if name not in all_names:
+            all_names.append(name)
+
+    return ScoringSpec(
+        target_edep=scoring_enabled,
+        volume_names=tuple(all_names) or (root_volume_name,),
+        volume_roles=role_map,
+    )
+
+
 def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str = "batch") -> SimulationSpec:
     raw = config if isinstance(config, dict) else {}
     geometry = raw.get("geometry", {}) if isinstance(raw.get("geometry"), dict) else {}
     params = geometry.get("params", {}) if isinstance(geometry.get("params"), dict) else {}
     source = raw.get("source", {}) if isinstance(raw.get("source"), dict) else {}
-    scoring = raw.get("scoring", {}) if isinstance(raw.get("scoring"), dict) else {}
 
     structure = str(geometry.get("structure") or "single_box")
+    root_volume_name = _root_volume_name(raw)
     geometry_spec = GeometryRuntimeSpec(
         structure=structure,
         material=_first_material(raw),
+        root_volume_name=root_volume_name,
         size_x_mm=_coerce_float(geometry.get("size_triplet_mm", [None, None, None])[0], _coerce_float(params.get("module_x"), 50.0))
         if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 1
         else _coerce_float(params.get("module_x"), 50.0),
@@ -106,17 +156,10 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         direction_vec=_coerce_vector3(source.get("direction"), (0.0, 0.0, 1.0)),
     )
 
-    scoring_enabled = bool(scoring.get("target_edep", True))
-    volume_names = scoring.get("volume_names")
-    if isinstance(volume_names, (list, tuple)):
-        cleaned = tuple(str(name) for name in volume_names if str(name))
-    else:
-        cleaned = ("Target",)
-
     return SimulationSpec(
         geometry=geometry_spec,
         source=source_spec,
         physics=PhysicsRuntimeSpec(physics_list=_physics_list_name(raw)),
         run=RunControlSpec(events=max(1, int(events)), mode=str(mode or "batch")),
-        scoring=ScoringSpec(target_edep=scoring_enabled, volume_names=cleaned or ("Target",)),
+        scoring=_scoring_spec(raw, root_volume_name),
     )

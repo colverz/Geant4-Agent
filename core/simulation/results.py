@@ -24,6 +24,7 @@ class SimulationScoringResult:
     target_step_count: int = 0
     target_track_entries: int = 0
     volume_stats: dict[str, dict[str, float | int]] | None = None
+    role_stats: dict[str, dict[str, float | int]] | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,7 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         target_step_count=int(scoring_data.get("target_step_count", 0) or 0),
         target_track_entries=int(scoring_data.get("target_track_entries", 0) or 0),
         volume_stats=volume_stats or None,
+        role_stats=None,
     )
     return SimulationResult(
         run_ok=bool(data.get("run_ok", False)),
@@ -102,3 +104,45 @@ def load_simulation_result(summary_path: str | Path) -> SimulationResult:
     if not isinstance(payload, dict):
         raise ValueError("run_summary.json must contain a JSON object")
     return simulation_result_from_dict(payload)
+
+
+def derive_role_stats(
+    volume_stats: dict[str, dict[str, float | int]] | None,
+    volume_roles: dict[str, list[str] | tuple[str, ...] | str] | None,
+) -> dict[str, dict[str, float | int]]:
+    if not volume_stats or not volume_roles:
+        return {}
+    role_stats: dict[str, dict[str, float | int]] = {}
+    for role, raw_names in volume_roles.items():
+        role_name = str(role).strip()
+        if not role_name:
+            continue
+        if isinstance(raw_names, str):
+            names = [raw_names]
+        elif isinstance(raw_names, (list, tuple)):
+            names = [str(name) for name in raw_names if str(name)]
+        else:
+            names = []
+        if not names:
+            continue
+        aggregate = {
+            "edep_total_mev": 0.0,
+            "edep_mean_mev_per_event": 0.0,
+            "hit_events": 0,
+            "step_count": 0,
+            "track_entries": 0,
+        }
+        matched = False
+        for name in names:
+            stats = volume_stats.get(name)
+            if not isinstance(stats, dict):
+                continue
+            matched = True
+            aggregate["edep_total_mev"] += float(stats.get("edep_total_mev", 0.0) or 0.0)
+            aggregate["edep_mean_mev_per_event"] += float(stats.get("edep_mean_mev_per_event", 0.0) or 0.0)
+            aggregate["hit_events"] += int(stats.get("hit_events", 0) or 0)
+            aggregate["step_count"] += int(stats.get("step_count", 0) or 0)
+            aggregate["track_entries"] += int(stats.get("track_entries", 0) or 0)
+        if matched:
+            role_stats[role_name] = aggregate
+    return role_stats

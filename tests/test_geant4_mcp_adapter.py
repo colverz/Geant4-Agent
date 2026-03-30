@@ -109,7 +109,7 @@ class Geant4McpAdapterTest(unittest.TestCase):
                             "target_step_count": 12,
                             "target_track_entries": 3,
                             "volume_stats": {
-                                "Target": {
+                                "target": {
                                     "edep_total_mev": 1.5,
                                     "edep_mean_mev_per_event": 0.5,
                                     "hit_events": 2,
@@ -140,7 +140,7 @@ class Geant4McpAdapterTest(unittest.TestCase):
                     tool_name="apply_config_patch",
                     arguments={
                         "patch": {
-                            "geometry": {"structure": "single_box"},
+                            "geometry": {"structure": "single_box", "root_name": "target"},
                             "source": {"particle": "gamma"},
                             "physics_list": {"name": "FTFP_BERT"},
                         }
@@ -153,7 +153,8 @@ class Geant4McpAdapterTest(unittest.TestCase):
         result = run_obs.payload["simulation_result"]
         self.assertEqual(result["geometry_structure"], "single_box")
         self.assertEqual(result["scoring"]["target_hit_events"], 2)
-        self.assertEqual(result["scoring"]["volume_stats"]["Target"]["step_count"], 12)
+        self.assertEqual(result["scoring"]["volume_stats"]["target"]["step_count"], 12)
+        self.assertEqual(result["scoring"]["role_stats"]["target"]["track_entries"], 3)
 
 
 if __name__ == "__main__":

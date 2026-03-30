@@ -12,6 +12,7 @@ class SimulationBridgeTest(unittest.TestCase):
             {
                 "geometry": {
                     "structure": "single_box",
+                    "root_name": "target",
                     "params": {"module_x": 10.0, "module_y": 20.0, "module_z": 30.0},
                 },
                 "materials": {"selected_materials": ["G4_Cu"]},
@@ -29,17 +30,20 @@ class SimulationBridgeTest(unittest.TestCase):
         )
         self.assertEqual(spec.geometry.structure, "single_box")
         self.assertEqual(spec.geometry.material, "G4_Cu")
+        self.assertEqual(spec.geometry.root_volume_name, "target")
         self.assertEqual(spec.geometry.size_x_mm, 10.0)
         self.assertEqual(spec.source.source_type, "point")
         self.assertEqual(spec.source.position_mm, (0.0, 0.0, -20.0))
         self.assertEqual(spec.run.events, 25)
         self.assertTrue(spec.scoring.target_edep)
+        self.assertEqual(spec.scoring.volume_roles["target"], ("target",))
 
     def test_runtime_payload_keeps_nested_bridge_sections(self) -> None:
         payload = build_runtime_payload(
             {
                 "geometry": {
                     "structure": "single_tubs",
+                    "root_name": "target",
                     "params": {"child_rmax": 5.0, "child_hz": 40.0},
                 },
                 "materials": {"selected_materials": ["G4_W"]},
@@ -54,10 +58,12 @@ class SimulationBridgeTest(unittest.TestCase):
             }
         )
         self.assertEqual(payload["geometry"]["structure"], "single_tubs")
+        self.assertEqual(payload["geometry"]["root_volume_name"], "target")
         self.assertEqual(payload["source"]["type"], "beam")
         self.assertEqual(payload["physics"]["list"], "QGSP_BERT")
         self.assertTrue(payload["scoring"]["target_edep"])
-        self.assertEqual(payload["scoring"]["volume_names"], ["Target"])
+        self.assertEqual(payload["scoring"]["volume_names"], ["target"])
+        self.assertEqual(payload["scoring"]["volume_roles"]["target"], ["target"])
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
 

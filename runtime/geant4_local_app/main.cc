@@ -42,6 +42,7 @@ namespace fs = std::filesystem;
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
   std::string material = "G4_Cu";
+  std::string root_volume_name = "Target";
   std::string particle = "gamma";
   std::string source_type = "point";
   double energy_mev = 1.0;
@@ -180,6 +181,7 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   const auto text = read_text(config_path);
   cfg.geometry_structure = extract_top_level_string(text, "structure", cfg.geometry_structure);
   cfg.material = extract_top_level_string(text, "material", cfg.material);
+  cfg.root_volume_name = extract_top_level_string(text, "root_volume_name", cfg.root_volume_name);
   cfg.particle = extract_top_level_string(text, "particle", cfg.particle);
   cfg.source_type = extract_top_level_string(text, "source_type", cfg.source_type);
   cfg.physics_list = extract_top_level_string(text, "physics_list", cfg.physics_list);
@@ -246,7 +248,7 @@ class RuntimeDetectorConstruction : public G4VUserDetectorConstruction {
         nullptr,
         G4ThreeVector(),
         logic_target,
-        "Target",
+        config_.root_volume_name,
         logic_world,
         false,
         0,
