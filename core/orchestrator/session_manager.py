@@ -284,6 +284,38 @@ def _merge_slot_frame_with_memory(frame: SlotFrame, slot_memory: dict[str, Any])
     return frame
 
 
+def _prune_slot_frame_to_targets(frame: SlotFrame, target_paths: list[str]) -> SlotFrame:
+    targets = {str(path) for path in target_paths if isinstance(path, str) and path}
+    if not targets:
+        return frame
+
+    def _wanted(*paths: str) -> bool:
+        return any(path in targets for path in paths)
+
+    if not _wanted("geometry.structure", "geometry.kind"):
+        frame.geometry.kind = None
+    if not any(path in targets for path in ("geometry.params.module_x", "geometry.params.module_y", "geometry.params.module_z")):
+        frame.geometry.size_triplet_mm = None
+    if not _wanted("geometry.params.child_rmax"):
+        frame.geometry.radius_mm = None
+    if not _wanted("geometry.params.child_hz"):
+        frame.geometry.half_length_mm = None
+    if not _wanted("materials.selected_materials", "materials.primary"):
+        frame.materials.primary = None
+
+    if not _wanted("source.type", "source.kind"):
+        frame.source.kind = None
+    if not _wanted("source.particle"):
+        frame.source.particle = None
+    if not _wanted("source.energy", "source.energy_mev"):
+        frame.source.energy_mev = None
+    if not _wanted("source.position", "source.position_mm"):
+        frame.source.position_mm = None
+    if not _wanted("source.direction", "source.direction_vec"):
+        frame.source.direction_vec = None
+    return frame
+
+
 def _refresh_slot_memory(
     existing_memory: dict[str, Any] | None,
     *,
@@ -1065,6 +1097,7 @@ def _apply_explicit_user_controls(
     explicit_controls: dict[str, Any],
 ) -> CandidateUpdate:
     explicit_intent = explicit_controls.get("intent", user_candidate.intent)
+    strict_targets = bool(explicit_controls.get("strict_targets", False))
     explicit_targets = [
         str(path)
         for path in explicit_controls.get("target_paths", [])
@@ -1085,9 +1118,12 @@ def _apply_explicit_user_controls(
         intent = explicit_intent
     existing_targets = [str(path) for path in user_candidate.target_paths if isinstance(path, str) and path]
     if explicit_targets:
-        # Keep explicit detections while preserving high-confidence slot paths,
-        # otherwise we may accidentally drop extracted geometry/source slots.
-        target_paths = sorted(set(explicit_targets) | set(existing_targets))
+        if strict_targets:
+            target_paths = sorted(set(explicit_targets))
+        else:
+            # Keep explicit detections while preserving high-confidence slot paths,
+            # otherwise we may accidentally drop extracted geometry/source slots.
+            target_paths = sorted(set(explicit_targets) | set(existing_targets))
     else:
         target_paths = list(existing_targets)
     if intent == user_candidate.intent and target_paths == list(user_candidate.target_paths):
@@ -1100,6 +1136,49 @@ def _apply_explicit_user_controls(
         confidence=user_candidate.confidence,
         rationale=f"{user_candidate.rationale}_explicit_controls",
     )
+
+
+def _looks_like_focused_answer(text: str) -> bool:
+    compact = re.sub(r"\s+", " ", text or "").strip()
+    if not compact:
+        return False
+    if len(compact) <= 48:
+        return True
+    lowered = compact.lower()
+    return bool(
+        re.fullmatch(r"(direction|energy|position)\s*(?:is|=|:)?\s*.+", lowered)
+        or re.fullmatch(r"(方向|能量|位置)\s*(?:是|为|：|:)?\s*.+", compact)
+    )
+
+
+def _refine_explicit_controls_for_question_answer(
+    *,
+    state: SessionState,
+    text: str,
+    explicit_controls: dict[str, Any],
+) -> dict[str, Any]:
+    asked_paths = [str(path) for path in getattr(state, "last_asked_paths", []) if str(path)]
+    if not asked_paths:
+        return explicit_controls
+    if explicit_controls.get("intent") in {Intent.CONFIRM, Intent.REJECT, Intent.MODIFY, Intent.REMOVE, Intent.QUESTION}:
+        return explicit_controls
+    explicit_targets = [
+        str(path)
+        for path in explicit_controls.get("target_paths", [])
+        if isinstance(path, str) and path
+    ]
+    asked_set = set(asked_paths)
+    if explicit_targets and set(explicit_targets).issubset(asked_set):
+        refined = dict(explicit_controls)
+        refined["target_paths"] = sorted(set(explicit_targets))
+        refined["strict_targets"] = True
+        return refined
+    if not explicit_targets and len(asked_paths) == 1 and _looks_like_focused_answer(text):
+        refined = dict(explicit_controls)
+        refined["target_paths"] = [asked_paths[0]]
+        refined["strict_targets"] = True
+        return refined
+    return explicit_controls
 
 
 def _enforce_no_implicit_overwrite(
@@ -1462,6 +1541,11 @@ def process_turn(
     rejected_overwrite_preview: list[dict[str, Any]] = []
     slot_frame_memory_snapshot: SlotFrame | None = None
     explicit_controls = infer_user_turn_controls(text)
+    explicit_controls = _refine_explicit_controls_for_question_answer(
+        state=state,
+        text=text,
+        explicit_controls=explicit_controls,
+    )
     _progress(progress_cb, "intent", "Interpreting intent", "User controls and overwrite intent parsed.")
 
     if enable_llm_first:
@@ -1472,6 +1556,11 @@ def process_turn(
             config_path=ollama_config_path,
         )
         if slot_result.ok and slot_result.frame:
+            if explicit_controls.get("strict_targets"):
+                slot_result.frame = _prune_slot_frame_to_targets(
+                    slot_result.frame,
+                    list(explicit_controls.get("target_paths", [])),
+                )
             slot_result.frame = _merge_slot_frame_with_memory(slot_result.frame, getattr(state, "slot_memory", {}))
             slot_frame_memory_snapshot = deep_copy(slot_result.frame)
             spatial_v2_meta: dict[str, Any] | None = None

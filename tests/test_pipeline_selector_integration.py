@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from core.contracts.slots import GeometrySlots, SlotFrame, SourceSlots
-from core.orchestrator.session_manager import process_turn, reset_session
+from core.orchestrator.session_manager import get_or_create_session, process_turn, reset_session
 from core.orchestrator.types import Intent
 from core.interpreter import (
     EvidenceSpan,
@@ -561,6 +561,9 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
                 },
                 ollama_config_path="",
             )
+            state = get_or_create_session("selector-memory-test")
+            state.open_questions = ["source.direction"]
+            state.last_asked_paths = ["source.direction"]
             second = process_turn(
                 {
                     "session_id": "selector-memory-test",
@@ -680,6 +683,9 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
                 },
                 ollama_config_path="",
             )
+            state = get_or_create_session("selector-memory-test")
+            state.open_questions = ["source.direction"]
+            state.last_asked_paths = ["source.direction"]
             second = process_turn(
                 {
                     "session_id": "selector-memory-test",
@@ -714,6 +720,109 @@ class PipelineSelectorIntegrationTests(unittest.TestCase):
         self.assertEqual(third["config"]["source"]["energy"], 2.0)
         self.assertEqual(third["config"]["source"]["position"]["value"], [0.0, 0.0, -50.0])
         self.assertIsNone(third["config"]["source"]["direction"])
+
+    def test_process_turn_answering_direction_question_does_not_rewrite_source(self) -> None:
+        initial = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="initial source missing direction",
+            target_slots=[
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "materials.primary",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+            ],
+            geometry=GeometrySlots(kind="box", size_triplet_mm=[10.0, 10.0, 10.0]),
+            source=SourceSlots(
+                kind="point",
+                particle="gamma",
+                energy_mev=1.0,
+                position_mm=[0.0, 0.0, -20.0],
+            ),
+        )
+        answer = SlotFrame(
+            intent=Intent.SET,
+            confidence=1.0,
+            normalized_text="answer source direction only",
+            target_slots=[
+                "source.kind",
+                "source.particle",
+                "source.position_mm",
+                "source.direction_vec",
+            ],
+            source=SourceSlots(
+                kind="beam",
+                particle="proton",
+                position_mm=[0.0, 0.0, -50.0],
+                direction_vec=[0.0, 0.0, -1.0],
+            ),
+        )
+        with patch(
+            "core.orchestrator.session_manager.build_llm_slot_frame",
+            side_effect=[
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=initial,
+                    normalized_text=initial.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+                LlmSlotBuildResult(
+                    ok=True,
+                    frame=answer,
+                    normalized_text=answer.normalized_text,
+                    confidence=1.0,
+                    llm_raw="{}",
+                    fallback_reason=None,
+                    schema_errors=[],
+                    stage_trace={"final_status": "ok"},
+                ),
+            ],
+        ):
+            first = process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "10 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm.",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+            state = get_or_create_session("selector-memory-test")
+            state.open_questions = ["source.direction"]
+            state.last_asked_paths = ["source.direction"]
+            second = process_turn(
+                {
+                    "session_id": "selector-memory-test",
+                    "text": "沿着z轴负方向",
+                    "llm_router": True,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "enable_interpreter": False,
+                },
+                ollama_config_path="",
+            )
+
+        self.assertFalse(second.get("pending_overwrite_required", False))
+        self.assertEqual(second["config"]["source"]["type"], "point")
+        self.assertEqual(second["config"]["source"]["particle"], "gamma")
+        self.assertEqual(second["config"]["source"]["energy"], 1.0)
+        self.assertEqual(second["config"]["source"]["position"]["value"], [0.0, 0.0, -20.0])
+        self.assertEqual(second["config"]["source"]["direction"]["value"], [0.0, 0.0, -1.0])
 
     def test_process_turn_keeps_legacy_default_when_not_selected(self) -> None:
         frame = SlotFrame(
