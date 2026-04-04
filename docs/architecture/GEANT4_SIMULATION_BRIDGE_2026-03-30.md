@@ -14,6 +14,9 @@ The first stage is intentionally small:
   - `beam`
 - one scorer
   - `target_edep`
+- one optional runtime detector
+  - `single_box`
+  - role-mapped as `detector`
 
 ## Why this bridge exists
 
@@ -74,6 +77,10 @@ The first added scorer is:
 
 - `target_edep`
 
+The first added runtime role beyond the target is:
+
+- `detector`
+
 The runtime writes:
 
 - `run_ok`
@@ -87,6 +94,7 @@ The runtime writes:
 - `target_track_entries`
 - `scoring.volume_stats`
 - app-side derived `scoring.role_stats`
+- optional detector summary
 
 ### `run_summary.json -> SimulationResult`
 
@@ -128,6 +136,6 @@ The bridge design is intentionally lightweight, but its structure borrows from e
 After this first bridge is stable, the next practical extensions are:
 
 1. richer source models
-2. per-volume scoring
-3. detector/scoring volume roles
+2. detector/scoring volume roles beyond the first `target` + `detector`
+3. richer per-volume scoring
 4. stable result bundles for comparison and batch runs

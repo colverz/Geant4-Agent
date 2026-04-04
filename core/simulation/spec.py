@@ -16,6 +16,16 @@ class GeometryRuntimeSpec:
 
 
 @dataclass(frozen=True)
+class DetectorRuntimeSpec:
+    volume_name: str = "Detector"
+    material: str = "G4_Si"
+    position_mm: tuple[float, float, float] = (0.0, 0.0, 100.0)
+    size_x_mm: float = 20.0
+    size_y_mm: float = 20.0
+    size_z_mm: float = 2.0
+
+
+@dataclass(frozen=True)
 class SourceRuntimeSpec:
     source_type: str
     particle: str
@@ -49,3 +59,4 @@ class SimulationSpec:
     physics: PhysicsRuntimeSpec
     run: RunControlSpec = field(default_factory=RunControlSpec)
     scoring: ScoringSpec = field(default_factory=ScoringSpec)
+    detector: DetectorRuntimeSpec | None = None

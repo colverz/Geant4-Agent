@@ -115,8 +115,22 @@ class Geant4McpAdapterTest(unittest.TestCase):
                                     "hit_events": 2,
                                     "step_count": 12,
                                     "track_entries": 3,
+                                },
+                                "Detector": {
+                                    "edep_total_mev": 0.2,
+                                    "edep_mean_mev_per_event": 0.0667,
+                                    "hit_events": 1,
+                                    "step_count": 4,
+                                    "track_entries": 1,
                                 }
                             },
+                        },
+                        "detector": {
+                            "enabled": True,
+                            "volume_name": "Detector",
+                            "material": "G4_Si",
+                            "position_mm": [0, 0, 50],
+                            "size_mm": [12, 12, 1.5],
                         },
                     }
                 ),
@@ -141,6 +155,15 @@ class Geant4McpAdapterTest(unittest.TestCase):
                     arguments={
                         "patch": {
                             "geometry": {"structure": "single_box", "root_name": "target"},
+                            "simulation": {
+                                "detector": {
+                                    "enabled": True,
+                                    "name": "Detector",
+                                    "material": "G4_Si",
+                                    "position": {"type": "vector", "value": [0.0, 0.0, 50.0]},
+                                    "size_triplet_mm": [12.0, 12.0, 1.5],
+                                }
+                            },
                             "source": {"particle": "gamma"},
                             "physics_list": {"name": "FTFP_BERT"},
                         }
@@ -155,6 +178,7 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(result["scoring"]["target_hit_events"], 2)
         self.assertEqual(result["scoring"]["volume_stats"]["target"]["step_count"], 12)
         self.assertEqual(result["scoring"]["role_stats"]["target"]["track_entries"], 3)
+        self.assertEqual(result["scoring"]["role_stats"]["detector"]["track_entries"], 1)
 
 
 if __name__ == "__main__":

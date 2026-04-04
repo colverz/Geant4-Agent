@@ -15,6 +15,15 @@ class SimulationBridgeTest(unittest.TestCase):
                     "root_name": "target",
                     "params": {"module_x": 10.0, "module_y": 20.0, "module_z": 30.0},
                 },
+                "simulation": {
+                    "detector": {
+                        "enabled": True,
+                        "name": "Detector",
+                        "material": "G4_Si",
+                        "position": {"type": "vector", "value": [0.0, 0.0, 120.0]},
+                        "size_triplet_mm": [25.0, 25.0, 3.0],
+                    }
+                },
                 "materials": {"selected_materials": ["G4_Cu"]},
                 "source": {
                     "type": "point",
@@ -37,6 +46,10 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(spec.run.events, 25)
         self.assertTrue(spec.scoring.target_edep)
         self.assertEqual(spec.scoring.volume_roles["target"], ("target",))
+        self.assertEqual(spec.scoring.volume_roles["detector"], ("Detector",))
+        self.assertIsNotNone(spec.detector)
+        self.assertEqual(spec.detector.volume_name, "Detector")
+        self.assertEqual(spec.detector.position_mm, (0.0, 0.0, 120.0))
 
     def test_runtime_payload_keeps_nested_bridge_sections(self) -> None:
         payload = build_runtime_payload(
@@ -45,6 +58,15 @@ class SimulationBridgeTest(unittest.TestCase):
                     "structure": "single_tubs",
                     "root_name": "target",
                     "params": {"child_rmax": 5.0, "child_hz": 40.0},
+                },
+                "simulation": {
+                    "detector": {
+                        "enabled": True,
+                        "name": "Detector",
+                        "material": "G4_Si",
+                        "position": {"type": "vector", "value": [0.0, 0.0, 60.0]},
+                        "size_triplet_mm": [15.0, 15.0, 2.0],
+                    }
                 },
                 "materials": {"selected_materials": ["G4_W"]},
                 "source": {
@@ -62,8 +84,13 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(payload["source"]["type"], "beam")
         self.assertEqual(payload["physics"]["list"], "QGSP_BERT")
         self.assertTrue(payload["scoring"]["target_edep"])
-        self.assertEqual(payload["scoring"]["volume_names"], ["target"])
+        self.assertEqual(payload["scoring"]["volume_names"], ["target", "Detector"])
         self.assertEqual(payload["scoring"]["volume_roles"]["target"], ["target"])
+        self.assertEqual(payload["scoring"]["volume_roles"]["detector"], ["Detector"])
+        self.assertTrue(payload["detector"]["enabled"])
+        self.assertEqual(payload["detector_name"], "Detector")
+        self.assertEqual(payload["detector_material"], "G4_Si")
+        self.assertEqual(payload["detector_position"]["z"], 60.0)
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
 

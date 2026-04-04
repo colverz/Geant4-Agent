@@ -23,6 +23,13 @@ class SimulationResultTest(unittest.TestCase):
                 "physics_list": "FTFP_BERT",
                 "events": 4,
                 "mode": "batch",
+                "detector": {
+                    "enabled": True,
+                    "volume_name": "Detector",
+                    "material": "G4_Si",
+                    "position_mm": [0, 0, 100],
+                    "size_mm": [20, 20, 2],
+                },
                 "scoring": {
                     "target_edep_enabled": True,
                     "target_edep_total_mev": 2.7,
@@ -36,6 +43,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertTrue(result.run_ok)
         self.assertEqual(result.geometry_structure, "single_box")
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
+        self.assertTrue(result.detector.enabled)
+        self.assertEqual(result.detector.volume_name, "Detector")
         self.assertEqual(result.scoring.target_hit_events, 3)
         self.assertEqual(result.scoring.target_step_count, 18)
         self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
@@ -57,6 +66,13 @@ class SimulationResultTest(unittest.TestCase):
   "physics_list": "QGSP_BERT",
   "events": 2,
   "mode": "batch",
+  "detector": {
+    "enabled": true,
+    "volume_name": "Detector",
+    "material": "G4_Si",
+    "position_mm": [0, 0, 50],
+    "size_mm": [15, 15, 2]
+  },
   "scoring": {
     "target_edep_enabled": true,
     "target_edep_total_mev": 1.25,
@@ -80,6 +96,7 @@ class SimulationResultTest(unittest.TestCase):
             result = load_simulation_result(summary_path)
         self.assertEqual(result.geometry_structure, "single_tubs")
         self.assertEqual(result.source_type, "beam")
+        self.assertTrue(result.detector.enabled)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
 
@@ -105,3 +122,26 @@ class SimulationResultTest(unittest.TestCase):
         )
         self.assertAlmostEqual(role_stats["target"]["edep_total_mev"], 1.5)
         self.assertEqual(role_stats["target"]["step_count"], 16)
+
+    def test_derive_role_stats_keeps_detector_role(self) -> None:
+        role_stats = derive_role_stats(
+            {
+                "Target": {
+                    "edep_total_mev": 1.0,
+                    "edep_mean_mev_per_event": 0.5,
+                    "hit_events": 2,
+                    "step_count": 8,
+                    "track_entries": 2,
+                },
+                "Detector": {
+                    "edep_total_mev": 0.3,
+                    "edep_mean_mev_per_event": 0.15,
+                    "hit_events": 1,
+                    "step_count": 4,
+                    "track_entries": 1,
+                },
+            },
+            {"target": ["Target"], "detector": ["Detector"]},
+        )
+        self.assertAlmostEqual(role_stats["detector"]["edep_total_mev"], 0.3)
+        self.assertEqual(role_stats["detector"]["track_entries"], 1)

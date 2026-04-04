@@ -57,6 +57,15 @@ struct RuntimeConfig {
   double size_z_mm = 50.0;
   double radius_mm = 25.0;
   double half_length_mm = 50.0;
+  bool detector_enabled = false;
+  std::string detector_name = "Detector";
+  std::string detector_material = "G4_Si";
+  double detector_x_mm = 0.0;
+  double detector_y_mm = 0.0;
+  double detector_z_mm = 100.0;
+  double detector_size_x_mm = 20.0;
+  double detector_size_y_mm = 20.0;
+  double detector_size_z_mm = 2.0;
   std::string physics_list = "FTFP_BERT";
   int events = 1;
   bool score_target_edep = true;
@@ -97,6 +106,18 @@ double extract_top_level_number(const std::string& text, const std::string& key,
   return fallback;
 }
 
+bool extract_top_level_bool(const std::string& text, const std::string& key, bool fallback) {
+  const std::regex pattern(
+      "(?:^|[\\r\\n])\\s*\"" + key + "\"\\s*:\\s*(true|false)",
+      std::regex::icase);
+  std::smatch match;
+  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
+    const auto value = match[1].str();
+    return value == "true" || value == "TRUE";
+  }
+  return fallback;
+}
+
 double extract_top_level_object_number(
     const std::string& text,
     const std::string& object_key,
@@ -126,6 +147,22 @@ bool extract_nested_bool(
   if (std::regex_search(text, match, pattern) && match.size() >= 2) {
     const auto value = match[1].str();
     return value == "true" || value == "TRUE";
+  }
+  return fallback;
+}
+
+std::string extract_nested_string(
+    const std::string& text,
+    const std::string& object_key,
+    const std::string& key,
+    const std::string& fallback) {
+  const std::regex pattern(
+      "(?:^|[\\r\\n])\\s*\"" + object_key +
+          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*\"([^\"]+)\"",
+      std::regex::icase);
+  std::smatch match;
+  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
+    return match[1].str();
   }
   return fallback;
 }
@@ -165,6 +202,7 @@ struct VolumeScoringMetrics {
 };
 
 struct RuntimeScoringState {
+  std::string target_volume_name = "Target";
   double target_edep_mev = 0.0;
   double current_event_target_edep_mev = 0.0;
   int target_hit_events = 0;
@@ -197,6 +235,15 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.size_z_mm = extract_top_level_number(text, "size_z", cfg.size_z_mm);
   cfg.radius_mm = extract_top_level_number(text, "radius", cfg.radius_mm);
   cfg.half_length_mm = extract_top_level_number(text, "half_length", cfg.half_length_mm);
+  cfg.detector_enabled = extract_top_level_bool(text, "detector_enabled", cfg.detector_enabled);
+  cfg.detector_name = extract_top_level_string(text, "detector_name", cfg.detector_name);
+  cfg.detector_material = extract_top_level_string(text, "detector_material", cfg.detector_material);
+  cfg.detector_x_mm = extract_top_level_object_number(text, "detector_position", "x", cfg.detector_x_mm);
+  cfg.detector_y_mm = extract_top_level_object_number(text, "detector_position", "y", cfg.detector_y_mm);
+  cfg.detector_z_mm = extract_top_level_object_number(text, "detector_position", "z", cfg.detector_z_mm);
+  cfg.detector_size_x_mm = extract_top_level_number(text, "detector_size_x", cfg.detector_size_x_mm);
+  cfg.detector_size_y_mm = extract_top_level_number(text, "detector_size_y", cfg.detector_size_y_mm);
+  cfg.detector_size_z_mm = extract_top_level_number(text, "detector_size_z", cfg.detector_size_z_mm);
   cfg.score_target_edep = extract_nested_bool(text, "scoring", "target_edep", cfg.score_target_edep);
   cfg.scoring_volume_names =
       extract_nested_string_list(text, "scoring", "volume_names", cfg.scoring_volume_names);
@@ -253,6 +300,31 @@ class RuntimeDetectorConstruction : public G4VUserDetectorConstruction {
         false,
         0,
         true);
+
+    if (config_.detector_enabled) {
+      auto* detector_material = nist->FindOrBuildMaterial(config_.detector_material, false);
+      if (!detector_material) {
+        detector_material = air;
+      }
+      auto* solid_detector = new G4Box(
+          "Detector",
+          (config_.detector_size_x_mm * 0.5) * mm,
+          (config_.detector_size_y_mm * 0.5) * mm,
+          (config_.detector_size_z_mm * 0.5) * mm);
+      auto* logic_detector = new G4LogicalVolume(solid_detector, detector_material, "Detector");
+      auto* detector_vis = new G4VisAttributes(G4Colour(0.12, 0.65, 0.32));
+      detector_vis->SetForceSolid(true);
+      logic_detector->SetVisAttributes(detector_vis);
+      new G4PVPlacement(
+          nullptr,
+          G4ThreeVector(config_.detector_x_mm * mm, config_.detector_y_mm * mm, config_.detector_z_mm * mm),
+          logic_detector,
+          config_.detector_name,
+          logic_world,
+          false,
+          0,
+          true);
+    }
 
     const auto marker_radius_mm = 2.0;
     auto* solid_source_marker = new G4Orb("SourceMarker", marker_radius_mm * mm);
@@ -392,7 +464,7 @@ class RuntimeEventAction : public G4UserEventAction {
       if (metrics.current_event_edep_mev > 0.0) {
         metrics.hit_events += 1;
       }
-      if (volume_name == "Target") {
+      if (volume_name == scoring_state_->target_volume_name) {
         scoring_state_->target_edep_mev = metrics.edep_mev;
         scoring_state_->current_event_target_edep_mev = metrics.current_event_edep_mev;
         scoring_state_->target_hit_events = metrics.hit_events;
@@ -467,6 +539,7 @@ int main(int argc, char** argv) {
   }
   run_manager->SetUserInitialization(physics);
   RuntimeScoringState scoring_state;
+  scoring_state.target_volume_name = cfg.root_volume_name;
   for (const auto& volume_name : cfg.scoring_volume_names) {
     if (!volume_name.empty()) {
       scoring_state.volume_stats.emplace(volume_name, VolumeScoringMetrics{});
@@ -525,6 +598,13 @@ int main(int argc, char** argv) {
           << "  \"physics_list\": \"" << cfg.physics_list << "\",\n"
           << "  \"events\": " << events << ",\n"
           << "  \"mode\": \"" << cfg.mode << "\",\n"
+          << "  \"detector\": {\n"
+          << "    \"enabled\": " << (cfg.detector_enabled ? "true" : "false") << ",\n"
+          << "    \"volume_name\": \"" << cfg.detector_name << "\",\n"
+          << "    \"material\": \"" << cfg.detector_material << "\",\n"
+          << "    \"position_mm\": [" << cfg.detector_x_mm << ", " << cfg.detector_y_mm << ", " << cfg.detector_z_mm << "],\n"
+          << "    \"size_mm\": [" << cfg.detector_size_x_mm << ", " << cfg.detector_size_y_mm << ", " << cfg.detector_size_z_mm << "]\n"
+          << "  },\n"
           << "  \"scoring\": {\n"
           << "    \"target_edep_enabled\": " << (cfg.score_target_edep ? "true" : "false") << ",\n"
           << "    \"target_edep_total_mev\": " << scoring_state.target_edep_mev << ",\n"

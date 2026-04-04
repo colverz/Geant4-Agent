@@ -77,6 +77,19 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
             "radius_mm": spec.geometry.radius_mm,
             "half_length_mm": spec.geometry.half_length_mm,
         },
+        "detector": (
+            {
+                "enabled": True,
+                "volume_name": spec.detector.volume_name,
+                "material": spec.detector.material,
+                "position_mm": list(spec.detector.position_mm),
+                "size_x_mm": spec.detector.size_x_mm,
+                "size_y_mm": spec.detector.size_y_mm,
+                "size_z_mm": spec.detector.size_z_mm,
+            }
+            if spec.detector is not None
+            else {"enabled": False}
+        ),
         "source": {
             "type": spec.source.source_type,
             "particle": spec.source.particle,
@@ -114,8 +127,21 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
             "y": spec.source.direction_vec[1],
             "z": spec.source.direction_vec[2],
         },
+        "detector_enabled": spec.detector is not None,
         "raw_config": raw_config,
     }
+
+    if spec.detector is not None:
+        payload["detector_name"] = spec.detector.volume_name
+        payload["detector_material"] = spec.detector.material
+        payload["detector_position"] = {
+            "x": spec.detector.position_mm[0],
+            "y": spec.detector.position_mm[1],
+            "z": spec.detector.position_mm[2],
+        }
+        payload["detector_size_x"] = float(spec.detector.size_x_mm)
+        payload["detector_size_y"] = float(spec.detector.size_y_mm)
+        payload["detector_size_z"] = float(spec.detector.size_z_mm)
 
     if spec.geometry.structure == "single_tubs":
         payload["radius"] = float(spec.geometry.radius_mm or 25.0)

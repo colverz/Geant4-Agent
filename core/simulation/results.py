@@ -28,6 +28,15 @@ class SimulationScoringResult:
 
 
 @dataclass(frozen=True)
+class SimulationDetectorResult:
+    enabled: bool = False
+    volume_name: str | None = None
+    material: str | None = None
+    position_mm: tuple[float, float, float] | None = None
+    size_mm: tuple[float, float, float] | None = None
+
+
+@dataclass(frozen=True)
 class SimulationResult:
     run_ok: bool
     events_requested: int
@@ -42,6 +51,7 @@ class SimulationResult:
     events: int = 0
     mode: str = "batch"
     scoring: SimulationScoringResult = SimulationScoringResult()
+    detector: SimulationDetectorResult = SimulationDetectorResult()
 
     def to_payload(self) -> dict[str, Any]:
         return asdict(self)
@@ -94,6 +104,13 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         events=int(data.get("events", 0) or 0),
         mode=str(data.get("mode", "batch") or "batch"),
         scoring=scoring,
+        detector=SimulationDetectorResult(
+            enabled=bool(data.get("detector", {}).get("enabled", False)) if isinstance(data.get("detector"), dict) else False,
+            volume_name=data.get("detector", {}).get("volume_name") if isinstance(data.get("detector"), dict) else None,
+            material=data.get("detector", {}).get("material") if isinstance(data.get("detector"), dict) else None,
+            position_mm=_coerce_triplet(data.get("detector", {}).get("position_mm")) if isinstance(data.get("detector"), dict) else None,
+            size_mm=_coerce_triplet(data.get("detector", {}).get("size_mm")) if isinstance(data.get("detector"), dict) else None,
+        ),
     )
 
 

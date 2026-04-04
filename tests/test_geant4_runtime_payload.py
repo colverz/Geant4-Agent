@@ -47,6 +47,15 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                     "selected_materials": ["G4_Al"],
                     "volume_material_map": {"target": "G4_W"},
                 },
+                "simulation": {
+                    "detector": {
+                        "enabled": True,
+                        "name": "Detector",
+                        "material": "G4_Si",
+                        "position": {"type": "vector", "value": [0.0, 0.0, 50.0]},
+                        "size_triplet_mm": [12.0, 12.0, 1.5],
+                    }
+                },
                 "source": {"particle": "proton", "energy": 250.0},
                 "physics_list": {"name": "QGSP_BERT"},
             }
@@ -57,6 +66,9 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
         self.assertEqual(payload["physics_list"], "QGSP_BERT")
+        self.assertTrue(payload["detector_enabled"])
+        self.assertEqual(payload["detector_name"], "Detector")
+        self.assertEqual(payload["detector_size_z"], 1.5)
 
 
 if __name__ == "__main__":

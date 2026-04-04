@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.simulation.spec import (
+    DetectorRuntimeSpec,
     GeometryRuntimeSpec,
     PhysicsRuntimeSpec,
     RunControlSpec,
@@ -82,7 +83,43 @@ def _root_volume_name(config: dict[str, Any]) -> str:
     return "Target"
 
 
-def _scoring_spec(config: dict[str, Any], root_volume_name: str) -> ScoringSpec:
+def _detector_spec(config: dict[str, Any]) -> DetectorRuntimeSpec | None:
+    raw_detector = config.get("simulation", {}) if isinstance(config.get("simulation"), dict) else {}
+    if isinstance(raw_detector, dict):
+        raw_detector = raw_detector.get("detector")
+    if raw_detector is None:
+        raw_detector = config.get("detector")
+    if not isinstance(raw_detector, dict):
+        return None
+    if raw_detector.get("enabled") is False:
+        return None
+
+    size_triplet = raw_detector.get("size_triplet_mm")
+    if isinstance(size_triplet, (list, tuple)) and len(size_triplet) >= 3:
+        size_x = _coerce_float(size_triplet[0], 20.0)
+        size_y = _coerce_float(size_triplet[1], 20.0)
+        size_z = _coerce_float(size_triplet[2], 2.0)
+    else:
+        params = raw_detector.get("params", {}) if isinstance(raw_detector.get("params"), dict) else {}
+        size_x = _coerce_float(raw_detector.get("size_x_mm"), _coerce_float(params.get("module_x"), 20.0))
+        size_y = _coerce_float(raw_detector.get("size_y_mm"), _coerce_float(params.get("module_y"), 20.0))
+        size_z = _coerce_float(raw_detector.get("size_z_mm"), _coerce_float(params.get("module_z"), 2.0))
+
+    return DetectorRuntimeSpec(
+        volume_name=str(raw_detector.get("name") or "Detector"),
+        material=str(raw_detector.get("material") or "G4_Si"),
+        position_mm=_coerce_vector3(raw_detector.get("position"), (0.0, 0.0, 100.0)),
+        size_x_mm=size_x,
+        size_y_mm=size_y,
+        size_z_mm=size_z,
+    )
+
+
+def _scoring_spec(
+    config: dict[str, Any],
+    root_volume_name: str,
+    detector_spec: DetectorRuntimeSpec | None,
+) -> ScoringSpec:
     scoring = config.get("scoring", {}) if isinstance(config.get("scoring"), dict) else {}
     scoring_enabled = bool(scoring.get("target_edep", True))
     volume_names = scoring.get("volume_names")
@@ -92,6 +129,8 @@ def _scoring_spec(config: dict[str, Any], root_volume_name: str) -> ScoringSpec:
         cleaned = ()
 
     role_map: dict[str, tuple[str, ...]] = {"target": (root_volume_name,)}
+    if detector_spec is not None:
+        role_map["detector"] = (detector_spec.volume_name,)
     raw_roles = scoring.get("volume_roles")
     if isinstance(raw_roles, dict):
         for role, raw_names in raw_roles.items():
@@ -131,6 +170,7 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
 
     structure = str(geometry.get("structure") or "single_box")
     root_volume_name = _root_volume_name(raw)
+    detector_spec = _detector_spec(raw)
     geometry_spec = GeometryRuntimeSpec(
         structure=structure,
         material=_first_material(raw),
@@ -161,5 +201,6 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         source=source_spec,
         physics=PhysicsRuntimeSpec(physics_list=_physics_list_name(raw)),
         run=RunControlSpec(events=max(1, int(events)), mode=str(mode or "batch")),
-        scoring=_scoring_spec(raw, root_volume_name),
+        scoring=_scoring_spec(raw, root_volume_name, detector_spec),
+        detector=detector_spec,
     )
