@@ -83,6 +83,7 @@ The first added runtime role beyond the target is:
 
 The runtime writes:
 
+- `schema_version`
 - `run_ok`
 - `events_requested`
 - `events_completed`
@@ -104,6 +105,10 @@ Implemented in:
 - [adapter.py](/f:/geant4agent/mcp/geant4/adapter.py)
 
 This layer turns the runtime artifact back into a stable app-side result object.
+
+The current result schema version is:
+
+- `2026-04-12.v1`
 
 That keeps the bridge symmetrical:
 

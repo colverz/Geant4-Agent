@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-12.v1"
+
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
     if not isinstance(value, (list, tuple)) or len(value) != 3:
@@ -41,6 +43,7 @@ class SimulationResult:
     run_ok: bool
     events_requested: int
     events_completed: int
+    schema_version: str = SIMULATION_RESULT_SCHEMA_VERSION
     geometry_structure: str | None = None
     material: str | None = None
     particle: str | None = None
@@ -91,6 +94,7 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         role_stats=None,
     )
     return SimulationResult(
+        schema_version=str(data.get("schema_version") or SIMULATION_RESULT_SCHEMA_VERSION),
         run_ok=bool(data.get("run_ok", False)),
         events_requested=int(data.get("events_requested", 0) or 0),
         events_completed=int(data.get("events_completed", 0) or 0),

@@ -4,7 +4,12 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from core.simulation import derive_role_stats, load_simulation_result, simulation_result_from_dict
+from core.simulation import (
+    SIMULATION_RESULT_SCHEMA_VERSION,
+    derive_role_stats,
+    load_simulation_result,
+    simulation_result_from_dict,
+)
 
 
 class SimulationResultTest(unittest.TestCase):
@@ -14,6 +19,7 @@ class SimulationResultTest(unittest.TestCase):
                 "run_ok": True,
                 "events_requested": 4,
                 "events_completed": 4,
+                "schema_version": SIMULATION_RESULT_SCHEMA_VERSION,
                 "geometry_structure": "single_box",
                 "material": "G4_Cu",
                 "particle": "gamma",
@@ -41,6 +47,7 @@ class SimulationResultTest(unittest.TestCase):
             }
         )
         self.assertTrue(result.run_ok)
+        self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)
         self.assertEqual(result.geometry_structure, "single_box")
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertTrue(result.detector.enabled)
@@ -57,6 +64,7 @@ class SimulationResultTest(unittest.TestCase):
   "run_ok": true,
   "events_requested": 2,
   "events_completed": 2,
+  "schema_version": "2026-04-12.v1",
   "geometry_structure": "single_tubs",
   "material": "G4_W",
   "particle": "proton",
@@ -95,6 +103,7 @@ class SimulationResultTest(unittest.TestCase):
             )
             result = load_simulation_result(summary_path)
         self.assertEqual(result.geometry_structure, "single_tubs")
+        self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)
         self.assertEqual(result.source_type, "beam")
         self.assertTrue(result.detector.enabled)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
@@ -145,3 +154,14 @@ class SimulationResultTest(unittest.TestCase):
         )
         self.assertAlmostEqual(role_stats["detector"]["edep_total_mev"], 0.3)
         self.assertEqual(role_stats["detector"]["track_entries"], 1)
+
+    def test_missing_schema_version_uses_current_default(self) -> None:
+        result = simulation_result_from_dict(
+            {
+                "run_ok": True,
+                "events_requested": 1,
+                "events_completed": 1,
+                "scoring": {},
+            }
+        )
+        self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)

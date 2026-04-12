@@ -38,6 +38,7 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+constexpr const char* kResultSchemaVersion = "2026-04-12.v1";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -584,6 +585,7 @@ int main(int argc, char** argv) {
 
   std::ofstream summary(artifact_dir / "run_summary.json", std::ios::trunc);
   summary << "{\n"
+          << "  \"schema_version\": \"" << kResultSchemaVersion << "\",\n"
           << "  \"run_ok\": true,\n"
           << "  \"events_requested\": " << events << ",\n"
           << "  \"events_completed\": " << events << ",\n"

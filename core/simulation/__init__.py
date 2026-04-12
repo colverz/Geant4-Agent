@@ -1,5 +1,6 @@
 from core.simulation.bridge import build_simulation_spec
 from core.simulation.results import (
+    SIMULATION_RESULT_SCHEMA_VERSION,
     SimulationDetectorResult,
     SimulationResult,
     SimulationScoringResult,
@@ -23,6 +24,7 @@ __all__ = [
     "GeometryRuntimeSpec",
     "PhysicsRuntimeSpec",
     "RunControlSpec",
+    "SIMULATION_RESULT_SCHEMA_VERSION",
     "SimulationDetectorResult",
     "SimulationResult",
     "SimulationScoringResult",
