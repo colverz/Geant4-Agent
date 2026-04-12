@@ -20,6 +20,9 @@ def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
 @dataclass(frozen=True)
 class SimulationScoringResult:
     target_edep_enabled: bool = False
+    detector_crossings_enabled: bool = False
+    detector_crossing_count: int = 0
+    detector_crossing_events: int = 0
     target_edep_total_mev: float = 0.0
     target_edep_mean_mev_per_event: float = 0.0
     target_hit_events: int = 0
@@ -76,6 +79,8 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
                 "edep_total_mev": float(raw_stats.get("edep_total_mev", 0.0) or 0.0),
                 "edep_mean_mev_per_event": float(raw_stats.get("edep_mean_mev_per_event", 0.0) or 0.0),
                 "hit_events": int(raw_stats.get("hit_events", 0) or 0),
+                "crossing_events": int(raw_stats.get("crossing_events", 0) or 0),
+                "crossing_count": int(raw_stats.get("crossing_count", 0) or 0),
                 "step_count": int(raw_stats.get("step_count", 0) or 0),
                 "track_entries": int(raw_stats.get("track_entries", 0) or 0),
             }
@@ -87,6 +92,8 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
                 "edep_total_mev": float(raw_stats.get("edep_total_mev", 0.0) or 0.0),
                 "edep_mean_mev_per_event": float(raw_stats.get("edep_mean_mev_per_event", 0.0) or 0.0),
                 "hit_events": int(raw_stats.get("hit_events", 0) or 0),
+                "crossing_events": int(raw_stats.get("crossing_events", 0) or 0),
+                "crossing_count": int(raw_stats.get("crossing_count", 0) or 0),
                 "step_count": int(raw_stats.get("step_count", 0) or 0),
                 "track_entries": int(raw_stats.get("track_entries", 0) or 0),
             }
@@ -95,11 +102,16 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
             "edep_total_mev": float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),
             "edep_mean_mev_per_event": float(scoring_data.get("target_edep_mean_mev_per_event", 0.0) or 0.0),
             "hit_events": int(scoring_data.get("target_hit_events", 0) or 0),
+            "crossing_events": 0,
+            "crossing_count": 0,
             "step_count": int(scoring_data.get("target_step_count", 0) or 0),
             "track_entries": int(scoring_data.get("target_track_entries", 0) or 0),
         }
     scoring = SimulationScoringResult(
         target_edep_enabled=bool(scoring_data.get("target_edep_enabled", False)),
+        detector_crossings_enabled=bool(scoring_data.get("detector_crossings_enabled", False)),
+        detector_crossing_count=int(scoring_data.get("detector_crossing_count", 0) or 0),
+        detector_crossing_events=int(scoring_data.get("detector_crossing_events", 0) or 0),
         target_edep_total_mev=float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),
         target_edep_mean_mev_per_event=float(scoring_data.get("target_edep_mean_mev_per_event", 0.0) or 0.0),
         target_hit_events=int(scoring_data.get("target_hit_events", 0) or 0),
@@ -167,6 +179,8 @@ def derive_role_stats(
             "edep_total_mev": 0.0,
             "edep_mean_mev_per_event": 0.0,
             "hit_events": 0,
+            "crossing_events": 0,
+            "crossing_count": 0,
             "step_count": 0,
             "track_entries": 0,
         }
@@ -179,6 +193,8 @@ def derive_role_stats(
             aggregate["edep_total_mev"] += float(stats.get("edep_total_mev", 0.0) or 0.0)
             aggregate["edep_mean_mev_per_event"] += float(stats.get("edep_mean_mev_per_event", 0.0) or 0.0)
             aggregate["hit_events"] += int(stats.get("hit_events", 0) or 0)
+            aggregate["crossing_events"] += int(stats.get("crossing_events", 0) or 0)
+            aggregate["crossing_count"] += int(stats.get("crossing_count", 0) or 0)
             aggregate["step_count"] += int(stats.get("step_count", 0) or 0)
             aggregate["track_entries"] += int(stats.get("track_entries", 0) or 0)
         if matched:

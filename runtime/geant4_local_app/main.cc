@@ -72,6 +72,7 @@ struct RuntimeConfig {
   std::string physics_list = "FTFP_BERT";
   int events = 1;
   bool score_target_edep = true;
+  bool score_detector_crossings = true;
   std::vector<std::string> scoring_volume_names = {"Target"};
   std::map<std::string, std::vector<std::string>> scoring_volume_roles = {{"target", {"Target"}}};
   std::string payload_sha256;
@@ -121,6 +122,9 @@ struct VolumeScoringMetrics {
   double edep_mev = 0.0;
   double current_event_edep_mev = 0.0;
   int hit_events = 0;
+  bool current_event_crossed = false;
+  int crossing_events = 0;
+  int crossing_count = 0;
   int step_count = 0;
   int track_entries = 0;
 };
@@ -151,6 +155,8 @@ std::map<std::string, VolumeScoringMetrics> derive_role_stats(
       aggregate.edep_mev += it->second.edep_mev;
       aggregate.current_event_edep_mev += it->second.current_event_edep_mev;
       aggregate.hit_events += it->second.hit_events;
+      aggregate.crossing_events += it->second.crossing_events;
+      aggregate.crossing_count += it->second.crossing_count;
       aggregate.step_count += it->second.step_count;
       aggregate.track_entries += it->second.track_entries;
     }
@@ -209,7 +215,8 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
 
   if (payload.contains("scoring") && payload.at("scoring").is_object()) {
     const auto& scoring = payload.at("scoring");
-    cfg.score_target_edep = json_value<bool>(scoring, "target_edep", cfg.score_target_edep);
+  cfg.score_target_edep = json_value<bool>(scoring, "target_edep", cfg.score_target_edep);
+  cfg.score_detector_crossings = json_value<bool>(scoring, "detector_crossings", cfg.score_detector_crossings);
     cfg.scoring_volume_names = json_string_list(scoring, "volume_names", cfg.scoring_volume_names);
     if (scoring.contains("volume_roles") && scoring.at("volume_roles").is_object()) {
       cfg.scoring_volume_roles.clear();
@@ -392,7 +399,7 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
       : config_(std::move(config)), scoring_state_(scoring_state) {}
 
   void UserSteppingAction(const G4Step* step) override {
-    if (!step || !scoring_state_ || !config_.score_target_edep) {
+    if (!step || !scoring_state_) {
       return;
     }
     const auto* pre_point = step->GetPreStepPoint();
@@ -416,9 +423,13 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
     metrics.step_count += 1;
     if (pre_point->GetStepStatus() == fGeomBoundary) {
       metrics.track_entries += 1;
+      if (config_.score_detector_crossings) {
+        metrics.crossing_count += 1;
+        metrics.current_event_crossed = true;
+      }
     }
     const auto edep = step->GetTotalEnergyDeposit();
-    if (edep > 0.0) {
+    if (config_.score_target_edep && edep > 0.0) {
       const auto edep_mev = edep / MeV;
       metrics.edep_mev += edep_mev;
       metrics.current_event_edep_mev += edep_mev;
@@ -441,6 +452,7 @@ class RuntimeEventAction : public G4UserEventAction {
     scoring_state_->current_event_target_edep_mev = 0.0;
     for (auto& [_, metrics] : scoring_state_->volume_stats) {
       metrics.current_event_edep_mev = 0.0;
+      metrics.current_event_crossed = false;
     }
   }
 
@@ -451,6 +463,9 @@ class RuntimeEventAction : public G4UserEventAction {
     for (auto& [volume_name, metrics] : scoring_state_->volume_stats) {
       if (metrics.current_event_edep_mev > 0.0) {
         metrics.hit_events += 1;
+      }
+      if (metrics.current_event_crossed) {
+        metrics.crossing_events += 1;
       }
       if (volume_name == scoring_state_->target_volume_name) {
         scoring_state_->target_edep_mev = metrics.edep_mev;
@@ -599,6 +614,11 @@ int main(int argc, char** argv) {
           << "  },\n"
           << "  \"scoring\": {\n"
           << "    \"target_edep_enabled\": " << (cfg.score_target_edep ? "true" : "false") << ",\n"
+          << "    \"detector_crossings_enabled\": " << (cfg.score_detector_crossings ? "true" : "false") << ",\n"
+          << "    \"detector_crossing_count\": "
+          << (role_stats.count("detector") ? role_stats.at("detector").crossing_count : 0) << ",\n"
+          << "    \"detector_crossing_events\": "
+          << (role_stats.count("detector") ? role_stats.at("detector").crossing_events : 0) << ",\n"
           << "    \"target_edep_total_mev\": " << scoring_state.target_edep_mev << ",\n"
           << "    \"target_edep_mean_mev_per_event\": "
           << (events > 0 ? (scoring_state.target_edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
@@ -617,6 +637,8 @@ int main(int argc, char** argv) {
             << "        \"edep_mean_mev_per_event\": "
             << (events > 0 ? (metrics.edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
             << "        \"hit_events\": " << metrics.hit_events << ",\n"
+            << "        \"crossing_events\": " << metrics.crossing_events << ",\n"
+            << "        \"crossing_count\": " << metrics.crossing_count << ",\n"
             << "        \"step_count\": " << metrics.step_count << ",\n"
             << "        \"track_entries\": " << metrics.track_entries << "\n"
             << "      }";
@@ -635,6 +657,8 @@ int main(int argc, char** argv) {
             << "        \"edep_mean_mev_per_event\": "
             << (events > 0 ? (metrics.edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
             << "        \"hit_events\": " << metrics.hit_events << ",\n"
+            << "        \"crossing_events\": " << metrics.crossing_events << ",\n"
+            << "        \"crossing_count\": " << metrics.crossing_count << ",\n"
             << "        \"step_count\": " << metrics.step_count << ",\n"
             << "        \"track_entries\": " << metrics.track_entries << "\n"
             << "      }";

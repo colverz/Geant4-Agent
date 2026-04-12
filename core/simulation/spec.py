@@ -48,6 +48,7 @@ class RunControlSpec:
 @dataclass(frozen=True)
 class ScoringSpec:
     target_edep: bool = True
+    detector_crossings: bool = True
     volume_names: tuple[str, ...] = field(default_factory=lambda: ("Target",))
     volume_roles: dict[str, tuple[str, ...]] = field(default_factory=lambda: {"target": ("Target",)})
 

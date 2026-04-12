@@ -106,6 +106,7 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
         },
         "scoring": {
             "target_edep": spec.scoring.target_edep,
+            "detector_crossings": spec.scoring.detector_crossings,
             "volume_names": list(spec.scoring.volume_names),
             "volume_roles": {role: list(names) for role, names in spec.scoring.volume_roles.items()},
         },

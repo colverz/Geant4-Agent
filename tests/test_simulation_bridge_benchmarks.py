@@ -77,6 +77,7 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertTrue(summary["run_ok"])
         self.assertEqual(summary["geometry_structure"], "single_box")
         self.assertIn("Target", summary["scoring"]["volume_stats"])
+        self.assertIn("detector_crossings_enabled", summary["scoring"])
 
     def test_target_and_detector_batch_returns_both_volume_stats(self) -> None:
         summary = self._run_wrapper(
@@ -112,6 +113,8 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertEqual(summary["detector"]["volume_name"], "Detector")
         self.assertIn("Target", summary["scoring"]["volume_stats"])
         self.assertIn("Detector", summary["scoring"]["volume_stats"])
+        self.assertIn("detector", summary["scoring"]["role_stats"])
+        self.assertIn("crossing_count", summary["scoring"]["role_stats"]["detector"])
 
 
 if __name__ == "__main__":

@@ -40,6 +40,9 @@ class SimulationResultTest(unittest.TestCase):
                 },
                 "scoring": {
                     "target_edep_enabled": True,
+                    "detector_crossings_enabled": True,
+                    "detector_crossing_count": 2,
+                    "detector_crossing_events": 2,
                     "target_edep_total_mev": 2.7,
                     "target_edep_mean_mev_per_event": 0.675,
                     "target_hit_events": 3,
@@ -50,6 +53,8 @@ class SimulationResultTest(unittest.TestCase):
                             "edep_total_mev": 2.7,
                             "edep_mean_mev_per_event": 0.675,
                             "hit_events": 3,
+                            "crossing_events": 2,
+                            "crossing_count": 2,
                             "step_count": 18,
                             "track_entries": 4
                         }
@@ -65,6 +70,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.detector.volume_name, "Detector")
+        self.assertEqual(result.scoring.detector_crossing_count, 2)
+        self.assertEqual(result.scoring.detector_crossing_events, 2)
         self.assertEqual(result.scoring.target_hit_events, 3)
         self.assertEqual(result.scoring.target_step_count, 18)
         self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
@@ -99,6 +106,9 @@ class SimulationResultTest(unittest.TestCase):
   },
   "scoring": {
     "target_edep_enabled": true,
+    "detector_crossings_enabled": true,
+    "detector_crossing_count": 1,
+    "detector_crossing_events": 1,
     "target_edep_total_mev": 1.25,
     "target_edep_mean_mev_per_event": 0.625,
     "target_hit_events": 2,
@@ -118,6 +128,8 @@ class SimulationResultTest(unittest.TestCase):
         "edep_total_mev": 1.25,
         "edep_mean_mev_per_event": 0.625,
         "hit_events": 2,
+        "crossing_events": 0,
+        "crossing_count": 0,
         "step_count": 9,
         "track_entries": 2
       }
@@ -132,6 +144,7 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.payload_sha256, "def456")
         self.assertEqual(result.source_type, "beam")
         self.assertTrue(result.detector.enabled)
+        self.assertEqual(result.scoring.detector_crossing_count, 1)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
         self.assertEqual(result.scoring.role_stats["target"]["step_count"], 9)
@@ -165,22 +178,27 @@ class SimulationResultTest(unittest.TestCase):
                 "Target": {
                     "edep_total_mev": 1.0,
                     "edep_mean_mev_per_event": 0.5,
-                    "hit_events": 2,
-                    "step_count": 8,
-                    "track_entries": 2,
-                },
-                "Detector": {
-                    "edep_total_mev": 0.3,
-                    "edep_mean_mev_per_event": 0.15,
-                    "hit_events": 1,
-                    "step_count": 4,
-                    "track_entries": 1,
-                },
+                "hit_events": 2,
+                "crossing_events": 2,
+                "crossing_count": 2,
+                "step_count": 8,
+                "track_entries": 2,
             },
-            {"target": ["Target"], "detector": ["Detector"]},
-        )
+            "Detector": {
+                "edep_total_mev": 0.3,
+                "edep_mean_mev_per_event": 0.15,
+                "hit_events": 1,
+                "crossing_events": 1,
+                "crossing_count": 1,
+                "step_count": 4,
+                "track_entries": 1,
+            },
+        },
+        {"target": ["Target"], "detector": ["Detector"]},
+    )
         self.assertAlmostEqual(role_stats["detector"]["edep_total_mev"], 0.3)
         self.assertEqual(role_stats["detector"]["track_entries"], 1)
+        self.assertEqual(role_stats["detector"]["crossing_count"], 1)
 
     def test_missing_schema_version_uses_current_default(self) -> None:
         result = simulation_result_from_dict(

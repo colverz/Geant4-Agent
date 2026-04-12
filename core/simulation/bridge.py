@@ -122,6 +122,7 @@ def _scoring_spec(
 ) -> ScoringSpec:
     scoring = config.get("scoring", {}) if isinstance(config.get("scoring"), dict) else {}
     scoring_enabled = bool(scoring.get("target_edep", True))
+    detector_crossings = bool(scoring.get("detector_crossings", True))
     volume_names = scoring.get("volume_names")
     if isinstance(volume_names, (list, tuple)):
         cleaned = tuple(str(name).strip() for name in volume_names if str(name).strip())
@@ -157,6 +158,7 @@ def _scoring_spec(
 
     return ScoringSpec(
         target_edep=scoring_enabled,
+        detector_crossings=detector_crossings,
         volume_names=tuple(all_names) or (root_volume_name,),
         volume_roles=role_map,
     )
