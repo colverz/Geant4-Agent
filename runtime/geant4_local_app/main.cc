@@ -21,23 +21,25 @@
 #include "G4UserEventAction.hh"
 #include "G4UserSteppingAction.hh"
 #include "G4UserTrackingAction.hh"
+#include "G4Version.hh"
 #include "G4VisAttributes.hh"
 #include "G4VisExecutive.hh"
 #include "G4VSolid.hh"
 #include "G4VUserDetectorConstruction.hh"
 #include "G4VUserPrimaryGeneratorAction.hh"
 #include "globals.hh"
+#include "third_party/json.hpp"
 
 #include <filesystem>
 #include <fstream>
 #include <map>
-#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace fs = std::filesystem;
+using json = nlohmann::json;
 constexpr const char* kResultSchemaVersion = "2026-04-12.v1";
 
 struct RuntimeConfig {
@@ -71,124 +73,45 @@ struct RuntimeConfig {
   int events = 1;
   bool score_target_edep = true;
   std::vector<std::string> scoring_volume_names = {"Target"};
+  std::map<std::string, std::vector<std::string>> scoring_volume_roles = {{"target", {"Target"}}};
+  std::string payload_sha256;
   std::string artifact_dir;
   std::string mode = "batch";
 };
 
-std::string read_text(const fs::path& path) {
+json read_json(const fs::path& path) {
   std::ifstream input(path, std::ios::binary);
   if (!input) {
     throw std::runtime_error("Failed to open config file: " + path.string());
   }
-  std::ostringstream buffer;
-  buffer << input.rdbuf();
-  return buffer.str();
+  json payload;
+  input >> payload;
+  return payload;
 }
 
-std::string extract_top_level_string(const std::string& text, const std::string& key, const std::string& fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + key + "\"\\s*:\\s*\"([^\"]+)\"",
-      std::regex::icase);
-  std::smatch match;
-  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
-    return match[1].str();
-  }
-  return fallback;
-}
-
-double extract_top_level_number(const std::string& text, const std::string& key, double fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + key + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)",
-      std::regex::icase);
-  std::smatch match;
-  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
-    return std::stod(match[1].str());
-  }
-  return fallback;
-}
-
-bool extract_top_level_bool(const std::string& text, const std::string& key, bool fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + key + "\"\\s*:\\s*(true|false)",
-      std::regex::icase);
-  std::smatch match;
-  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
-    const auto value = match[1].str();
-    return value == "true" || value == "TRUE";
-  }
-  return fallback;
-}
-
-double extract_top_level_object_number(
-    const std::string& text,
-    const std::string& object_key,
-    const std::string& key,
-    double fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + object_key +
-          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)",
-      std::regex::icase);
-  std::smatch match;
-  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
-    return std::stod(match[1].str());
-  }
-  return fallback;
-}
-
-bool extract_nested_bool(
-    const std::string& text,
-    const std::string& object_key,
-    const std::string& key,
-    bool fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + object_key +
-          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*(true|false)",
-      std::regex::icase);
-  std::smatch match;
-  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
-    const auto value = match[1].str();
-    return value == "true" || value == "TRUE";
-  }
-  return fallback;
-}
-
-std::string extract_nested_string(
-    const std::string& text,
-    const std::string& object_key,
-    const std::string& key,
-    const std::string& fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + object_key +
-          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*\"([^\"]+)\"",
-      std::regex::icase);
-  std::smatch match;
-  if (std::regex_search(text, match, pattern) && match.size() >= 2) {
-    return match[1].str();
-  }
-  return fallback;
-}
-
-std::vector<std::string> extract_nested_string_list(
-    const std::string& text,
-    const std::string& object_key,
-    const std::string& key,
-    const std::vector<std::string>& fallback) {
-  const std::regex pattern(
-      "(?:^|[\\r\\n])\\s*\"" + object_key +
-          "\"\\s*:\\s*\\{[^\\}]*?\"" + key + "\"\\s*:\\s*\\[([^\\]]*)\\]",
-      std::regex::icase);
-  std::smatch match;
-  if (!(std::regex_search(text, match, pattern) && match.size() >= 2)) {
+template <typename T>
+T json_value(const json& node, const char* key, const T& fallback) {
+  if (!node.is_object() || !node.contains(key) || node.at(key).is_null()) {
     return fallback;
   }
-  const auto body = match[1].str();
-  const std::regex item_pattern("\"([^\"]+)\"");
-  std::sregex_iterator begin(body.begin(), body.end(), item_pattern);
-  std::sregex_iterator end;
+  try {
+    return node.at(key).get<T>();
+  } catch (const json::exception&) {
+    return fallback;
+  }
+}
+
+std::vector<std::string> json_string_list(const json& node, const char* key, const std::vector<std::string>& fallback) {
+  if (!node.is_object() || !node.contains(key) || !node.at(key).is_array()) {
+    return fallback;
+  }
   std::vector<std::string> values;
-  for (auto it = begin; it != end; ++it) {
-    if (it->size() >= 2 && !(*it)[1].str().empty()) {
-      values.push_back((*it)[1].str());
+  for (const auto& item : node.at(key)) {
+    if (item.is_string()) {
+      const auto value = item.get<std::string>();
+      if (!value.empty()) {
+        values.push_back(value);
+      }
     }
   }
   return values.empty() ? fallback : values;
@@ -212,42 +135,106 @@ struct RuntimeScoringState {
   std::map<std::string, VolumeScoringMetrics> volume_stats;
 };
 
+std::map<std::string, VolumeScoringMetrics> derive_role_stats(
+    const std::map<std::string, VolumeScoringMetrics>& volume_stats,
+    const std::map<std::string, std::vector<std::string>>& volume_roles) {
+  std::map<std::string, VolumeScoringMetrics> role_stats;
+  for (const auto& [role_name, volume_names] : volume_roles) {
+    VolumeScoringMetrics aggregate;
+    bool matched = false;
+    for (const auto& volume_name : volume_names) {
+      const auto it = volume_stats.find(volume_name);
+      if (it == volume_stats.end()) {
+        continue;
+      }
+      matched = true;
+      aggregate.edep_mev += it->second.edep_mev;
+      aggregate.current_event_edep_mev += it->second.current_event_edep_mev;
+      aggregate.hit_events += it->second.hit_events;
+      aggregate.step_count += it->second.step_count;
+      aggregate.track_entries += it->second.track_entries;
+    }
+    if (matched) {
+      role_stats.emplace(role_name, aggregate);
+    }
+  }
+  return role_stats;
+}
+
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
   RuntimeConfig cfg;
   cfg.events = events;
   cfg.artifact_dir = artifact_dir.string();
 
-  const auto text = read_text(config_path);
-  cfg.geometry_structure = extract_top_level_string(text, "structure", cfg.geometry_structure);
-  cfg.material = extract_top_level_string(text, "material", cfg.material);
-  cfg.root_volume_name = extract_top_level_string(text, "root_volume_name", cfg.root_volume_name);
-  cfg.particle = extract_top_level_string(text, "particle", cfg.particle);
-  cfg.source_type = extract_top_level_string(text, "source_type", cfg.source_type);
-  cfg.physics_list = extract_top_level_string(text, "physics_list", cfg.physics_list);
-  cfg.energy_mev = extract_top_level_number(text, "energy", cfg.energy_mev);
-  cfg.source_x_mm = extract_top_level_object_number(text, "position", "x", cfg.source_x_mm);
-  cfg.source_y_mm = extract_top_level_object_number(text, "position", "y", cfg.source_y_mm);
-  cfg.source_z_mm = extract_top_level_object_number(text, "position", "z", cfg.source_z_mm);
-  cfg.direction_x = extract_top_level_object_number(text, "direction", "x", cfg.direction_x);
-  cfg.direction_y = extract_top_level_object_number(text, "direction", "y", cfg.direction_y);
-  cfg.direction_z = extract_top_level_object_number(text, "direction", "z", cfg.direction_z);
-  cfg.size_x_mm = extract_top_level_number(text, "size_x", cfg.size_x_mm);
-  cfg.size_y_mm = extract_top_level_number(text, "size_y", cfg.size_y_mm);
-  cfg.size_z_mm = extract_top_level_number(text, "size_z", cfg.size_z_mm);
-  cfg.radius_mm = extract_top_level_number(text, "radius", cfg.radius_mm);
-  cfg.half_length_mm = extract_top_level_number(text, "half_length", cfg.half_length_mm);
-  cfg.detector_enabled = extract_top_level_bool(text, "detector_enabled", cfg.detector_enabled);
-  cfg.detector_name = extract_top_level_string(text, "detector_name", cfg.detector_name);
-  cfg.detector_material = extract_top_level_string(text, "detector_material", cfg.detector_material);
-  cfg.detector_x_mm = extract_top_level_object_number(text, "detector_position", "x", cfg.detector_x_mm);
-  cfg.detector_y_mm = extract_top_level_object_number(text, "detector_position", "y", cfg.detector_y_mm);
-  cfg.detector_z_mm = extract_top_level_object_number(text, "detector_position", "z", cfg.detector_z_mm);
-  cfg.detector_size_x_mm = extract_top_level_number(text, "detector_size_x", cfg.detector_size_x_mm);
-  cfg.detector_size_y_mm = extract_top_level_number(text, "detector_size_y", cfg.detector_size_y_mm);
-  cfg.detector_size_z_mm = extract_top_level_number(text, "detector_size_z", cfg.detector_size_z_mm);
-  cfg.score_target_edep = extract_nested_bool(text, "scoring", "target_edep", cfg.score_target_edep);
-  cfg.scoring_volume_names =
-      extract_nested_string_list(text, "scoring", "volume_names", cfg.scoring_volume_names);
+  const auto payload = read_json(config_path);
+  cfg.geometry_structure = json_value<std::string>(payload, "structure", cfg.geometry_structure);
+  cfg.material = json_value<std::string>(payload, "material", cfg.material);
+  cfg.root_volume_name = json_value<std::string>(payload, "root_volume_name", cfg.root_volume_name);
+  cfg.particle = json_value<std::string>(payload, "particle", cfg.particle);
+  cfg.source_type = json_value<std::string>(payload, "source_type", cfg.source_type);
+  cfg.physics_list = json_value<std::string>(payload, "physics_list", cfg.physics_list);
+  cfg.energy_mev = json_value<double>(payload, "energy", cfg.energy_mev);
+
+  if (payload.contains("position") && payload.at("position").is_object()) {
+    const auto& position = payload.at("position");
+    cfg.source_x_mm = json_value<double>(position, "x", cfg.source_x_mm);
+    cfg.source_y_mm = json_value<double>(position, "y", cfg.source_y_mm);
+    cfg.source_z_mm = json_value<double>(position, "z", cfg.source_z_mm);
+  }
+  if (payload.contains("direction") && payload.at("direction").is_object()) {
+    const auto& direction = payload.at("direction");
+    cfg.direction_x = json_value<double>(direction, "x", cfg.direction_x);
+    cfg.direction_y = json_value<double>(direction, "y", cfg.direction_y);
+    cfg.direction_z = json_value<double>(direction, "z", cfg.direction_z);
+  }
+
+  cfg.size_x_mm = json_value<double>(payload, "size_x", cfg.size_x_mm);
+  cfg.size_y_mm = json_value<double>(payload, "size_y", cfg.size_y_mm);
+  cfg.size_z_mm = json_value<double>(payload, "size_z", cfg.size_z_mm);
+  cfg.radius_mm = json_value<double>(payload, "radius", cfg.radius_mm);
+  cfg.half_length_mm = json_value<double>(payload, "half_length", cfg.half_length_mm);
+
+  cfg.detector_enabled = json_value<bool>(payload, "detector_enabled", cfg.detector_enabled);
+  cfg.detector_name = json_value<std::string>(payload, "detector_name", cfg.detector_name);
+  cfg.detector_material = json_value<std::string>(payload, "detector_material", cfg.detector_material);
+  if (payload.contains("detector_position") && payload.at("detector_position").is_object()) {
+    const auto& detector_position = payload.at("detector_position");
+    cfg.detector_x_mm = json_value<double>(detector_position, "x", cfg.detector_x_mm);
+    cfg.detector_y_mm = json_value<double>(detector_position, "y", cfg.detector_y_mm);
+    cfg.detector_z_mm = json_value<double>(detector_position, "z", cfg.detector_z_mm);
+  }
+  cfg.detector_size_x_mm = json_value<double>(payload, "detector_size_x", cfg.detector_size_x_mm);
+  cfg.detector_size_y_mm = json_value<double>(payload, "detector_size_y", cfg.detector_size_y_mm);
+  cfg.detector_size_z_mm = json_value<double>(payload, "detector_size_z", cfg.detector_size_z_mm);
+
+  if (payload.contains("scoring") && payload.at("scoring").is_object()) {
+    const auto& scoring = payload.at("scoring");
+    cfg.score_target_edep = json_value<bool>(scoring, "target_edep", cfg.score_target_edep);
+    cfg.scoring_volume_names = json_string_list(scoring, "volume_names", cfg.scoring_volume_names);
+    if (scoring.contains("volume_roles") && scoring.at("volume_roles").is_object()) {
+      cfg.scoring_volume_roles.clear();
+      for (auto it = scoring.at("volume_roles").begin(); it != scoring.at("volume_roles").end(); ++it) {
+        std::vector<std::string> names;
+        if (it.value().is_array()) {
+          for (const auto& item : it.value()) {
+            if (item.is_string() && !item.get<std::string>().empty()) {
+              names.push_back(item.get<std::string>());
+            }
+          }
+        } else if (it.value().is_string() && !it.value().get<std::string>().empty()) {
+          names.push_back(it.value().get<std::string>());
+        }
+        if (!names.empty()) {
+          cfg.scoring_volume_roles[it.key()] = names;
+        }
+      }
+      if (cfg.scoring_volume_roles.empty()) {
+        cfg.scoring_volume_roles["target"] = {cfg.root_volume_name};
+      }
+    }
+  }
+
+  cfg.payload_sha256 = json_value<std::string>(payload, "payload_sha256", cfg.payload_sha256);
   return cfg;
 }
 
@@ -584,6 +571,7 @@ int main(int argc, char** argv) {
   }
 
   std::ofstream summary(artifact_dir / "run_summary.json", std::ios::trunc);
+  const auto role_stats = derive_role_stats(scoring_state.volume_stats, cfg.scoring_volume_roles);
   summary << "{\n"
           << "  \"schema_version\": \"" << kResultSchemaVersion << "\",\n"
           << "  \"run_ok\": true,\n"
@@ -593,6 +581,8 @@ int main(int argc, char** argv) {
           << "  \"material\": \"" << cfg.material << "\",\n"
           << "  \"particle\": \"" << cfg.particle << "\",\n"
           << "  \"source_type\": \"" << cfg.source_type << "\",\n"
+          << "  \"payload_sha256\": \"" << cfg.payload_sha256 << "\",\n"
+          << "  \"geant4_version\": \"" << G4Version << "\",\n"
           << "  \"source_position_mm\": [" << cfg.source_x_mm << ", " << cfg.source_y_mm << ", " << cfg.source_z_mm
           << "],\n"
           << "  \"source_direction\": [" << cfg.direction_x << ", " << cfg.direction_y << ", " << cfg.direction_z
@@ -623,6 +613,24 @@ int main(int argc, char** argv) {
     }
     first_volume = false;
     summary << "      \"" << volume_name << "\": {\n"
+            << "        \"edep_total_mev\": " << metrics.edep_mev << ",\n"
+            << "        \"edep_mean_mev_per_event\": "
+            << (events > 0 ? (metrics.edep_mev / static_cast<double>(events)) : 0.0) << ",\n"
+            << "        \"hit_events\": " << metrics.hit_events << ",\n"
+            << "        \"step_count\": " << metrics.step_count << ",\n"
+            << "        \"track_entries\": " << metrics.track_entries << "\n"
+            << "      }";
+  }
+  summary << "\n"
+          << "    },\n"
+          << "    \"role_stats\": {\n";
+  bool first_role = true;
+  for (const auto& [role_name, metrics] : role_stats) {
+    if (!first_role) {
+      summary << ",\n";
+    }
+    first_role = false;
+    summary << "      \"" << role_name << "\": {\n"
             << "        \"edep_total_mev\": " << metrics.edep_mev << ",\n"
             << "        \"edep_mean_mev_per_event\": "
             << (events > 0 ? (metrics.edep_mev / static_cast<double>(events)) : 0.0) << ",\n"

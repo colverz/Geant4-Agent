@@ -50,6 +50,8 @@ class SimulationResult:
     source_type: str | None = None
     source_position_mm: tuple[float, float, float] | None = None
     source_direction: tuple[float, float, float] | None = None
+    payload_sha256: str | None = None
+    geant4_version: str | None = None
     physics_list: str | None = None
     events: int = 0
     mode: str = "batch"
@@ -63,12 +65,25 @@ class SimulationResult:
 def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
     scoring_data = data.get("scoring", {}) if isinstance(data.get("scoring"), dict) else {}
     raw_volume_stats = scoring_data.get("volume_stats", {})
+    raw_role_stats = scoring_data.get("role_stats", {})
     volume_stats: dict[str, dict[str, float | int]] = {}
+    role_stats: dict[str, dict[str, float | int]] = {}
     if isinstance(raw_volume_stats, dict):
         for volume_name, raw_stats in raw_volume_stats.items():
             if not isinstance(volume_name, str) or not isinstance(raw_stats, dict):
                 continue
             volume_stats[volume_name] = {
+                "edep_total_mev": float(raw_stats.get("edep_total_mev", 0.0) or 0.0),
+                "edep_mean_mev_per_event": float(raw_stats.get("edep_mean_mev_per_event", 0.0) or 0.0),
+                "hit_events": int(raw_stats.get("hit_events", 0) or 0),
+                "step_count": int(raw_stats.get("step_count", 0) or 0),
+                "track_entries": int(raw_stats.get("track_entries", 0) or 0),
+            }
+    if isinstance(raw_role_stats, dict):
+        for role_name, raw_stats in raw_role_stats.items():
+            if not isinstance(role_name, str) or not isinstance(raw_stats, dict):
+                continue
+            role_stats[role_name] = {
                 "edep_total_mev": float(raw_stats.get("edep_total_mev", 0.0) or 0.0),
                 "edep_mean_mev_per_event": float(raw_stats.get("edep_mean_mev_per_event", 0.0) or 0.0),
                 "hit_events": int(raw_stats.get("hit_events", 0) or 0),
@@ -91,7 +106,7 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         target_step_count=int(scoring_data.get("target_step_count", 0) or 0),
         target_track_entries=int(scoring_data.get("target_track_entries", 0) or 0),
         volume_stats=volume_stats or None,
-        role_stats=None,
+        role_stats=role_stats or None,
     )
     return SimulationResult(
         schema_version=str(data.get("schema_version") or SIMULATION_RESULT_SCHEMA_VERSION),
@@ -104,6 +119,8 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         source_type=data.get("source_type"),
         source_position_mm=_coerce_triplet(data.get("source_position_mm")),
         source_direction=_coerce_triplet(data.get("source_direction")),
+        payload_sha256=data.get("payload_sha256"),
+        geant4_version=data.get("geant4_version"),
         physics_list=data.get("physics_list"),
         events=int(data.get("events", 0) or 0),
         mode=str(data.get("mode", "batch") or "batch"),

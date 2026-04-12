@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 import os
@@ -64,9 +65,11 @@ def _load_run_summary_payload(
         scoring = runtime_payload.get("scoring", {})
         if isinstance(scoring, dict) and isinstance(scoring.get("volume_roles"), dict):
             role_map = scoring["volume_roles"]
-    role_stats = derive_role_stats(payload.get("scoring", {}).get("volume_stats"), role_map)
-    if role_stats:
-        payload["scoring"]["role_stats"] = role_stats
+    existing_role_stats = payload.get("scoring", {}).get("role_stats")
+    if not existing_role_stats:
+        role_stats = derive_role_stats(payload.get("scoring", {}).get("volume_stats"), role_map)
+        if role_stats:
+            payload["scoring"]["role_stats"] = role_stats
     payload["artifact_dir"] = str(artifact_dir)
     payload["run_summary_path"] = str(summary_path)
     return payload
@@ -300,6 +303,9 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
 
                 runtime_payload = deepcopy(self._runtime_payload or build_runtime_payload(self._config))
                 runtime_payload.pop("raw_config", None)
+                runtime_payload["payload_sha256"] = hashlib.sha256(
+                    json.dumps(runtime_payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
+                ).hexdigest()
                 json.dump(runtime_payload, handle, ensure_ascii=True, indent=2)
                 config_path = handle.name
 

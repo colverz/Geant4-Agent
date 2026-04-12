@@ -84,6 +84,8 @@ The first added runtime role beyond the target is:
 The runtime writes:
 
 - `schema_version`
+- `payload_sha256`
+- `geant4_version`
 - `run_ok`
 - `events_requested`
 - `events_completed`
@@ -94,7 +96,7 @@ The runtime writes:
 - `target_step_count`
 - `target_track_entries`
 - `scoring.volume_stats`
-- app-side derived `scoring.role_stats`
+- runtime-native `scoring.role_stats`
 - optional detector summary
 
 ### `run_summary.json -> SimulationResult`
@@ -109,6 +111,8 @@ This layer turns the runtime artifact back into a stable app-side result object.
 The current result schema version is:
 
 - `2026-04-12.v1`
+
+The local Geant4 runtime now parses payloads with a real JSON parser rather than regex extraction.
 
 That keeps the bridge symmetrical:
 

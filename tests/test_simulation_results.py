@@ -24,6 +24,8 @@ class SimulationResultTest(unittest.TestCase):
                 "material": "G4_Cu",
                 "particle": "gamma",
                 "source_type": "point",
+                "payload_sha256": "abc123",
+                "geant4_version": "geant4-test",
                 "source_position_mm": [0, 0, -20],
                 "source_direction": [0, 0, 1],
                 "physics_list": "FTFP_BERT",
@@ -43,18 +45,30 @@ class SimulationResultTest(unittest.TestCase):
                     "target_hit_events": 3,
                     "target_step_count": 18,
                     "target_track_entries": 4,
+                    "role_stats": {
+                        "target": {
+                            "edep_total_mev": 2.7,
+                            "edep_mean_mev_per_event": 0.675,
+                            "hit_events": 3,
+                            "step_count": 18,
+                            "track_entries": 4
+                        }
+                    }
                 },
             }
         )
         self.assertTrue(result.run_ok)
         self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)
         self.assertEqual(result.geometry_structure, "single_box")
+        self.assertEqual(result.payload_sha256, "abc123")
+        self.assertEqual(result.geant4_version, "geant4-test")
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.detector.volume_name, "Detector")
         self.assertEqual(result.scoring.target_hit_events, 3)
         self.assertEqual(result.scoring.target_step_count, 18)
         self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
+        self.assertEqual(result.scoring.role_stats["target"]["track_entries"], 4)
 
     def test_load_simulation_result_reads_run_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -69,6 +83,8 @@ class SimulationResultTest(unittest.TestCase):
   "material": "G4_W",
   "particle": "proton",
   "source_type": "beam",
+  "payload_sha256": "def456",
+  "geant4_version": "geant4-test",
   "source_position_mm": [0, 0, -250],
   "source_direction": [0, 0, 1],
   "physics_list": "QGSP_BERT",
@@ -96,6 +112,15 @@ class SimulationResultTest(unittest.TestCase):
         "step_count": 9,
         "track_entries": 2
       }
+    },
+    "role_stats": {
+      "target": {
+        "edep_total_mev": 1.25,
+        "edep_mean_mev_per_event": 0.625,
+        "hit_events": 2,
+        "step_count": 9,
+        "track_entries": 2
+      }
     }
   }
 }""",
@@ -104,10 +129,12 @@ class SimulationResultTest(unittest.TestCase):
             result = load_simulation_result(summary_path)
         self.assertEqual(result.geometry_structure, "single_tubs")
         self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)
+        self.assertEqual(result.payload_sha256, "def456")
         self.assertEqual(result.source_type, "beam")
         self.assertTrue(result.detector.enabled)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
+        self.assertEqual(result.scoring.role_stats["target"]["step_count"], 9)
 
     def test_derive_role_stats_aggregates_named_volumes(self) -> None:
         role_stats = derive_role_stats(
