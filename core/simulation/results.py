@@ -21,6 +21,11 @@ def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
 class SimulationScoringResult:
     target_edep_enabled: bool = False
     detector_crossings_enabled: bool = False
+    plane_crossings_enabled: bool = False
+    plane_crossing_name: str | None = None
+    plane_crossing_z_mm: float | None = None
+    plane_crossing_count: int = 0
+    plane_crossing_events: int = 0
     detector_crossing_count: int = 0
     detector_crossing_events: int = 0
     target_edep_total_mev: float = 0.0
@@ -112,6 +117,15 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
     scoring = SimulationScoringResult(
         target_edep_enabled=bool(scoring_data.get("target_edep_enabled", False)),
         detector_crossings_enabled=bool(scoring_data.get("detector_crossings_enabled", False)),
+        plane_crossings_enabled=bool(scoring_data.get("plane_crossings_enabled", False)),
+        plane_crossing_name=scoring_data.get("plane_crossing_name"),
+        plane_crossing_z_mm=(
+            float(scoring_data.get("plane_crossing_z_mm"))
+            if scoring_data.get("plane_crossing_z_mm") is not None
+            else None
+        ),
+        plane_crossing_count=int(scoring_data.get("plane_crossing_count", 0) or 0),
+        plane_crossing_events=int(scoring_data.get("plane_crossing_events", 0) or 0),
         detector_crossing_count=int(scoring_data.get("detector_crossing_count", 0) or 0),
         detector_crossing_events=int(scoring_data.get("detector_crossing_events", 0) or 0),
         target_edep_total_mev=float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),

@@ -77,6 +77,7 @@ The first added scorer is:
 
 - `target_edep`
 - `detector_crossings`
+- `plane_crossings`
 
 The first added runtime role beyond the target is:
 
@@ -98,6 +99,10 @@ The runtime writes:
 - `target_hit_events`
 - `target_step_count`
 - `target_track_entries`
+- `plane_crossing_name`
+- `plane_crossing_z_mm`
+- `plane_crossing_count`
+- `plane_crossing_events`
 - `scoring.volume_stats`
 - runtime-native `scoring.role_stats`
 - optional detector summary
@@ -156,5 +161,5 @@ After this first bridge is stable, the next practical extensions are:
 
 1. richer source models
 2. detector/scoring volume roles beyond the first `target` + `detector`
-3. richer per-volume scoring
+3. richer plane/surface/flux scorers
 4. stable result bundles for comparison and batch runs

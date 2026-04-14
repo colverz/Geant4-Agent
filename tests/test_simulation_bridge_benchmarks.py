@@ -122,6 +122,37 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertIn("detector", summary["scoring"]["role_stats"])
         self.assertIn("crossing_count", summary["scoring"]["role_stats"]["detector"])
 
+    def test_plane_crossing_batch_returns_plane_summary(self) -> None:
+        summary = self._run_wrapper(
+            {
+                "geometry": {
+                    "structure": "single_box",
+                    "root_name": "Target",
+                    "params": {"module_x": 10.0, "module_y": 10.0, "module_z": 10.0},
+                },
+                "materials": {"selected_materials": ["G4_Cu"]},
+                "source": {
+                    "type": "point",
+                    "particle": "gamma",
+                    "energy": 1.0,
+                    "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
+                    "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+                },
+                "physics": {"physics_list": "FTFP_BERT"},
+                "run": {"seed": 3333},
+                "scoring": {
+                    "target_edep": True,
+                    "plane_crossings": True,
+                    "plane": {"name": "MidPlane", "z_mm": 20.0},
+                },
+            }
+        )
+        self.assertEqual(summary["schema_version"], SIMULATION_RESULT_SCHEMA_VERSION)
+        self.assertTrue(summary["scoring"]["plane_crossings_enabled"])
+        self.assertEqual(summary["scoring"]["plane_crossing_name"], "MidPlane")
+        self.assertEqual(summary["run_manifest"]["scoring_plane_name"], "MidPlane")
+        self.assertIn("plane_crossing_count", summary["scoring"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,8 @@ def _build_run_manifest(spec: SimulationSpec) -> dict[str, Any]:
         "geometry_root_volume": spec.geometry.root_volume_name,
         "detector_enabled": spec.detector is not None,
         "detector_volume_name": spec.detector.volume_name if spec.detector is not None else None,
+        "scoring_plane_name": spec.scoring.scoring_plane.name if spec.scoring.scoring_plane is not None else None,
+        "scoring_plane_z_mm": spec.scoring.scoring_plane.z_mm if spec.scoring.scoring_plane is not None else None,
         "scoring_volume_names": list(spec.scoring.volume_names),
         "scoring_roles": {role: list(names) for role, names in spec.scoring.volume_roles.items()},
     }
@@ -120,6 +122,15 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
         "scoring": {
             "target_edep": spec.scoring.target_edep,
             "detector_crossings": spec.scoring.detector_crossings,
+            "plane_crossings": spec.scoring.plane_crossings,
+            "plane": (
+                {
+                    "name": spec.scoring.scoring_plane.name,
+                    "z_mm": spec.scoring.scoring_plane.z_mm,
+                }
+                if spec.scoring.scoring_plane is not None
+                else None
+            ),
             "volume_names": list(spec.scoring.volume_names),
             "volume_roles": {role: list(names) for role, names in spec.scoring.volume_roles.items()},
         },

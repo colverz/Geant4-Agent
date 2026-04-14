@@ -7,6 +7,7 @@ from core.simulation.spec import (
     GeometryRuntimeSpec,
     PhysicsRuntimeSpec,
     RunControlSpec,
+    ScoringPlaneSpec,
     ScoringSpec,
     SimulationSpec,
     SourceRuntimeSpec,
@@ -147,6 +148,14 @@ def _scoring_spec(
     scoring = config.get("scoring", {}) if isinstance(config.get("scoring"), dict) else {}
     scoring_enabled = bool(scoring.get("target_edep", True))
     detector_crossings = bool(scoring.get("detector_crossings", True))
+    plane_crossings = bool(scoring.get("plane_crossings", False))
+    raw_plane = scoring.get("plane") if isinstance(scoring.get("plane"), dict) else {}
+    scoring_plane = None
+    if plane_crossings:
+        scoring_plane = ScoringPlaneSpec(
+            name=str(raw_plane.get("name") or "ScoringPlane"),
+            z_mm=_coerce_float(raw_plane.get("z_mm"), 0.0),
+        )
     volume_names = scoring.get("volume_names")
     if isinstance(volume_names, (list, tuple)):
         cleaned = tuple(str(name).strip() for name in volume_names if str(name).strip())
@@ -183,6 +192,8 @@ def _scoring_spec(
     return ScoringSpec(
         target_edep=scoring_enabled,
         detector_crossings=detector_crossings,
+        plane_crossings=plane_crossings,
+        scoring_plane=scoring_plane,
         volume_names=tuple(all_names) or (root_volume_name,),
         volume_roles=role_map,
     )

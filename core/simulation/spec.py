@@ -47,9 +47,17 @@ class RunControlSpec:
 
 
 @dataclass(frozen=True)
+class ScoringPlaneSpec:
+    name: str = "ScoringPlane"
+    z_mm: float = 0.0
+
+
+@dataclass(frozen=True)
 class ScoringSpec:
     target_edep: bool = True
     detector_crossings: bool = True
+    plane_crossings: bool = False
+    scoring_plane: ScoringPlaneSpec | None = None
     volume_names: tuple[str, ...] = field(default_factory=lambda: ("Target",))
     volume_roles: dict[str, tuple[str, ...]] = field(default_factory=lambda: {"target": ("Target",)})
 

@@ -75,6 +75,9 @@ struct RuntimeConfig {
   int seed = 1337;
   bool score_target_edep = true;
   bool score_detector_crossings = true;
+  bool score_plane_crossings = false;
+  std::string scoring_plane_name = "ScoringPlane";
+  double scoring_plane_z_mm = 0.0;
   std::vector<std::string> scoring_volume_names = {"Target"};
   std::map<std::string, std::vector<std::string>> scoring_volume_roles = {{"target", {"Target"}}};
   std::string payload_sha256;
@@ -138,6 +141,11 @@ struct RuntimeScoringState {
   int target_hit_events = 0;
   int target_step_count = 0;
   int target_track_entries = 0;
+  std::string scoring_plane_name = "ScoringPlane";
+  double scoring_plane_z_mm = 0.0;
+  bool current_event_plane_crossed = false;
+  int plane_crossing_events = 0;
+  int plane_crossing_count = 0;
   std::map<std::string, VolumeScoringMetrics> volume_stats;
 };
 
@@ -250,8 +258,14 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
 
   if (payload.contains("scoring") && payload.at("scoring").is_object()) {
     const auto& scoring = payload.at("scoring");
-  cfg.score_target_edep = json_value<bool>(scoring, "target_edep", cfg.score_target_edep);
-  cfg.score_detector_crossings = json_value<bool>(scoring, "detector_crossings", cfg.score_detector_crossings);
+    cfg.score_target_edep = json_value<bool>(scoring, "target_edep", cfg.score_target_edep);
+    cfg.score_detector_crossings = json_value<bool>(scoring, "detector_crossings", cfg.score_detector_crossings);
+    cfg.score_plane_crossings = json_value<bool>(scoring, "plane_crossings", cfg.score_plane_crossings);
+    if (scoring.contains("plane") && scoring.at("plane").is_object()) {
+      const auto& plane = scoring.at("plane");
+      cfg.scoring_plane_name = json_value<std::string>(plane, "name", cfg.scoring_plane_name);
+      cfg.scoring_plane_z_mm = json_value<double>(plane, "z_mm", cfg.scoring_plane_z_mm);
+    }
     cfg.scoring_volume_names = json_string_list(scoring, "volume_names", cfg.scoring_volume_names);
     if (scoring.contains("volume_roles") && scoring.at("volume_roles").is_object()) {
       cfg.scoring_volume_roles.clear();
@@ -463,6 +477,20 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
         metrics.current_event_crossed = true;
       }
     }
+    if (config_.score_plane_crossings) {
+      const auto* post_point = step->GetPostStepPoint();
+      if (post_point) {
+        const auto pre_z = pre_point->GetPosition().z() / mm;
+        const auto post_z = post_point->GetPosition().z() / mm;
+        const auto plane_z = scoring_state_->scoring_plane_z_mm;
+        const auto crosses_plane =
+            ((pre_z < plane_z && post_z >= plane_z) || (pre_z > plane_z && post_z <= plane_z));
+        if (crosses_plane) {
+          scoring_state_->plane_crossing_count += 1;
+          scoring_state_->current_event_plane_crossed = true;
+        }
+      }
+    }
     const auto edep = step->GetTotalEnergyDeposit();
     if (config_.score_target_edep && edep > 0.0) {
       const auto edep_mev = edep / MeV;
@@ -485,6 +513,7 @@ class RuntimeEventAction : public G4UserEventAction {
       return;
     }
     scoring_state_->current_event_target_edep_mev = 0.0;
+    scoring_state_->current_event_plane_crossed = false;
     for (auto& [_, metrics] : scoring_state_->volume_stats) {
       metrics.current_event_edep_mev = 0.0;
       metrics.current_event_crossed = false;
@@ -509,6 +538,9 @@ class RuntimeEventAction : public G4UserEventAction {
         scoring_state_->target_step_count = metrics.step_count;
         scoring_state_->target_track_entries = metrics.track_entries;
       }
+    }
+    if (scoring_state_->current_event_plane_crossed) {
+      scoring_state_->plane_crossing_events += 1;
     }
   }
 
@@ -579,6 +611,8 @@ int main(int argc, char** argv) {
   run_manager->SetUserInitialization(physics);
   RuntimeScoringState scoring_state;
   scoring_state.target_volume_name = cfg.root_volume_name;
+  scoring_state.scoring_plane_name = cfg.scoring_plane_name;
+  scoring_state.scoring_plane_z_mm = cfg.scoring_plane_z_mm;
   for (const auto& volume_name : cfg.scoring_volume_names) {
     if (!volume_name.empty()) {
       scoring_state.volume_stats.emplace(volume_name, VolumeScoringMetrics{});
@@ -647,6 +681,8 @@ int main(int argc, char** argv) {
           << "    \"geometry_root_volume\": \"" << cfg.root_volume_name << "\",\n"
           << "    \"detector_enabled\": " << (cfg.detector_enabled ? "true" : "false") << ",\n"
           << "    \"detector_volume_name\": " << (cfg.detector_enabled ? ("\"" + cfg.detector_name + "\"") : "null") << ",\n"
+          << "    \"scoring_plane_name\": " << (cfg.score_plane_crossings ? ("\"" + cfg.scoring_plane_name + "\"") : "null") << ",\n"
+          << "    \"scoring_plane_z_mm\": " << (cfg.score_plane_crossings ? std::to_string(cfg.scoring_plane_z_mm) : "null") << ",\n"
           << "    \"scoring_volume_names\": ";
   write_string_array(summary, cfg.scoring_volume_names);
   summary << ",\n"
@@ -664,6 +700,11 @@ int main(int argc, char** argv) {
           << "  \"scoring\": {\n"
           << "    \"target_edep_enabled\": " << (cfg.score_target_edep ? "true" : "false") << ",\n"
           << "    \"detector_crossings_enabled\": " << (cfg.score_detector_crossings ? "true" : "false") << ",\n"
+          << "    \"plane_crossings_enabled\": " << (cfg.score_plane_crossings ? "true" : "false") << ",\n"
+          << "    \"plane_crossing_name\": " << (cfg.score_plane_crossings ? ("\"" + cfg.scoring_plane_name + "\"") : "null") << ",\n"
+          << "    \"plane_crossing_z_mm\": " << (cfg.score_plane_crossings ? std::to_string(cfg.scoring_plane_z_mm) : "null") << ",\n"
+          << "    \"plane_crossing_count\": " << scoring_state.plane_crossing_count << ",\n"
+          << "    \"plane_crossing_events\": " << scoring_state.plane_crossing_events << ",\n"
           << "    \"detector_crossing_count\": "
           << (role_stats.count("detector") ? role_stats.at("detector").crossing_count : 0) << ",\n"
           << "    \"detector_crossing_events\": "

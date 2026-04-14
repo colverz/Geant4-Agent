@@ -23,6 +23,7 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
                 "run": {"seed": 31415},
+                "scoring": {"plane_crossings": True, "plane": {"name": "SourcePlane", "z_mm": -10.0}},
             }
         )
         self.assertEqual(payload["structure"], "single_box")
@@ -31,8 +32,11 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["physics_list"], "FTFP_BERT")
         self.assertEqual(payload["run"]["seed"], 31415)
         self.assertEqual(payload["run_manifest"]["geometry_root_volume"], "Target")
+        self.assertEqual(payload["run_manifest"]["scoring_plane_name"], "SourcePlane")
         self.assertEqual(payload["root_volume_name"], "Target")
         self.assertTrue(payload["scoring"]["detector_crossings"])
+        self.assertTrue(payload["scoring"]["plane_crossings"])
+        self.assertEqual(payload["scoring"]["plane"]["z_mm"], -10.0)
         self.assertEqual(payload["size_x"], 10.0)
         self.assertEqual(payload["size_y"], 20.0)
         self.assertEqual(payload["size_z"], 30.0)
@@ -63,6 +67,7 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                 },
                 "source": {"particle": "proton", "energy": 250.0},
                 "physics_list": {"name": "QGSP_BERT"},
+                "scoring": {"plane_crossings": True, "plane": {"name": "DetectorPlane", "z_mm": 40.0}},
             }
         )
         self.assertEqual(payload["structure"], "single_tubs")
@@ -73,7 +78,9 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["physics_list"], "QGSP_BERT")
         self.assertEqual(payload["run"]["seed"], 2718)
         self.assertEqual(payload["run_manifest"]["detector_volume_name"], "Detector")
+        self.assertEqual(payload["run_manifest"]["scoring_plane_name"], "DetectorPlane")
         self.assertTrue(payload["scoring"]["detector_crossings"])
+        self.assertTrue(payload["scoring"]["plane_crossings"])
         self.assertTrue(payload["detector_enabled"])
         self.assertEqual(payload["detector_name"], "Detector")
         self.assertEqual(payload["detector_size_z"], 1.5)
