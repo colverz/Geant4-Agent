@@ -117,6 +117,13 @@ The runtime writes:
 - runtime-native `scoring.role_stats`
 - optional detector summary
 
+The scorer layer now follows a more symmetric contract:
+
+- top-level summaries for `target`, `detector`, and `plane`
+- `volume_stats` for per-volume aggregation
+- `role_stats` for role-level aggregation
+- count, event-count, and mean-per-event fields carried consistently where applicable
+
 ### `run_summary.json -> SimulationResult`
 
 Implemented in:

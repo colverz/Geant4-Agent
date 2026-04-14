@@ -81,6 +81,7 @@ class SimulationResultTest(unittest.TestCase):
                             "hit_events": 3,
                             "crossing_events": 2,
                             "crossing_count": 2,
+                            "crossing_mean_per_event": 0.5,
                             "step_count": 18,
                             "track_entries": 4
                         }
@@ -114,6 +115,7 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.scoring.target_step_count, 18)
         self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
         self.assertEqual(result.scoring.role_stats["target"]["track_entries"], 4)
+        self.assertAlmostEqual(result.scoring.role_stats["target"]["crossing_mean_per_event"], 0.5)
 
     def test_load_simulation_result_reads_run_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -194,6 +196,7 @@ class SimulationResultTest(unittest.TestCase):
         "hit_events": 2,
         "crossing_events": 0,
         "crossing_count": 0,
+        "crossing_mean_per_event": 0.0,
         "step_count": 9,
         "track_entries": 2
       }
@@ -223,6 +226,7 @@ class SimulationResultTest(unittest.TestCase):
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
         self.assertEqual(result.scoring.role_stats["target"]["step_count"], 9)
+        self.assertAlmostEqual(result.scoring.role_stats["target"]["crossing_mean_per_event"], 0.0)
 
     def test_derive_role_stats_aggregates_named_volumes(self) -> None:
         role_stats = derive_role_stats(
@@ -256,6 +260,7 @@ class SimulationResultTest(unittest.TestCase):
                 "hit_events": 2,
                 "crossing_events": 2,
                 "crossing_count": 2,
+                "crossing_mean_per_event": 1.0,
                 "step_count": 8,
                 "track_entries": 2,
             },
@@ -265,6 +270,7 @@ class SimulationResultTest(unittest.TestCase):
                 "hit_events": 1,
                 "crossing_events": 1,
                 "crossing_count": 1,
+                "crossing_mean_per_event": 0.5,
                 "step_count": 4,
                 "track_entries": 1,
             },
@@ -274,6 +280,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertAlmostEqual(role_stats["detector"]["edep_total_mev"], 0.3)
         self.assertEqual(role_stats["detector"]["track_entries"], 1)
         self.assertEqual(role_stats["detector"]["crossing_count"], 1)
+        self.assertAlmostEqual(role_stats["target"]["crossing_mean_per_event"], 1.0)
+        self.assertAlmostEqual(role_stats["detector"]["crossing_mean_per_event"], 0.5)
 
     def test_missing_schema_version_uses_current_default(self) -> None:
         result = simulation_result_from_dict(

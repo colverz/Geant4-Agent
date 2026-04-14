@@ -834,6 +834,8 @@ int main(int argc, char** argv) {
             << "        \"hit_events\": " << metrics.hit_events << ",\n"
             << "        \"crossing_events\": " << metrics.crossing_events << ",\n"
             << "        \"crossing_count\": " << metrics.crossing_count << ",\n"
+            << "        \"crossing_mean_per_event\": "
+            << (events > 0 ? (static_cast<double>(metrics.crossing_count) / static_cast<double>(events)) : 0.0) << ",\n"
             << "        \"step_count\": " << metrics.step_count << ",\n"
             << "        \"track_entries\": " << metrics.track_entries << "\n"
             << "      }";
@@ -854,6 +856,8 @@ int main(int argc, char** argv) {
             << "        \"hit_events\": " << metrics.hit_events << ",\n"
             << "        \"crossing_events\": " << metrics.crossing_events << ",\n"
             << "        \"crossing_count\": " << metrics.crossing_count << ",\n"
+            << "        \"crossing_mean_per_event\": "
+            << (events > 0 ? (static_cast<double>(metrics.crossing_count) / static_cast<double>(events)) : 0.0) << ",\n"
             << "        \"step_count\": " << metrics.step_count << ",\n"
             << "        \"track_entries\": " << metrics.track_entries << "\n"
             << "      }";

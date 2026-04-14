@@ -121,6 +121,8 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertIn("Detector", summary["scoring"]["volume_stats"])
         self.assertIn("detector", summary["scoring"]["role_stats"])
         self.assertIn("crossing_count", summary["scoring"]["role_stats"]["detector"])
+        self.assertIn("crossing_mean_per_event", summary["scoring"]["volume_stats"]["Detector"])
+        self.assertIn("crossing_mean_per_event", summary["scoring"]["role_stats"]["detector"])
         self.assertIn("detector_crossing_mean_per_event", summary["scoring"])
         self.assertIn("detector_crossing_particle_counts", summary["scoring"])
         self.assertIn("detector_crossing_particle_events", summary["scoring"])
@@ -169,6 +171,7 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertIn("gamma", summary["scoring"]["plane_crossing_particle_counts"])
         self.assertGreater(summary["scoring"]["plane_crossing_particle_counts"]["gamma"], 0)
         self.assertGreater(summary["scoring"]["plane_crossing_particle_events"]["gamma"], 0)
+        self.assertIn("crossing_mean_per_event", summary["scoring"]["volume_stats"]["Target"])
         self.assertEqual(
             summary["scoring"]["plane_crossing_count"],
             summary["scoring"]["plane_crossing_forward_count"] + summary["scoring"]["plane_crossing_reverse_count"],
