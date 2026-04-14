@@ -32,6 +32,8 @@ class SourceRuntimeSpec:
     energy_mev: float
     position_mm: tuple[float, float, float]
     direction_vec: tuple[float, float, float]
+    spot_radius_mm: float = 0.0
+    divergence_half_angle_deg: float = 0.0
 
 
 @dataclass(frozen=True)

@@ -181,6 +181,36 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
             sum(summary["scoring"]["plane_crossing_particle_counts"].values()),
         )
 
+    def test_beam_model_batch_returns_source_runtime_summary(self) -> None:
+        summary = self._run_wrapper(
+            {
+                "geometry": {
+                    "structure": "single_tubs",
+                    "root_name": "Target",
+                    "params": {"child_rmax": 5.0, "child_hz": 40.0},
+                },
+                "materials": {"selected_materials": ["G4_W"]},
+                "source": {
+                    "type": "beam",
+                    "particle": "proton",
+                    "energy": 150.0,
+                    "position": {"type": "vector", "value": [0.0, 0.0, -200.0]},
+                    "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+                    "spot_radius_mm": 2.5,
+                    "divergence_half_angle_deg": 1.25,
+                },
+                "physics": {"physics_list": "QGSP_BERT"},
+                "run": {"seed": 7777},
+                "scoring": {"target_edep": True},
+            }
+        )
+        self.assertEqual(summary["schema_version"], SIMULATION_RESULT_SCHEMA_VERSION)
+        self.assertEqual(summary["source_type"], "beam")
+        self.assertEqual(summary["particle"], "proton")
+        self.assertEqual(summary["source_spot_radius_mm"], 2.5)
+        self.assertEqual(summary["source_divergence_half_angle_deg"], 1.25)
+        self.assertEqual(summary["run_seed"], 7777)
+
 
 if __name__ == "__main__":
     unittest.main()

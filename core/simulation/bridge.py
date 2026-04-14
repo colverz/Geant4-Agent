@@ -45,6 +45,10 @@ def _coerce_vector3(value: Any, fallback: tuple[float, float, float]) -> tuple[f
     return fallback
 
 
+def _nonnegative_float(value: Any, fallback: float = 0.0) -> float:
+    return max(0.0, _coerce_float(value, fallback))
+
+
 def _first_material(config: dict[str, Any]) -> str:
     materials = config.get("materials", {}) if isinstance(config.get("materials"), dict) else {}
     vmap = materials.get("volume_material_map")
@@ -231,6 +235,14 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         energy_mev=_coerce_float(source.get("energy"), 1.0),
         position_mm=_coerce_vector3(source.get("position"), (0.0, 0.0, -100.0)),
         direction_vec=_coerce_vector3(source.get("direction"), (0.0, 0.0, 1.0)),
+        spot_radius_mm=_nonnegative_float(
+            source.get("spot_radius_mm", source.get("beam_spot_radius_mm")),
+            0.0,
+        ),
+        divergence_half_angle_deg=_nonnegative_float(
+            source.get("divergence_half_angle_deg", source.get("divergence_deg")),
+            0.0,
+        ),
     )
 
     return SimulationSpec(

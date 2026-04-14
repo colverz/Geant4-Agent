@@ -24,6 +24,8 @@ class SimulationResultTest(unittest.TestCase):
                 "material": "G4_Cu",
                 "particle": "gamma",
                 "source_type": "point",
+                "source_spot_radius_mm": 0.0,
+                "source_divergence_half_angle_deg": 0.0,
                 "payload_sha256": "abc123",
                 "geant4_version": "geant4-test",
                 "run_seed": 20260414,
@@ -95,6 +97,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.payload_sha256, "abc123")
         self.assertEqual(result.geant4_version, "geant4-test")
         self.assertEqual(result.run_seed, 20260414)
+        self.assertEqual(result.source_spot_radius_mm, 0.0)
+        self.assertEqual(result.source_divergence_half_angle_deg, 0.0)
         self.assertEqual(result.run_manifest["geometry_root_volume"], "Target")
         self.assertEqual(result.scoring.plane_crossing_name, "CheckPlane")
         self.assertEqual(result.scoring.plane_crossing_count, 5)
@@ -125,11 +129,13 @@ class SimulationResultTest(unittest.TestCase):
   "run_ok": true,
   "events_requested": 2,
   "events_completed": 2,
-  "schema_version": "2026-04-14.v4",
+  "schema_version": "2026-04-14.v5",
   "geometry_structure": "single_tubs",
   "material": "G4_W",
   "particle": "proton",
   "source_type": "beam",
+  "source_spot_radius_mm": 2.0,
+  "source_divergence_half_angle_deg": 1.0,
   "payload_sha256": "def456",
   "geant4_version": "geant4-test",
   "run_seed": 2718,
@@ -210,6 +216,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)
         self.assertEqual(result.payload_sha256, "def456")
         self.assertEqual(result.source_type, "beam")
+        self.assertEqual(result.source_spot_radius_mm, 2.0)
+        self.assertEqual(result.source_divergence_half_angle_deg, 1.0)
         self.assertEqual(result.run_seed, 2718)
         self.assertEqual(result.run_manifest["detector_volume_name"], "Detector")
         self.assertEqual(result.scoring.plane_crossing_name, "DetectorPlane")

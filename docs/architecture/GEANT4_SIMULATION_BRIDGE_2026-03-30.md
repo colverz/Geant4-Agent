@@ -150,6 +150,15 @@ That keeps the bridge symmetrical:
 
 `config -> SimulationSpec -> RuntimePayload -> Geant4 run -> SimulationResult`
 
+## Phase 3 start
+
+The first source-runtime realism extension is intentionally still small:
+
+- `beam` may now carry `spot_radius_mm`
+- `beam` may now carry `divergence_half_angle_deg`
+
+These are passed through the bridge and emitted back in the runtime result schema so they can be benchmarked and consumed explicitly.
+
 ## References
 
 The bridge design is intentionally lightweight, but its structure borrows from established Geant4-based systems:

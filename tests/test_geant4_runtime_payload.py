@@ -20,6 +20,8 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                     "energy": 1000.0,
                     "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+                    "spot_radius_mm": 0.5,
+                    "divergence_half_angle_deg": 0.25,
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
                 "run": {"seed": 31415},
@@ -42,6 +44,10 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["size_z"], 30.0)
         self.assertEqual(payload["position"]["z"], -20.0)
         self.assertEqual(payload["direction"]["z"], 1.0)
+        self.assertEqual(payload["source"]["spot_radius_mm"], 0.5)
+        self.assertEqual(payload["source"]["divergence_half_angle_deg"], 0.25)
+        self.assertEqual(payload["source_spot_radius_mm"], 0.5)
+        self.assertEqual(payload["source_divergence_half_angle_deg"], 0.25)
 
     def test_tubs_payload_prefers_volume_material_map(self) -> None:
         payload = build_runtime_payload(
@@ -65,7 +71,13 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                     },
                     "run": {"seed": 2718},
                 },
-                "source": {"particle": "proton", "energy": 250.0},
+                "source": {
+                    "particle": "proton",
+                    "type": "beam",
+                    "energy": 250.0,
+                    "spot_radius_mm": 2.0,
+                    "divergence_half_angle_deg": 1.0,
+                },
                 "physics_list": {"name": "QGSP_BERT"},
                 "scoring": {"plane_crossings": True, "plane": {"name": "DetectorPlane", "z_mm": 40.0}},
             }
@@ -84,6 +96,9 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertTrue(payload["detector_enabled"])
         self.assertEqual(payload["detector_name"], "Detector")
         self.assertEqual(payload["detector_size_z"], 1.5)
+        self.assertEqual(payload["source"]["type"], "beam")
+        self.assertEqual(payload["source"]["spot_radius_mm"], 2.0)
+        self.assertEqual(payload["source"]["divergence_half_angle_deg"], 1.0)
 
 
 if __name__ == "__main__":

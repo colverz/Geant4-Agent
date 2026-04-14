@@ -39,10 +39,11 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cmath>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-14.v4";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v5";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -57,6 +58,8 @@ struct RuntimeConfig {
   double direction_x = 0.0;
   double direction_y = 0.0;
   double direction_z = 1.0;
+  double source_spot_radius_mm = 0.0;
+  double source_divergence_half_angle_deg = 0.0;
   double size_x_mm = 50.0;
   double size_y_mm = 50.0;
   double size_z_mm = 50.0;
@@ -253,6 +256,29 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.source_type = json_value<std::string>(payload, "source_type", cfg.source_type);
   cfg.physics_list = json_value<std::string>(payload, "physics_list", cfg.physics_list);
   cfg.energy_mev = json_value<double>(payload, "energy", cfg.energy_mev);
+  cfg.source_spot_radius_mm = json_value<double>(payload, "source_spot_radius_mm", cfg.source_spot_radius_mm);
+  cfg.source_divergence_half_angle_deg =
+      json_value<double>(payload, "source_divergence_half_angle_deg", cfg.source_divergence_half_angle_deg);
+
+  if (payload.contains("source") && payload.at("source").is_object()) {
+    const auto& source = payload.at("source");
+    cfg.source_type = json_value<std::string>(source, "type", cfg.source_type);
+    cfg.particle = json_value<std::string>(source, "particle", cfg.particle);
+    cfg.energy_mev = json_value<double>(source, "energy_mev", cfg.energy_mev);
+    cfg.source_spot_radius_mm = json_value<double>(source, "spot_radius_mm", cfg.source_spot_radius_mm);
+    cfg.source_divergence_half_angle_deg =
+        json_value<double>(source, "divergence_half_angle_deg", cfg.source_divergence_half_angle_deg);
+    if (source.contains("position_mm") && source.at("position_mm").is_array() && source.at("position_mm").size() >= 3) {
+      cfg.source_x_mm = source.at("position_mm").at(0).get<double>();
+      cfg.source_y_mm = source.at("position_mm").at(1).get<double>();
+      cfg.source_z_mm = source.at("position_mm").at(2).get<double>();
+    }
+    if (source.contains("direction_vec") && source.at("direction_vec").is_array() && source.at("direction_vec").size() >= 3) {
+      cfg.direction_x = source.at("direction_vec").at(0).get<double>();
+      cfg.direction_y = source.at("direction_vec").at(1).get<double>();
+      cfg.direction_z = source.at("direction_vec").at(2).get<double>();
+    }
+  }
 
   if (payload.contains("position") && payload.at("position").is_object()) {
     const auto& position = payload.at("position");
@@ -334,6 +360,8 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   }
 
   cfg.payload_sha256 = json_value<std::string>(payload, "payload_sha256", cfg.payload_sha256);
+  cfg.source_spot_radius_mm = std::max(0.0, cfg.source_spot_radius_mm);
+  cfg.source_divergence_half_angle_deg = std::max(0.0, cfg.source_divergence_half_angle_deg);
   return cfg;
 }
 
@@ -461,18 +489,75 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
       direction = G4ThreeVector(0., 0., 1.);
     }
     direction = direction.unit();
-    particle_gun_->SetParticleMomentumDirection(direction);
-    particle_gun_->SetParticlePosition(
-        G4ThreeVector(config_.source_x_mm * mm, config_.source_y_mm * mm, config_.source_z_mm * mm));
+    nominal_direction_ = direction;
+    nominal_position_ = G4ThreeVector(config_.source_x_mm * mm, config_.source_y_mm * mm, config_.source_z_mm * mm);
+    beam_spot_radius_ = std::max(0.0, config_.source_spot_radius_mm) * mm;
+    beam_divergence_half_angle_ = std::max(0.0, config_.source_divergence_half_angle_deg) * deg;
+    particle_gun_->SetParticleMomentumDirection(nominal_direction_);
+    particle_gun_->SetParticlePosition(nominal_position_);
   }
 
   ~RuntimePrimaryGeneratorAction() override { delete particle_gun_; }
 
-  void GeneratePrimaries(G4Event* event) override { particle_gun_->GeneratePrimaryVertex(event); }
+  void GeneratePrimaries(G4Event* event) override {
+    if (config_.source_type == "beam") {
+      particle_gun_->SetParticlePosition(sample_beam_position());
+      particle_gun_->SetParticleMomentumDirection(sample_beam_direction());
+    } else {
+      particle_gun_->SetParticlePosition(nominal_position_);
+      particle_gun_->SetParticleMomentumDirection(nominal_direction_);
+    }
+    particle_gun_->GeneratePrimaryVertex(event);
+  }
 
  private:
+  G4ThreeVector basis_u() const {
+    const auto ref = std::fabs(nominal_direction_.z()) < 0.9 ? G4ThreeVector(0., 0., 1.) : G4ThreeVector(1., 0., 0.);
+    auto u = nominal_direction_.cross(ref);
+    if (u.mag() == 0.0) {
+      u = G4ThreeVector(1., 0., 0.);
+    }
+    return u.unit();
+  }
+
+  G4ThreeVector basis_v(const G4ThreeVector& u) const {
+    auto v = nominal_direction_.cross(u);
+    if (v.mag() == 0.0) {
+      v = G4ThreeVector(0., 1., 0.);
+    }
+    return v.unit();
+  }
+
+  G4ThreeVector sample_beam_position() const {
+    if (beam_spot_radius_ <= 0.0) {
+      return nominal_position_;
+    }
+    const auto u = basis_u();
+    const auto v = basis_v(u);
+    const auto r = beam_spot_radius_ * std::sqrt(G4UniformRand());
+    const auto phi = CLHEP::twopi * G4UniformRand();
+    return nominal_position_ + u * (r * std::cos(phi)) + v * (r * std::sin(phi));
+  }
+
+  G4ThreeVector sample_beam_direction() const {
+    if (beam_divergence_half_angle_ <= 0.0) {
+      return nominal_direction_;
+    }
+    const auto u = basis_u();
+    const auto v = basis_v(u);
+    const auto cos_theta_min = std::cos(beam_divergence_half_angle_);
+    const auto cos_theta = 1.0 - G4UniformRand() * (1.0 - cos_theta_min);
+    const auto sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
+    const auto phi = CLHEP::twopi * G4UniformRand();
+    return (nominal_direction_ * cos_theta + u * (sin_theta * std::cos(phi)) + v * (sin_theta * std::sin(phi))).unit();
+  }
+
   RuntimeConfig config_;
   G4ParticleGun* particle_gun_;
+  G4ThreeVector nominal_direction_;
+  G4ThreeVector nominal_position_;
+  double beam_spot_radius_ = 0.0;
+  double beam_divergence_half_angle_ = 0.0;
 };
 
 class RuntimeTrackingAction : public G4UserTrackingAction {
@@ -752,6 +837,8 @@ int main(int argc, char** argv) {
           << "  \"material\": \"" << cfg.material << "\",\n"
           << "  \"particle\": \"" << cfg.particle << "\",\n"
           << "  \"source_type\": \"" << cfg.source_type << "\",\n"
+          << "  \"source_spot_radius_mm\": " << cfg.source_spot_radius_mm << ",\n"
+          << "  \"source_divergence_half_angle_deg\": " << cfg.source_divergence_half_angle_deg << ",\n"
           << "  \"payload_sha256\": \"" << cfg.payload_sha256 << "\",\n"
           << "  \"geant4_version\": \"" << G4Version << "\",\n"
           << "  \"source_position_mm\": [" << cfg.source_x_mm << ", " << cfg.source_y_mm << ", " << cfg.source_z_mm

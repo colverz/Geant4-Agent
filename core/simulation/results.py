@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v4"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v5"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -66,6 +66,8 @@ class SimulationResult:
     material: str | None = None
     particle: str | None = None
     source_type: str | None = None
+    source_spot_radius_mm: float = 0.0
+    source_divergence_half_angle_deg: float = 0.0
     source_position_mm: tuple[float, float, float] | None = None
     source_direction: tuple[float, float, float] | None = None
     payload_sha256: str | None = None
@@ -209,6 +211,8 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         material=data.get("material"),
         particle=data.get("particle"),
         source_type=data.get("source_type"),
+        source_spot_radius_mm=float(data.get("source_spot_radius_mm", 0.0) or 0.0),
+        source_divergence_half_angle_deg=float(data.get("source_divergence_half_angle_deg", 0.0) or 0.0),
         source_position_mm=_coerce_triplet(data.get("source_position_mm")),
         source_direction=_coerce_triplet(data.get("source_direction")),
         payload_sha256=data.get("payload_sha256"),

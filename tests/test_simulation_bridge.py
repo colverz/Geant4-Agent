@@ -44,6 +44,8 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(spec.geometry.size_x_mm, 10.0)
         self.assertEqual(spec.source.source_type, "point")
         self.assertEqual(spec.source.position_mm, (0.0, 0.0, -20.0))
+        self.assertEqual(spec.source.spot_radius_mm, 0.0)
+        self.assertEqual(spec.source.divergence_half_angle_deg, 0.0)
         self.assertEqual(spec.run.events, 25)
         self.assertEqual(spec.run.seed, 20260414)
         self.assertTrue(spec.scoring.target_edep)
@@ -78,6 +80,8 @@ class SimulationBridgeTest(unittest.TestCase):
                     "energy": 250.0,
                     "position": {"type": "vector", "value": [0.0, 0.0, -250.0]},
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+                    "spot_radius_mm": 3.0,
+                    "divergence_half_angle_deg": 1.5,
                 },
                 "physics": {"physics_list": "QGSP_BERT"},
                 "run": {"seed": 4242},
@@ -91,6 +95,8 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(payload["geometry"]["structure"], "single_tubs")
         self.assertEqual(payload["geometry"]["root_volume_name"], "target")
         self.assertEqual(payload["source"]["type"], "beam")
+        self.assertEqual(payload["source"]["spot_radius_mm"], 3.0)
+        self.assertEqual(payload["source"]["divergence_half_angle_deg"], 1.5)
         self.assertEqual(payload["physics"]["list"], "QGSP_BERT")
         self.assertEqual(payload["run"]["seed"], 4242)
         self.assertEqual(payload["run_manifest"]["bridge"], "simulation_bridge")
@@ -109,6 +115,8 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(payload["detector_name"], "Detector")
         self.assertEqual(payload["detector_material"], "G4_Si")
         self.assertEqual(payload["detector_position"]["z"], 60.0)
+        self.assertEqual(payload["source_spot_radius_mm"], 3.0)
+        self.assertEqual(payload["source_divergence_half_angle_deg"], 1.5)
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
 
