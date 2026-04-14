@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v3"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v4"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -30,10 +30,14 @@ class SimulationScoringResult:
     plane_crossing_forward_events: int = 0
     plane_crossing_reverse_count: int = 0
     plane_crossing_reverse_events: int = 0
+    plane_crossing_mean_per_event: float = 0.0
     plane_crossing_particle_counts: dict[str, int] | None = None
     plane_crossing_particle_events: dict[str, int] | None = None
     detector_crossing_count: int = 0
     detector_crossing_events: int = 0
+    detector_crossing_mean_per_event: float = 0.0
+    detector_crossing_particle_counts: dict[str, int] | None = None
+    detector_crossing_particle_events: dict[str, int] | None = None
     target_edep_total_mev: float = 0.0
     target_edep_mean_mev_per_event: float = 0.0
     target_hit_events: int = 0
@@ -96,6 +100,18 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
     )
     plane_crossing_particle_counts: dict[str, int] = {}
     plane_crossing_particle_events: dict[str, int] = {}
+    detector_crossing_particle_counts: dict[str, int] = {}
+    detector_crossing_particle_events: dict[str, int] = {}
+    raw_detector_crossing_particle_counts = (
+        scoring_data.get("detector_crossing_particle_counts", {})
+        if isinstance(scoring_data.get("detector_crossing_particle_counts"), dict)
+        else {}
+    )
+    raw_detector_crossing_particle_events = (
+        scoring_data.get("detector_crossing_particle_events", {})
+        if isinstance(scoring_data.get("detector_crossing_particle_events"), dict)
+        else {}
+    )
     for particle_name, raw_value in raw_plane_crossing_particle_counts.items():
         if not isinstance(particle_name, str) or not particle_name:
             continue
@@ -104,6 +120,14 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         if not isinstance(particle_name, str) or not particle_name:
             continue
         plane_crossing_particle_events[particle_name] = int(raw_value or 0)
+    for particle_name, raw_value in raw_detector_crossing_particle_counts.items():
+        if not isinstance(particle_name, str) or not particle_name:
+            continue
+        detector_crossing_particle_counts[particle_name] = int(raw_value or 0)
+    for particle_name, raw_value in raw_detector_crossing_particle_events.items():
+        if not isinstance(particle_name, str) or not particle_name:
+            continue
+        detector_crossing_particle_events[particle_name] = int(raw_value or 0)
 
     if isinstance(raw_volume_stats, dict):
         for volume_name, raw_stats in raw_volume_stats.items():
@@ -157,10 +181,14 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         plane_crossing_forward_events=int(scoring_data.get("plane_crossing_forward_events", 0) or 0),
         plane_crossing_reverse_count=int(scoring_data.get("plane_crossing_reverse_count", 0) or 0),
         plane_crossing_reverse_events=int(scoring_data.get("plane_crossing_reverse_events", 0) or 0),
+        plane_crossing_mean_per_event=float(scoring_data.get("plane_crossing_mean_per_event", 0.0) or 0.0),
         plane_crossing_particle_counts=plane_crossing_particle_counts or None,
         plane_crossing_particle_events=plane_crossing_particle_events or None,
         detector_crossing_count=int(scoring_data.get("detector_crossing_count", 0) or 0),
         detector_crossing_events=int(scoring_data.get("detector_crossing_events", 0) or 0),
+        detector_crossing_mean_per_event=float(scoring_data.get("detector_crossing_mean_per_event", 0.0) or 0.0),
+        detector_crossing_particle_counts=detector_crossing_particle_counts or None,
+        detector_crossing_particle_events=detector_crossing_particle_events or None,
         target_edep_total_mev=float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),
         target_edep_mean_mev_per_event=float(scoring_data.get("target_edep_mean_mev_per_event", 0.0) or 0.0),
         target_hit_events=int(scoring_data.get("target_hit_events", 0) or 0),

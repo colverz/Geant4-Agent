@@ -42,7 +42,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-14.v3";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v4";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -81,6 +81,7 @@ struct RuntimeConfig {
   double scoring_plane_z_mm = 0.0;
   std::vector<std::string> scoring_volume_names = {"Target"};
   std::map<std::string, std::vector<std::string>> scoring_volume_roles = {{"target", {"Target"}}};
+  std::vector<std::string> detector_scoring_volume_names;
   std::string payload_sha256;
   std::string artifact_dir;
   std::string mode = "batch";
@@ -144,6 +145,9 @@ struct RuntimeScoringState {
   int target_track_entries = 0;
   std::string scoring_plane_name = "ScoringPlane";
   double scoring_plane_z_mm = 0.0;
+  std::map<std::string, int> detector_crossing_particle_counts;
+  std::map<std::string, int> detector_crossing_particle_events;
+  std::set<std::string> current_event_detector_crossing_particles;
   bool current_event_plane_crossed = false;
   bool current_event_plane_crossed_forward = false;
   bool current_event_plane_crossed_reverse = false;
@@ -225,6 +229,15 @@ void write_int_map(std::ostream& out, const std::map<std::string, int>& values) 
     out << "\"" << key << "\": " << value;
   }
   out << "}";
+}
+
+bool contains_name(const std::vector<std::string>& names, const std::string& value) {
+  for (const auto& name : names) {
+    if (name == value) {
+      return true;
+    }
+  }
+  return false;
 }
 
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
@@ -311,6 +324,13 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
         cfg.scoring_volume_roles["target"] = {cfg.root_volume_name};
       }
     }
+  }
+
+  const auto detector_role_it = cfg.scoring_volume_roles.find("detector");
+  if (detector_role_it != cfg.scoring_volume_roles.end()) {
+    cfg.detector_scoring_volume_names = detector_role_it->second;
+  } else if (cfg.detector_enabled && !cfg.detector_name.empty()) {
+    cfg.detector_scoring_volume_names = {cfg.detector_name};
   }
 
   cfg.payload_sha256 = json_value<std::string>(payload, "payload_sha256", cfg.payload_sha256);
@@ -496,8 +516,18 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
     if (pre_point->GetStepStatus() == fGeomBoundary) {
       metrics.track_entries += 1;
       if (config_.score_detector_crossings) {
+        std::string particle_name = "unknown";
+        if (const auto* track = step->GetTrack()) {
+          if (const auto* definition = track->GetDefinition()) {
+            particle_name = definition->GetParticleName();
+          }
+        }
         metrics.crossing_count += 1;
         metrics.current_event_crossed = true;
+        if (contains_name(config_.detector_scoring_volume_names, volume_name)) {
+          scoring_state_->detector_crossing_particle_counts[particle_name] += 1;
+          scoring_state_->current_event_detector_crossing_particles.insert(particle_name);
+        }
       }
     }
     if (config_.score_plane_crossings) {
@@ -552,6 +582,7 @@ class RuntimeEventAction : public G4UserEventAction {
       return;
     }
     scoring_state_->current_event_target_edep_mev = 0.0;
+    scoring_state_->current_event_detector_crossing_particles.clear();
     scoring_state_->current_event_plane_crossed = false;
     scoring_state_->current_event_plane_crossed_forward = false;
     scoring_state_->current_event_plane_crossed_reverse = false;
@@ -589,6 +620,9 @@ class RuntimeEventAction : public G4UserEventAction {
     }
     if (scoring_state_->current_event_plane_crossed_reverse) {
       scoring_state_->plane_crossing_reverse_events += 1;
+    }
+    for (const auto& particle_name : scoring_state_->current_event_detector_crossing_particles) {
+      scoring_state_->detector_crossing_particle_events[particle_name] += 1;
     }
     for (const auto& particle_name : scoring_state_->current_event_plane_crossing_particles) {
       scoring_state_->plane_crossing_particle_events[particle_name] += 1;
@@ -760,6 +794,8 @@ int main(int argc, char** argv) {
           << "    \"plane_crossing_forward_events\": " << scoring_state.plane_crossing_forward_events << ",\n"
           << "    \"plane_crossing_reverse_count\": " << scoring_state.plane_crossing_reverse_count << ",\n"
           << "    \"plane_crossing_reverse_events\": " << scoring_state.plane_crossing_reverse_events << ",\n"
+          << "    \"plane_crossing_mean_per_event\": "
+          << (events > 0 ? (static_cast<double>(scoring_state.plane_crossing_count) / static_cast<double>(events)) : 0.0) << ",\n"
           << "    \"plane_crossing_particle_counts\": ";
   write_int_map(summary, scoring_state.plane_crossing_particle_counts);
   summary << ",\n"
@@ -770,6 +806,14 @@ int main(int argc, char** argv) {
           << (role_stats.count("detector") ? role_stats.at("detector").crossing_count : 0) << ",\n"
           << "    \"detector_crossing_events\": "
           << (role_stats.count("detector") ? role_stats.at("detector").crossing_events : 0) << ",\n"
+          << "    \"detector_crossing_mean_per_event\": "
+          << (events > 0 ? ((role_stats.count("detector") ? static_cast<double>(role_stats.at("detector").crossing_count) : 0.0) / static_cast<double>(events)) : 0.0) << ",\n"
+          << "    \"detector_crossing_particle_counts\": ";
+  write_int_map(summary, scoring_state.detector_crossing_particle_counts);
+  summary << ",\n"
+          << "    \"detector_crossing_particle_events\": ";
+  write_int_map(summary, scoring_state.detector_crossing_particle_events);
+  summary << ",\n"
           << "    \"target_edep_total_mev\": " << scoring_state.target_edep_mev << ",\n"
           << "    \"target_edep_mean_mev_per_event\": "
           << (events > 0 ? (scoring_state.target_edep_mev / static_cast<double>(events)) : 0.0) << ",\n"

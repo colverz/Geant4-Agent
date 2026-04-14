@@ -121,6 +121,14 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertIn("Detector", summary["scoring"]["volume_stats"])
         self.assertIn("detector", summary["scoring"]["role_stats"])
         self.assertIn("crossing_count", summary["scoring"]["role_stats"]["detector"])
+        self.assertIn("detector_crossing_mean_per_event", summary["scoring"])
+        self.assertIn("detector_crossing_particle_counts", summary["scoring"])
+        self.assertIn("detector_crossing_particle_events", summary["scoring"])
+        self.assertIn("gamma", summary["scoring"]["detector_crossing_particle_counts"])
+        self.assertEqual(
+            summary["scoring"]["detector_crossing_count"],
+            sum(summary["scoring"]["detector_crossing_particle_counts"].values()),
+        )
 
     def test_plane_crossing_batch_returns_plane_summary(self) -> None:
         summary = self._run_wrapper(
@@ -155,6 +163,7 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertGreater(summary["scoring"]["plane_crossing_count"], 0)
         self.assertGreater(summary["scoring"]["plane_crossing_events"], 0)
         self.assertGreater(summary["scoring"]["plane_crossing_forward_count"], 0)
+        self.assertIn("plane_crossing_mean_per_event", summary["scoring"])
         self.assertIn("plane_crossing_particle_counts", summary["scoring"])
         self.assertIn("plane_crossing_particle_events", summary["scoring"])
         self.assertIn("gamma", summary["scoring"]["plane_crossing_particle_counts"])

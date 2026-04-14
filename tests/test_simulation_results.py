@@ -61,10 +61,14 @@ class SimulationResultTest(unittest.TestCase):
                     "plane_crossing_forward_events": 4,
                     "plane_crossing_reverse_count": 0,
                     "plane_crossing_reverse_events": 0,
+                    "plane_crossing_mean_per_event": 1.25,
                     "plane_crossing_particle_counts": {"gamma": 5},
                     "plane_crossing_particle_events": {"gamma": 4},
                     "detector_crossing_count": 2,
                     "detector_crossing_events": 2,
+                    "detector_crossing_mean_per_event": 0.5,
+                    "detector_crossing_particle_counts": {"gamma": 2},
+                    "detector_crossing_particle_events": {"gamma": 2},
                     "target_edep_total_mev": 2.7,
                     "target_edep_mean_mev_per_event": 0.675,
                     "target_hit_events": 3,
@@ -95,6 +99,7 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.scoring.plane_crossing_count, 5)
         self.assertEqual(result.scoring.plane_crossing_forward_count, 5)
         self.assertEqual(result.scoring.plane_crossing_reverse_count, 0)
+        self.assertAlmostEqual(result.scoring.plane_crossing_mean_per_event, 1.25)
         self.assertEqual(result.scoring.plane_crossing_particle_counts["gamma"], 5)
         self.assertEqual(result.scoring.plane_crossing_particle_events["gamma"], 4)
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
@@ -102,6 +107,9 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.detector.volume_name, "Detector")
         self.assertEqual(result.scoring.detector_crossing_count, 2)
         self.assertEqual(result.scoring.detector_crossing_events, 2)
+        self.assertAlmostEqual(result.scoring.detector_crossing_mean_per_event, 0.5)
+        self.assertEqual(result.scoring.detector_crossing_particle_counts["gamma"], 2)
+        self.assertEqual(result.scoring.detector_crossing_particle_events["gamma"], 2)
         self.assertEqual(result.scoring.target_hit_events, 3)
         self.assertEqual(result.scoring.target_step_count, 18)
         self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
@@ -115,7 +123,7 @@ class SimulationResultTest(unittest.TestCase):
   "run_ok": true,
   "events_requested": 2,
   "events_completed": 2,
-  "schema_version": "2026-04-14.v3",
+  "schema_version": "2026-04-14.v4",
   "geometry_structure": "single_tubs",
   "material": "G4_W",
   "particle": "proton",
@@ -157,10 +165,14 @@ class SimulationResultTest(unittest.TestCase):
     "plane_crossing_forward_events": 2,
     "plane_crossing_reverse_count": 0,
     "plane_crossing_reverse_events": 0,
+    "plane_crossing_mean_per_event": 1.0,
     "plane_crossing_particle_counts": {"proton": 2},
     "plane_crossing_particle_events": {"proton": 2},
     "detector_crossing_count": 1,
     "detector_crossing_events": 1,
+    "detector_crossing_mean_per_event": 0.5,
+    "detector_crossing_particle_counts": {"proton": 1},
+    "detector_crossing_particle_events": {"proton": 1},
     "target_edep_total_mev": 1.25,
     "target_edep_mean_mev_per_event": 0.625,
     "target_hit_events": 2,
@@ -200,10 +212,14 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.scoring.plane_crossing_name, "DetectorPlane")
         self.assertEqual(result.scoring.plane_crossing_events, 2)
         self.assertEqual(result.scoring.plane_crossing_forward_events, 2)
+        self.assertAlmostEqual(result.scoring.plane_crossing_mean_per_event, 1.0)
         self.assertEqual(result.scoring.plane_crossing_particle_counts["proton"], 2)
         self.assertEqual(result.scoring.plane_crossing_particle_events["proton"], 2)
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.scoring.detector_crossing_count, 1)
+        self.assertAlmostEqual(result.scoring.detector_crossing_mean_per_event, 0.5)
+        self.assertEqual(result.scoring.detector_crossing_particle_counts["proton"], 1)
+        self.assertEqual(result.scoring.detector_crossing_particle_events["proton"], 1)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
         self.assertEqual(result.scoring.role_stats["target"]["step_count"], 9)

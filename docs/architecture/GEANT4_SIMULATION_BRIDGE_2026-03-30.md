@@ -107,8 +107,12 @@ The runtime writes:
 - `plane_crossing_forward_events`
 - `plane_crossing_reverse_count`
 - `plane_crossing_reverse_events`
+- `plane_crossing_mean_per_event`
 - `plane_crossing_particle_counts`
 - `plane_crossing_particle_events`
+- `detector_crossing_mean_per_event`
+- `detector_crossing_particle_counts`
+- `detector_crossing_particle_events`
 - `scoring.volume_stats`
 - runtime-native `scoring.role_stats`
 - optional detector summary
@@ -124,7 +128,7 @@ This layer turns the runtime artifact back into a stable app-side result object.
 
 The current result schema version is:
 
-- `2026-04-14.v3`
+- `2026-04-14.v4`
 
 The local Geant4 runtime now parses payloads with a real JSON parser rather than regex extraction.
 
