@@ -27,6 +27,7 @@
 #include "G4VSolid.hh"
 #include "G4VUserDetectorConstruction.hh"
 #include "G4VUserPrimaryGeneratorAction.hh"
+#include "Randomize.hh"
 #include "globals.hh"
 #include "third_party/json.hpp"
 
@@ -40,7 +41,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-12.v1";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v1";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -71,6 +72,7 @@ struct RuntimeConfig {
   double detector_size_z_mm = 2.0;
   std::string physics_list = "FTFP_BERT";
   int events = 1;
+  int seed = 1337;
   bool score_target_edep = true;
   bool score_detector_crossings = true;
   std::vector<std::string> scoring_volume_names = {"Target"};
@@ -167,6 +169,33 @@ std::map<std::string, VolumeScoringMetrics> derive_role_stats(
   return role_stats;
 }
 
+void write_string_array(std::ostream& out, const std::vector<std::string>& values) {
+  out << "[";
+  bool first = true;
+  for (const auto& value : values) {
+    if (!first) {
+      out << ", ";
+    }
+    first = false;
+    out << "\"" << value << "\"";
+  }
+  out << "]";
+}
+
+void write_role_map(std::ostream& out, const std::map<std::string, std::vector<std::string>>& roles) {
+  out << "{";
+  bool first_role = true;
+  for (const auto& [role_name, values] : roles) {
+    if (!first_role) {
+      out << ", ";
+    }
+    first_role = false;
+    out << "\"" << role_name << "\": ";
+    write_string_array(out, values);
+  }
+  out << "}";
+}
+
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
   RuntimeConfig cfg;
   cfg.events = events;
@@ -212,6 +241,12 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.detector_size_x_mm = json_value<double>(payload, "detector_size_x", cfg.detector_size_x_mm);
   cfg.detector_size_y_mm = json_value<double>(payload, "detector_size_y", cfg.detector_size_y_mm);
   cfg.detector_size_z_mm = json_value<double>(payload, "detector_size_z", cfg.detector_size_z_mm);
+
+  if (payload.contains("run") && payload.at("run").is_object()) {
+    const auto& run = payload.at("run");
+    cfg.seed = json_value<int>(run, "seed", cfg.seed);
+    cfg.mode = json_value<std::string>(run, "mode", cfg.mode);
+  }
 
   if (payload.contains("scoring") && payload.at("scoring").is_object()) {
     const auto& scoring = payload.at("scoring");
@@ -531,6 +566,7 @@ int main(int argc, char** argv) {
   fs::create_directories(artifact_dir);
   auto cfg = load_runtime_config(config_path, events, artifact_dir);
   cfg.mode = mode;
+  CLHEP::HepRandom::setTheSeed(static_cast<long>(cfg.seed));
 
   auto* run_manager = G4RunManagerFactory::CreateRunManager(G4RunManagerType::SerialOnly);
   run_manager->SetUserInitialization(new RuntimeDetectorConstruction(cfg));
@@ -592,6 +628,7 @@ int main(int argc, char** argv) {
           << "  \"run_ok\": true,\n"
           << "  \"events_requested\": " << events << ",\n"
           << "  \"events_completed\": " << events << ",\n"
+          << "  \"run_seed\": " << cfg.seed << ",\n"
           << "  \"geometry_structure\": \"" << cfg.geometry_structure << "\",\n"
           << "  \"material\": \"" << cfg.material << "\",\n"
           << "  \"particle\": \"" << cfg.particle << "\",\n"
@@ -605,6 +642,18 @@ int main(int argc, char** argv) {
           << "  \"physics_list\": \"" << cfg.physics_list << "\",\n"
           << "  \"events\": " << events << ",\n"
           << "  \"mode\": \"" << cfg.mode << "\",\n"
+          << "  \"run_manifest\": {\n"
+          << "    \"bridge\": \"simulation_bridge\",\n"
+          << "    \"geometry_root_volume\": \"" << cfg.root_volume_name << "\",\n"
+          << "    \"detector_enabled\": " << (cfg.detector_enabled ? "true" : "false") << ",\n"
+          << "    \"detector_volume_name\": " << (cfg.detector_enabled ? ("\"" + cfg.detector_name + "\"") : "null") << ",\n"
+          << "    \"scoring_volume_names\": ";
+  write_string_array(summary, cfg.scoring_volume_names);
+  summary << ",\n"
+          << "    \"scoring_roles\": ";
+  write_role_map(summary, cfg.scoring_volume_roles);
+  summary << "\n"
+          << "  },\n"
           << "  \"detector\": {\n"
           << "    \"enabled\": " << (cfg.detector_enabled ? "true" : "false") << ",\n"
           << "    \"volume_name\": \"" << cfg.detector_name << "\",\n"

@@ -33,6 +33,7 @@ class SimulationBridgeTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
+                "run": {"seed": 20260414},
             },
             events=25,
             mode="batch",
@@ -44,6 +45,7 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(spec.source.source_type, "point")
         self.assertEqual(spec.source.position_mm, (0.0, 0.0, -20.0))
         self.assertEqual(spec.run.events, 25)
+        self.assertEqual(spec.run.seed, 20260414)
         self.assertTrue(spec.scoring.target_edep)
         self.assertTrue(spec.scoring.detector_crossings)
         self.assertEqual(spec.scoring.volume_roles["target"], ("target",))
@@ -78,12 +80,17 @@ class SimulationBridgeTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                 },
                 "physics": {"physics_list": "QGSP_BERT"},
+                "run": {"seed": 4242},
             }
         )
         self.assertEqual(payload["geometry"]["structure"], "single_tubs")
         self.assertEqual(payload["geometry"]["root_volume_name"], "target")
         self.assertEqual(payload["source"]["type"], "beam")
         self.assertEqual(payload["physics"]["list"], "QGSP_BERT")
+        self.assertEqual(payload["run"]["seed"], 4242)
+        self.assertEqual(payload["run_manifest"]["bridge"], "simulation_bridge")
+        self.assertEqual(payload["run_manifest"]["geometry_root_volume"], "target")
+        self.assertEqual(payload["run_manifest"]["detector_volume_name"], "Detector")
         self.assertTrue(payload["scoring"]["target_edep"])
         self.assertTrue(payload["scoring"]["detector_crossings"])
         self.assertEqual(payload["scoring"]["volume_names"], ["target", "Detector"])

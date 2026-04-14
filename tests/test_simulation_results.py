@@ -26,6 +26,15 @@ class SimulationResultTest(unittest.TestCase):
                 "source_type": "point",
                 "payload_sha256": "abc123",
                 "geant4_version": "geant4-test",
+                "run_seed": 20260414,
+                "run_manifest": {
+                    "bridge": "simulation_bridge",
+                    "geometry_root_volume": "Target",
+                    "detector_enabled": True,
+                    "detector_volume_name": "Detector",
+                    "scoring_volume_names": ["Target", "Detector"],
+                    "scoring_roles": {"target": ["Target"], "detector": ["Detector"]},
+                },
                 "source_position_mm": [0, 0, -20],
                 "source_direction": [0, 0, 1],
                 "physics_list": "FTFP_BERT",
@@ -67,6 +76,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.geometry_structure, "single_box")
         self.assertEqual(result.payload_sha256, "abc123")
         self.assertEqual(result.geant4_version, "geant4-test")
+        self.assertEqual(result.run_seed, 20260414)
+        self.assertEqual(result.run_manifest["geometry_root_volume"], "Target")
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.detector.volume_name, "Detector")
@@ -85,13 +96,22 @@ class SimulationResultTest(unittest.TestCase):
   "run_ok": true,
   "events_requested": 2,
   "events_completed": 2,
-  "schema_version": "2026-04-12.v1",
+  "schema_version": "2026-04-14.v1",
   "geometry_structure": "single_tubs",
   "material": "G4_W",
   "particle": "proton",
   "source_type": "beam",
   "payload_sha256": "def456",
   "geant4_version": "geant4-test",
+  "run_seed": 2718,
+  "run_manifest": {
+    "bridge": "simulation_bridge",
+    "geometry_root_volume": "Target",
+    "detector_enabled": true,
+    "detector_volume_name": "Detector",
+    "scoring_volume_names": ["Target", "Detector"],
+    "scoring_roles": {"target": ["Target"], "detector": ["Detector"]}
+  },
   "source_position_mm": [0, 0, -250],
   "source_direction": [0, 0, 1],
   "physics_list": "QGSP_BERT",
@@ -143,6 +163,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.schema_version, SIMULATION_RESULT_SCHEMA_VERSION)
         self.assertEqual(result.payload_sha256, "def456")
         self.assertEqual(result.source_type, "beam")
+        self.assertEqual(result.run_seed, 2718)
+        self.assertEqual(result.run_manifest["detector_volume_name"], "Detector")
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.scoring.detector_crossing_count, 1)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)

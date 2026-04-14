@@ -76,6 +76,7 @@ Implemented in:
 The first added scorer is:
 
 - `target_edep`
+- `detector_crossings`
 
 The first added runtime role beyond the target is:
 
@@ -86,6 +87,8 @@ The runtime writes:
 - `schema_version`
 - `payload_sha256`
 - `geant4_version`
+- `run_seed`
+- `run_manifest`
 - `run_ok`
 - `events_requested`
 - `events_completed`
@@ -110,9 +113,16 @@ This layer turns the runtime artifact back into a stable app-side result object.
 
 The current result schema version is:
 
-- `2026-04-12.v1`
+- `2026-04-14.v1`
 
 The local Geant4 runtime now parses payloads with a real JSON parser rather than regex extraction.
+
+The current bridge also carries a reproducibility baseline:
+
+- explicit `run.seed`
+- stable `payload_sha256`
+- a lightweight `run_manifest`
+- benchmarked target-only and target+detector smoke cases
 
 That keeps the bridge symmetrical:
 

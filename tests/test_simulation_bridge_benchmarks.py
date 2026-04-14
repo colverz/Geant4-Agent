@@ -70,11 +70,14 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
+                "run": {"seed": 1111},
                 "scoring": {"target_edep": True},
             }
         )
         self.assertEqual(summary["schema_version"], SIMULATION_RESULT_SCHEMA_VERSION)
         self.assertTrue(summary["run_ok"])
+        self.assertEqual(summary["run_seed"], 1111)
+        self.assertEqual(summary["run_manifest"]["geometry_root_volume"], "Target")
         self.assertEqual(summary["geometry_structure"], "single_box")
         self.assertIn("Target", summary["scoring"]["volume_stats"])
         self.assertIn("detector_crossings_enabled", summary["scoring"])
@@ -105,12 +108,15 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
+                "run": {"seed": 2222},
                 "scoring": {"target_edep": True},
             }
         )
         self.assertEqual(summary["schema_version"], SIMULATION_RESULT_SCHEMA_VERSION)
+        self.assertEqual(summary["run_seed"], 2222)
         self.assertTrue(summary["detector"]["enabled"])
         self.assertEqual(summary["detector"]["volume_name"], "Detector")
+        self.assertEqual(summary["run_manifest"]["detector_volume_name"], "Detector")
         self.assertIn("Target", summary["scoring"]["volume_stats"])
         self.assertIn("Detector", summary["scoring"]["volume_stats"])
         self.assertIn("detector", summary["scoring"]["role_stats"])

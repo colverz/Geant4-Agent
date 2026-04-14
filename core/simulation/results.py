@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-12.v1"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v1"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -55,6 +55,8 @@ class SimulationResult:
     source_direction: tuple[float, float, float] | None = None
     payload_sha256: str | None = None
     geant4_version: str | None = None
+    run_seed: int = 1337
+    run_manifest: dict[str, Any] | None = None
     physics_list: str | None = None
     events: int = 0
     mode: str = "batch"
@@ -133,6 +135,8 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         source_direction=_coerce_triplet(data.get("source_direction")),
         payload_sha256=data.get("payload_sha256"),
         geant4_version=data.get("geant4_version"),
+        run_seed=int(data.get("run_seed", 1337) or 1337),
+        run_manifest=data.get("run_manifest") if isinstance(data.get("run_manifest"), dict) else None,
         physics_list=data.get("physics_list"),
         events=int(data.get("events", 0) or 0),
         mode=str(data.get("mode", "batch") or "batch"),

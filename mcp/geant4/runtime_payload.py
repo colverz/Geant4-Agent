@@ -6,6 +6,17 @@ from typing import Any
 from core.simulation import SimulationSpec, build_simulation_spec
 
 
+def _build_run_manifest(spec: SimulationSpec) -> dict[str, Any]:
+    return {
+        "bridge": "simulation_bridge",
+        "geometry_root_volume": spec.geometry.root_volume_name,
+        "detector_enabled": spec.detector is not None,
+        "detector_volume_name": spec.detector.volume_name if spec.detector is not None else None,
+        "scoring_volume_names": list(spec.scoring.volume_names),
+        "scoring_roles": {role: list(names) for role, names in spec.scoring.volume_roles.items()},
+    }
+
+
 def _coerce_vector3(value: Any, fallback: list[float]) -> list[float]:
     if isinstance(value, dict):
         if isinstance(value.get("value"), list) and len(value["value"]) >= 3:
@@ -103,7 +114,9 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
         "run": {
             "events": spec.run.events,
             "mode": spec.run.mode,
+            "seed": spec.run.seed,
         },
+        "run_manifest": _build_run_manifest(spec),
         "scoring": {
             "target_edep": spec.scoring.target_edep,
             "detector_crossings": spec.scoring.detector_crossings,

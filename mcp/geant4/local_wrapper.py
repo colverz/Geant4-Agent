@@ -52,9 +52,13 @@ def main() -> int:
     print("geant4_local_wrapper")
     print(f"mode={args.mode}")
     print(f"events={args.events}")
+    run_cfg = config.get("run", {}) if isinstance(config.get("run"), dict) else {}
+    scoring_cfg = config.get("scoring", {}) if isinstance(config.get("scoring"), dict) else {}
+    print(f"seed={run_cfg.get('seed', 'n/a')}")
     print(f"geometry_keys={_keys_for_summary(config.get('geometry', {}))}")
     print(f"source_keys={_keys_for_summary(config.get('source', {}))}")
     print(f"physics_keys={_keys_for_summary(config.get('physics_list') or config.get('physics') or {})}")
+    print(f"scoring_roles={_keys_for_summary(scoring_cfg.get('volume_roles', {}))}")
     command = [
         str(runtime_exe),
         "--config",

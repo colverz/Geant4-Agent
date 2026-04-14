@@ -75,6 +75,30 @@ def _physics_list_name(config: dict[str, Any]) -> str:
     return "FTFP_BERT"
 
 
+def _run_control_spec(config: dict[str, Any], *, events: int, mode: str) -> RunControlSpec:
+    simulation = config.get("simulation", {}) if isinstance(config.get("simulation"), dict) else {}
+    raw_run = config.get("run", {}) if isinstance(config.get("run"), dict) else {}
+    simulation_run = simulation.get("run", {}) if isinstance(simulation.get("run"), dict) else {}
+
+    seed_value = (
+        raw_run.get("seed")
+        if "seed" in raw_run
+        else simulation_run.get("seed")
+        if "seed" in simulation_run
+        else simulation.get("seed")
+    )
+    try:
+        seed = int(seed_value) if seed_value is not None else 1337
+    except (TypeError, ValueError):
+        seed = 1337
+
+    return RunControlSpec(
+        events=max(1, int(events)),
+        mode=str(mode or "batch"),
+        seed=seed,
+    )
+
+
 def _root_volume_name(config: dict[str, Any]) -> str:
     geometry = config.get("geometry", {}) if isinstance(config.get("geometry"), dict) else {}
     raw = geometry.get("root_name")
@@ -202,7 +226,7 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         geometry=geometry_spec,
         source=source_spec,
         physics=PhysicsRuntimeSpec(physics_list=_physics_list_name(raw)),
-        run=RunControlSpec(events=max(1, int(events)), mode=str(mode or "batch")),
+        run=_run_control_spec(raw, events=events, mode=mode),
         scoring=_scoring_spec(raw, root_volume_name, detector_spec),
         detector=detector_spec,
     )

@@ -43,6 +43,7 @@ class PhysicsRuntimeSpec:
 class RunControlSpec:
     events: int = 1
     mode: str = "batch"
+    seed: int = 1337
 
 
 @dataclass(frozen=True)

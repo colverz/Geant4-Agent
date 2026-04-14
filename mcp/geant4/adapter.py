@@ -303,6 +303,7 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
 
                 runtime_payload = deepcopy(self._runtime_payload or build_runtime_payload(self._config))
                 runtime_payload.pop("raw_config", None)
+                runtime_payload.pop("payload_sha256", None)
                 runtime_payload["payload_sha256"] = hashlib.sha256(
                     json.dumps(runtime_payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
                 ).hexdigest()

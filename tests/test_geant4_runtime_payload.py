@@ -22,12 +22,15 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
+                "run": {"seed": 31415},
             }
         )
         self.assertEqual(payload["structure"], "single_box")
         self.assertEqual(payload["material"], "G4_Cu")
         self.assertEqual(payload["particle"], "gamma")
         self.assertEqual(payload["physics_list"], "FTFP_BERT")
+        self.assertEqual(payload["run"]["seed"], 31415)
+        self.assertEqual(payload["run_manifest"]["geometry_root_volume"], "Target")
         self.assertEqual(payload["root_volume_name"], "Target")
         self.assertTrue(payload["scoring"]["detector_crossings"])
         self.assertEqual(payload["size_x"], 10.0)
@@ -55,7 +58,8 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                         "material": "G4_Si",
                         "position": {"type": "vector", "value": [0.0, 0.0, 50.0]},
                         "size_triplet_mm": [12.0, 12.0, 1.5],
-                    }
+                    },
+                    "run": {"seed": 2718},
                 },
                 "source": {"particle": "proton", "energy": 250.0},
                 "physics_list": {"name": "QGSP_BERT"},
@@ -67,6 +71,8 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
         self.assertEqual(payload["physics_list"], "QGSP_BERT")
+        self.assertEqual(payload["run"]["seed"], 2718)
+        self.assertEqual(payload["run_manifest"]["detector_volume_name"], "Detector")
         self.assertTrue(payload["scoring"]["detector_crossings"])
         self.assertTrue(payload["detector_enabled"])
         self.assertEqual(payload["detector_name"], "Detector")
