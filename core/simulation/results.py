@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v1"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v2"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -26,6 +26,10 @@ class SimulationScoringResult:
     plane_crossing_z_mm: float | None = None
     plane_crossing_count: int = 0
     plane_crossing_events: int = 0
+    plane_crossing_forward_count: int = 0
+    plane_crossing_forward_events: int = 0
+    plane_crossing_reverse_count: int = 0
+    plane_crossing_reverse_events: int = 0
     detector_crossing_count: int = 0
     detector_crossing_events: int = 0
     target_edep_total_mev: float = 0.0
@@ -126,6 +130,10 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         ),
         plane_crossing_count=int(scoring_data.get("plane_crossing_count", 0) or 0),
         plane_crossing_events=int(scoring_data.get("plane_crossing_events", 0) or 0),
+        plane_crossing_forward_count=int(scoring_data.get("plane_crossing_forward_count", 0) or 0),
+        plane_crossing_forward_events=int(scoring_data.get("plane_crossing_forward_events", 0) or 0),
+        plane_crossing_reverse_count=int(scoring_data.get("plane_crossing_reverse_count", 0) or 0),
+        plane_crossing_reverse_events=int(scoring_data.get("plane_crossing_reverse_events", 0) or 0),
         detector_crossing_count=int(scoring_data.get("detector_crossing_count", 0) or 0),
         detector_crossing_events=int(scoring_data.get("detector_crossing_events", 0) or 0),
         target_edep_total_mev=float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),

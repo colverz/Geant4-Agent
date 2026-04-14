@@ -41,7 +41,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-14.v1";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v2";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -144,8 +144,14 @@ struct RuntimeScoringState {
   std::string scoring_plane_name = "ScoringPlane";
   double scoring_plane_z_mm = 0.0;
   bool current_event_plane_crossed = false;
+  bool current_event_plane_crossed_forward = false;
+  bool current_event_plane_crossed_reverse = false;
   int plane_crossing_events = 0;
   int plane_crossing_count = 0;
+  int plane_crossing_forward_events = 0;
+  int plane_crossing_forward_count = 0;
+  int plane_crossing_reverse_events = 0;
+  int plane_crossing_reverse_count = 0;
   std::map<std::string, VolumeScoringMetrics> volume_stats;
 };
 
@@ -483,11 +489,19 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
         const auto pre_z = pre_point->GetPosition().z() / mm;
         const auto post_z = post_point->GetPosition().z() / mm;
         const auto plane_z = scoring_state_->scoring_plane_z_mm;
-        const auto crosses_plane =
-            ((pre_z < plane_z && post_z >= plane_z) || (pre_z > plane_z && post_z <= plane_z));
-        if (crosses_plane) {
+        const auto forward_cross = (pre_z < plane_z && post_z >= plane_z);
+        const auto reverse_cross = (pre_z > plane_z && post_z <= plane_z);
+        if (forward_cross || reverse_cross) {
           scoring_state_->plane_crossing_count += 1;
           scoring_state_->current_event_plane_crossed = true;
+          if (forward_cross) {
+            scoring_state_->plane_crossing_forward_count += 1;
+            scoring_state_->current_event_plane_crossed_forward = true;
+          }
+          if (reverse_cross) {
+            scoring_state_->plane_crossing_reverse_count += 1;
+            scoring_state_->current_event_plane_crossed_reverse = true;
+          }
         }
       }
     }
@@ -514,6 +528,8 @@ class RuntimeEventAction : public G4UserEventAction {
     }
     scoring_state_->current_event_target_edep_mev = 0.0;
     scoring_state_->current_event_plane_crossed = false;
+    scoring_state_->current_event_plane_crossed_forward = false;
+    scoring_state_->current_event_plane_crossed_reverse = false;
     for (auto& [_, metrics] : scoring_state_->volume_stats) {
       metrics.current_event_edep_mev = 0.0;
       metrics.current_event_crossed = false;
@@ -541,6 +557,12 @@ class RuntimeEventAction : public G4UserEventAction {
     }
     if (scoring_state_->current_event_plane_crossed) {
       scoring_state_->plane_crossing_events += 1;
+    }
+    if (scoring_state_->current_event_plane_crossed_forward) {
+      scoring_state_->plane_crossing_forward_events += 1;
+    }
+    if (scoring_state_->current_event_plane_crossed_reverse) {
+      scoring_state_->plane_crossing_reverse_events += 1;
     }
   }
 
@@ -705,6 +727,10 @@ int main(int argc, char** argv) {
           << "    \"plane_crossing_z_mm\": " << (cfg.score_plane_crossings ? std::to_string(cfg.scoring_plane_z_mm) : "null") << ",\n"
           << "    \"plane_crossing_count\": " << scoring_state.plane_crossing_count << ",\n"
           << "    \"plane_crossing_events\": " << scoring_state.plane_crossing_events << ",\n"
+          << "    \"plane_crossing_forward_count\": " << scoring_state.plane_crossing_forward_count << ",\n"
+          << "    \"plane_crossing_forward_events\": " << scoring_state.plane_crossing_forward_events << ",\n"
+          << "    \"plane_crossing_reverse_count\": " << scoring_state.plane_crossing_reverse_count << ",\n"
+          << "    \"plane_crossing_reverse_events\": " << scoring_state.plane_crossing_reverse_events << ",\n"
           << "    \"detector_crossing_count\": "
           << (role_stats.count("detector") ? role_stats.at("detector").crossing_count : 0) << ",\n"
           << "    \"detector_crossing_events\": "

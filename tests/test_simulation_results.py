@@ -57,6 +57,10 @@ class SimulationResultTest(unittest.TestCase):
                     "plane_crossing_z_mm": 25.0,
                     "plane_crossing_count": 5,
                     "plane_crossing_events": 4,
+                    "plane_crossing_forward_count": 5,
+                    "plane_crossing_forward_events": 4,
+                    "plane_crossing_reverse_count": 0,
+                    "plane_crossing_reverse_events": 0,
                     "detector_crossing_count": 2,
                     "detector_crossing_events": 2,
                     "target_edep_total_mev": 2.7,
@@ -87,6 +91,8 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.run_manifest["geometry_root_volume"], "Target")
         self.assertEqual(result.scoring.plane_crossing_name, "CheckPlane")
         self.assertEqual(result.scoring.plane_crossing_count, 5)
+        self.assertEqual(result.scoring.plane_crossing_forward_count, 5)
+        self.assertEqual(result.scoring.plane_crossing_reverse_count, 0)
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.detector.volume_name, "Detector")
@@ -105,7 +111,7 @@ class SimulationResultTest(unittest.TestCase):
   "run_ok": true,
   "events_requested": 2,
   "events_completed": 2,
-  "schema_version": "2026-04-14.v1",
+  "schema_version": "2026-04-14.v2",
   "geometry_structure": "single_tubs",
   "material": "G4_W",
   "particle": "proton",
@@ -143,6 +149,10 @@ class SimulationResultTest(unittest.TestCase):
     "plane_crossing_z_mm": 40.0,
     "plane_crossing_count": 2,
     "plane_crossing_events": 2,
+    "plane_crossing_forward_count": 2,
+    "plane_crossing_forward_events": 2,
+    "plane_crossing_reverse_count": 0,
+    "plane_crossing_reverse_events": 0,
     "detector_crossing_count": 1,
     "detector_crossing_events": 1,
     "target_edep_total_mev": 1.25,
@@ -183,6 +193,7 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.run_manifest["detector_volume_name"], "Detector")
         self.assertEqual(result.scoring.plane_crossing_name, "DetectorPlane")
         self.assertEqual(result.scoring.plane_crossing_events, 2)
+        self.assertEqual(result.scoring.plane_crossing_forward_events, 2)
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.scoring.detector_crossing_count, 1)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)

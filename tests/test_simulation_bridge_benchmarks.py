@@ -154,6 +154,11 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertIn("plane_crossing_count", summary["scoring"])
         self.assertGreater(summary["scoring"]["plane_crossing_count"], 0)
         self.assertGreater(summary["scoring"]["plane_crossing_events"], 0)
+        self.assertGreater(summary["scoring"]["plane_crossing_forward_count"], 0)
+        self.assertEqual(
+            summary["scoring"]["plane_crossing_count"],
+            summary["scoring"]["plane_crossing_forward_count"] + summary["scoring"]["plane_crossing_reverse_count"],
+        )
 
 
 if __name__ == "__main__":
