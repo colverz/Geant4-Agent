@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v2"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v3"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -30,6 +30,8 @@ class SimulationScoringResult:
     plane_crossing_forward_events: int = 0
     plane_crossing_reverse_count: int = 0
     plane_crossing_reverse_events: int = 0
+    plane_crossing_particle_counts: dict[str, int] | None = None
+    plane_crossing_particle_events: dict[str, int] | None = None
     detector_crossing_count: int = 0
     detector_crossing_events: int = 0
     target_edep_total_mev: float = 0.0
@@ -82,6 +84,27 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
     raw_role_stats = scoring_data.get("role_stats", {})
     volume_stats: dict[str, dict[str, float | int]] = {}
     role_stats: dict[str, dict[str, float | int]] = {}
+    raw_plane_crossing_particle_counts = (
+        scoring_data.get("plane_crossing_particle_counts", {})
+        if isinstance(scoring_data.get("plane_crossing_particle_counts"), dict)
+        else {}
+    )
+    raw_plane_crossing_particle_events = (
+        scoring_data.get("plane_crossing_particle_events", {})
+        if isinstance(scoring_data.get("plane_crossing_particle_events"), dict)
+        else {}
+    )
+    plane_crossing_particle_counts: dict[str, int] = {}
+    plane_crossing_particle_events: dict[str, int] = {}
+    for particle_name, raw_value in raw_plane_crossing_particle_counts.items():
+        if not isinstance(particle_name, str) or not particle_name:
+            continue
+        plane_crossing_particle_counts[particle_name] = int(raw_value or 0)
+    for particle_name, raw_value in raw_plane_crossing_particle_events.items():
+        if not isinstance(particle_name, str) or not particle_name:
+            continue
+        plane_crossing_particle_events[particle_name] = int(raw_value or 0)
+
     if isinstance(raw_volume_stats, dict):
         for volume_name, raw_stats in raw_volume_stats.items():
             if not isinstance(volume_name, str) or not isinstance(raw_stats, dict):
@@ -134,6 +157,8 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         plane_crossing_forward_events=int(scoring_data.get("plane_crossing_forward_events", 0) or 0),
         plane_crossing_reverse_count=int(scoring_data.get("plane_crossing_reverse_count", 0) or 0),
         plane_crossing_reverse_events=int(scoring_data.get("plane_crossing_reverse_events", 0) or 0),
+        plane_crossing_particle_counts=plane_crossing_particle_counts or None,
+        plane_crossing_particle_events=plane_crossing_particle_events or None,
         detector_crossing_count=int(scoring_data.get("detector_crossing_count", 0) or 0),
         detector_crossing_events=int(scoring_data.get("detector_crossing_events", 0) or 0),
         target_edep_total_mev=float(scoring_data.get("target_edep_total_mev", 0.0) or 0.0),

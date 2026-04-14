@@ -155,9 +155,18 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertGreater(summary["scoring"]["plane_crossing_count"], 0)
         self.assertGreater(summary["scoring"]["plane_crossing_events"], 0)
         self.assertGreater(summary["scoring"]["plane_crossing_forward_count"], 0)
+        self.assertIn("plane_crossing_particle_counts", summary["scoring"])
+        self.assertIn("plane_crossing_particle_events", summary["scoring"])
+        self.assertIn("gamma", summary["scoring"]["plane_crossing_particle_counts"])
+        self.assertGreater(summary["scoring"]["plane_crossing_particle_counts"]["gamma"], 0)
+        self.assertGreater(summary["scoring"]["plane_crossing_particle_events"]["gamma"], 0)
         self.assertEqual(
             summary["scoring"]["plane_crossing_count"],
             summary["scoring"]["plane_crossing_forward_count"] + summary["scoring"]["plane_crossing_reverse_count"],
+        )
+        self.assertEqual(
+            summary["scoring"]["plane_crossing_count"],
+            sum(summary["scoring"]["plane_crossing_particle_counts"].values()),
         )
 
 

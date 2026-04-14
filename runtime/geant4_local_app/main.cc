@@ -34,6 +34,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -41,7 +42,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-14.v2";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v3";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -152,6 +153,9 @@ struct RuntimeScoringState {
   int plane_crossing_forward_count = 0;
   int plane_crossing_reverse_events = 0;
   int plane_crossing_reverse_count = 0;
+  std::map<std::string, int> plane_crossing_particle_counts;
+  std::map<std::string, int> plane_crossing_particle_events;
+  std::set<std::string> current_event_plane_crossing_particles;
   std::map<std::string, VolumeScoringMetrics> volume_stats;
 };
 
@@ -206,6 +210,19 @@ void write_role_map(std::ostream& out, const std::map<std::string, std::vector<s
     first_role = false;
     out << "\"" << role_name << "\": ";
     write_string_array(out, values);
+  }
+  out << "}";
+}
+
+void write_int_map(std::ostream& out, const std::map<std::string, int>& values) {
+  out << "{";
+  bool first = true;
+  for (const auto& [key, value] : values) {
+    if (!first) {
+      out << ", ";
+    }
+    first = false;
+    out << "\"" << key << "\": " << value;
   }
   out << "}";
 }
@@ -492,8 +509,16 @@ class RuntimeSteppingAction : public G4UserSteppingAction {
         const auto forward_cross = (pre_z < plane_z && post_z >= plane_z);
         const auto reverse_cross = (pre_z > plane_z && post_z <= plane_z);
         if (forward_cross || reverse_cross) {
+          std::string particle_name = "unknown";
+          if (const auto* track = step->GetTrack()) {
+            if (const auto* definition = track->GetDefinition()) {
+              particle_name = definition->GetParticleName();
+            }
+          }
           scoring_state_->plane_crossing_count += 1;
           scoring_state_->current_event_plane_crossed = true;
+          scoring_state_->plane_crossing_particle_counts[particle_name] += 1;
+          scoring_state_->current_event_plane_crossing_particles.insert(particle_name);
           if (forward_cross) {
             scoring_state_->plane_crossing_forward_count += 1;
             scoring_state_->current_event_plane_crossed_forward = true;
@@ -530,6 +555,7 @@ class RuntimeEventAction : public G4UserEventAction {
     scoring_state_->current_event_plane_crossed = false;
     scoring_state_->current_event_plane_crossed_forward = false;
     scoring_state_->current_event_plane_crossed_reverse = false;
+    scoring_state_->current_event_plane_crossing_particles.clear();
     for (auto& [_, metrics] : scoring_state_->volume_stats) {
       metrics.current_event_edep_mev = 0.0;
       metrics.current_event_crossed = false;
@@ -563,6 +589,9 @@ class RuntimeEventAction : public G4UserEventAction {
     }
     if (scoring_state_->current_event_plane_crossed_reverse) {
       scoring_state_->plane_crossing_reverse_events += 1;
+    }
+    for (const auto& particle_name : scoring_state_->current_event_plane_crossing_particles) {
+      scoring_state_->plane_crossing_particle_events[particle_name] += 1;
     }
   }
 
@@ -731,6 +760,12 @@ int main(int argc, char** argv) {
           << "    \"plane_crossing_forward_events\": " << scoring_state.plane_crossing_forward_events << ",\n"
           << "    \"plane_crossing_reverse_count\": " << scoring_state.plane_crossing_reverse_count << ",\n"
           << "    \"plane_crossing_reverse_events\": " << scoring_state.plane_crossing_reverse_events << ",\n"
+          << "    \"plane_crossing_particle_counts\": ";
+  write_int_map(summary, scoring_state.plane_crossing_particle_counts);
+  summary << ",\n"
+          << "    \"plane_crossing_particle_events\": ";
+  write_int_map(summary, scoring_state.plane_crossing_particle_events);
+  summary << ",\n"
           << "    \"detector_crossing_count\": "
           << (role_stats.count("detector") ? role_stats.at("detector").crossing_count : 0) << ",\n"
           << "    \"detector_crossing_events\": "
