@@ -143,7 +143,7 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
                 "scoring": {
                     "target_edep": True,
                     "plane_crossings": True,
-                    "plane": {"name": "MidPlane", "z_mm": 20.0},
+                    "plane": {"name": "MidPlane", "z_mm": 0.0},
                 },
             }
         )
@@ -152,6 +152,8 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertEqual(summary["scoring"]["plane_crossing_name"], "MidPlane")
         self.assertEqual(summary["run_manifest"]["scoring_plane_name"], "MidPlane")
         self.assertIn("plane_crossing_count", summary["scoring"])
+        self.assertGreater(summary["scoring"]["plane_crossing_count"], 0)
+        self.assertGreater(summary["scoring"]["plane_crossing_events"], 0)
 
 
 if __name__ == "__main__":
