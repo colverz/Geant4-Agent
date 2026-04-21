@@ -26,18 +26,57 @@ class DetectorRuntimeSpec:
 
 
 @dataclass(frozen=True)
+class BeamSpotSpec:
+    profile: str = "uniform_disk"
+    radius_mm: float = 0.0
+    sigma_mm: float = 0.0
+
+
+@dataclass(frozen=True)
+class BeamDivergenceSpec:
+    profile: str = "uniform_cone"
+    half_angle_deg: float = 0.0
+    sigma_deg: float = 0.0
+
+
+@dataclass(frozen=True)
+class BeamModelSpec:
+    spot: BeamSpotSpec = field(default_factory=BeamSpotSpec)
+    divergence: BeamDivergenceSpec = field(default_factory=BeamDivergenceSpec)
+
+
+@dataclass(frozen=True)
 class SourceRuntimeSpec:
     source_type: str
     particle: str
     energy_mev: float
     position_mm: tuple[float, float, float]
     direction_vec: tuple[float, float, float]
-    spot_radius_mm: float = 0.0
-    divergence_half_angle_deg: float = 0.0
-    spot_profile: str = "uniform_disk"
-    spot_sigma_mm: float = 0.0
-    divergence_profile: str = "uniform_cone"
-    divergence_sigma_deg: float = 0.0
+    beam_model: BeamModelSpec = field(default_factory=BeamModelSpec)
+
+    @property
+    def spot_radius_mm(self) -> float:
+        return self.beam_model.spot.radius_mm
+
+    @property
+    def spot_profile(self) -> str:
+        return self.beam_model.spot.profile
+
+    @property
+    def spot_sigma_mm(self) -> float:
+        return self.beam_model.spot.sigma_mm
+
+    @property
+    def divergence_half_angle_deg(self) -> float:
+        return self.beam_model.divergence.half_angle_deg
+
+    @property
+    def divergence_profile(self) -> str:
+        return self.beam_model.divergence.profile
+
+    @property
+    def divergence_sigma_deg(self) -> float:
+        return self.beam_model.divergence.sigma_deg
 
 
 @dataclass(frozen=True)

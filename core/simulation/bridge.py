@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from core.simulation.spec import (
+    BeamDivergenceSpec,
+    BeamModelSpec,
+    BeamSpotSpec,
     DetectorRuntimeSpec,
     GeometryRuntimeSpec,
     PhysicsRuntimeSpec,
@@ -240,31 +243,37 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         energy_mev=_coerce_float(source.get("energy"), 1.0),
         position_mm=_coerce_vector3(source.get("position"), (0.0, 0.0, -100.0)),
         direction_vec=_coerce_vector3(source.get("direction"), (0.0, 0.0, 1.0)),
-        spot_radius_mm=_nonnegative_float(
-            source.get("spot_radius_mm", source.get("beam_spot_radius_mm")),
-            0.0,
-        ),
-        divergence_half_angle_deg=_nonnegative_float(
-            source.get("divergence_half_angle_deg", source.get("divergence_deg")),
-            0.0,
-        ),
-        spot_profile=_choice(
-            source.get("spot_profile", source.get("beam_spot_profile")),
-            allowed={"uniform_disk", "gaussian"},
-            fallback="uniform_disk",
-        ),
-        spot_sigma_mm=_nonnegative_float(
-            source.get("spot_sigma_mm", source.get("beam_spot_sigma_mm")),
-            0.0,
-        ),
-        divergence_profile=_choice(
-            source.get("divergence_profile", source.get("beam_divergence_profile")),
-            allowed={"uniform_cone", "gaussian"},
-            fallback="uniform_cone",
-        ),
-        divergence_sigma_deg=_nonnegative_float(
-            source.get("divergence_sigma_deg", source.get("beam_divergence_sigma_deg")),
-            0.0,
+        beam_model=BeamModelSpec(
+            spot=BeamSpotSpec(
+                radius_mm=_nonnegative_float(
+                    source.get("spot_radius_mm", source.get("beam_spot_radius_mm")),
+                    0.0,
+                ),
+                profile=_choice(
+                    source.get("spot_profile", source.get("beam_spot_profile")),
+                    allowed={"uniform_disk", "gaussian"},
+                    fallback="uniform_disk",
+                ),
+                sigma_mm=_nonnegative_float(
+                    source.get("spot_sigma_mm", source.get("beam_spot_sigma_mm")),
+                    0.0,
+                ),
+            ),
+            divergence=BeamDivergenceSpec(
+                half_angle_deg=_nonnegative_float(
+                    source.get("divergence_half_angle_deg", source.get("divergence_deg")),
+                    0.0,
+                ),
+                profile=_choice(
+                    source.get("divergence_profile", source.get("beam_divergence_profile")),
+                    allowed={"uniform_cone", "gaussian"},
+                    fallback="uniform_cone",
+                ),
+                sigma_deg=_nonnegative_float(
+                    source.get("divergence_sigma_deg", source.get("beam_divergence_sigma_deg")),
+                    0.0,
+                ),
+            ),
         ),
     )
 

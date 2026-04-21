@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 from typing import Any
@@ -57,6 +57,25 @@ class SimulationDetectorResult:
 
 
 @dataclass(frozen=True)
+class SimulationSourceModelResult:
+    spot_radius_mm: float = 0.0
+    divergence_half_angle_deg: float = 0.0
+    spot_profile: str = "uniform_disk"
+    spot_sigma_mm: float = 0.0
+    divergence_profile: str = "uniform_cone"
+    divergence_sigma_deg: float = 0.0
+
+
+@dataclass(frozen=True)
+class SimulationSourceSamplingResult:
+    primary_count: int = 0
+    sampled_position_mean_mm: tuple[float, float, float] | None = None
+    sampled_position_rms_mm: tuple[float, float, float] | None = None
+    sampled_direction_mean: tuple[float, float, float] | None = None
+    sampled_direction_rms: tuple[float, float, float] | None = None
+
+
+@dataclass(frozen=True)
 class SimulationResult:
     run_ok: bool
     events_requested: int
@@ -66,19 +85,10 @@ class SimulationResult:
     material: str | None = None
     particle: str | None = None
     source_type: str | None = None
-    source_spot_radius_mm: float = 0.0
-    source_divergence_half_angle_deg: float = 0.0
-    source_spot_profile: str = "uniform_disk"
-    source_spot_sigma_mm: float = 0.0
-    source_divergence_profile: str = "uniform_cone"
-    source_divergence_sigma_deg: float = 0.0
+    source_model: SimulationSourceModelResult = field(default_factory=SimulationSourceModelResult)
     source_position_mm: tuple[float, float, float] | None = None
     source_direction: tuple[float, float, float] | None = None
-    source_primary_count: int = 0
-    source_sampled_position_mean_mm: tuple[float, float, float] | None = None
-    source_sampled_position_rms_mm: tuple[float, float, float] | None = None
-    source_sampled_direction_mean: tuple[float, float, float] | None = None
-    source_sampled_direction_rms: tuple[float, float, float] | None = None
+    source_sampling: SimulationSourceSamplingResult = field(default_factory=SimulationSourceSamplingResult)
     payload_sha256: str | None = None
     geant4_version: str | None = None
     run_seed: int = 1337
@@ -89,8 +99,69 @@ class SimulationResult:
     scoring: SimulationScoringResult = SimulationScoringResult()
     detector: SimulationDetectorResult = SimulationDetectorResult()
 
+    @property
+    def source_spot_radius_mm(self) -> float:
+        return self.source_model.spot_radius_mm
+
+    @property
+    def source_divergence_half_angle_deg(self) -> float:
+        return self.source_model.divergence_half_angle_deg
+
+    @property
+    def source_spot_profile(self) -> str:
+        return self.source_model.spot_profile
+
+    @property
+    def source_spot_sigma_mm(self) -> float:
+        return self.source_model.spot_sigma_mm
+
+    @property
+    def source_divergence_profile(self) -> str:
+        return self.source_model.divergence_profile
+
+    @property
+    def source_divergence_sigma_deg(self) -> float:
+        return self.source_model.divergence_sigma_deg
+
+    @property
+    def source_primary_count(self) -> int:
+        return self.source_sampling.primary_count
+
+    @property
+    def source_sampled_position_mean_mm(self) -> tuple[float, float, float] | None:
+        return self.source_sampling.sampled_position_mean_mm
+
+    @property
+    def source_sampled_position_rms_mm(self) -> tuple[float, float, float] | None:
+        return self.source_sampling.sampled_position_rms_mm
+
+    @property
+    def source_sampled_direction_mean(self) -> tuple[float, float, float] | None:
+        return self.source_sampling.sampled_direction_mean
+
+    @property
+    def source_sampled_direction_rms(self) -> tuple[float, float, float] | None:
+        return self.source_sampling.sampled_direction_rms
+
     def to_payload(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        # Compatibility fields for current API consumers while internal code uses structured objects.
+        payload.update(
+            {
+                "source_spot_radius_mm": self.source_spot_radius_mm,
+                "source_divergence_half_angle_deg": self.source_divergence_half_angle_deg,
+                "source_spot_profile": self.source_spot_profile,
+                "source_spot_sigma_mm": self.source_spot_sigma_mm,
+                "source_divergence_profile": self.source_divergence_profile,
+                "source_divergence_sigma_deg": self.source_divergence_sigma_deg,
+                "source_primary_count": self.source_primary_count,
+                "source_sampled_position_mean_mm": self.source_sampled_position_mean_mm,
+                "source_sampled_position_rms_mm": self.source_sampled_position_rms_mm,
+                "source_sampled_direction_mean": self.source_sampled_direction_mean,
+                "source_sampled_direction_rms": self.source_sampled_direction_rms,
+            }
+        )
+        return payload
 
 
 def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
@@ -220,19 +291,23 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         material=data.get("material"),
         particle=data.get("particle"),
         source_type=data.get("source_type"),
-        source_spot_radius_mm=float(data.get("source_spot_radius_mm", 0.0) or 0.0),
-        source_divergence_half_angle_deg=float(data.get("source_divergence_half_angle_deg", 0.0) or 0.0),
-        source_spot_profile=str(data.get("source_spot_profile") or "uniform_disk"),
-        source_spot_sigma_mm=float(data.get("source_spot_sigma_mm", 0.0) or 0.0),
-        source_divergence_profile=str(data.get("source_divergence_profile") or "uniform_cone"),
-        source_divergence_sigma_deg=float(data.get("source_divergence_sigma_deg", 0.0) or 0.0),
+        source_model=SimulationSourceModelResult(
+            spot_radius_mm=float(data.get("source_spot_radius_mm", 0.0) or 0.0),
+            divergence_half_angle_deg=float(data.get("source_divergence_half_angle_deg", 0.0) or 0.0),
+            spot_profile=str(data.get("source_spot_profile") or "uniform_disk"),
+            spot_sigma_mm=float(data.get("source_spot_sigma_mm", 0.0) or 0.0),
+            divergence_profile=str(data.get("source_divergence_profile") or "uniform_cone"),
+            divergence_sigma_deg=float(data.get("source_divergence_sigma_deg", 0.0) or 0.0),
+        ),
         source_position_mm=_coerce_triplet(data.get("source_position_mm")),
         source_direction=_coerce_triplet(data.get("source_direction")),
-        source_primary_count=int(data.get("source_primary_count", 0) or 0),
-        source_sampled_position_mean_mm=_coerce_triplet(data.get("source_sampled_position_mean_mm")),
-        source_sampled_position_rms_mm=_coerce_triplet(data.get("source_sampled_position_rms_mm")),
-        source_sampled_direction_mean=_coerce_triplet(data.get("source_sampled_direction_mean")),
-        source_sampled_direction_rms=_coerce_triplet(data.get("source_sampled_direction_rms")),
+        source_sampling=SimulationSourceSamplingResult(
+            primary_count=int(data.get("source_primary_count", 0) or 0),
+            sampled_position_mean_mm=_coerce_triplet(data.get("source_sampled_position_mean_mm")),
+            sampled_position_rms_mm=_coerce_triplet(data.get("source_sampled_position_rms_mm")),
+            sampled_direction_mean=_coerce_triplet(data.get("source_sampled_direction_mean")),
+            sampled_direction_rms=_coerce_triplet(data.get("source_sampled_direction_rms")),
+        ),
         payload_sha256=data.get("payload_sha256"),
         geant4_version=data.get("geant4_version"),
         run_seed=int(data.get("run_seed", 1337) or 1337),

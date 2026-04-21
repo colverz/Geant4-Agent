@@ -180,6 +180,16 @@ The runtime also emits a source sampling summary:
 
 This keeps the beam model observable: later source-model changes can be validated against actual sampled primary positions and directions, not just against input parameters.
 
+Internally, the bridge keeps these source fields grouped rather than treating them as an open-ended dictionary:
+
+- `BeamModelSpec`
+  - `BeamSpotSpec`
+  - `BeamDivergenceSpec`
+- `SimulationSourceModelResult`
+- `SimulationSourceSamplingResult`
+
+Flat `source_*` fields remain in runtime JSON and API payloads for compatibility, but app-side code should prefer the structured objects when making simulation decisions.
+
 ## References
 
 The bridge design is intentionally lightweight, but its structure borrows from established Geant4-based systems:

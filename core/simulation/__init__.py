@@ -4,11 +4,16 @@ from core.simulation.results import (
     SimulationDetectorResult,
     SimulationResult,
     SimulationScoringResult,
+    SimulationSourceModelResult,
+    SimulationSourceSamplingResult,
     derive_role_stats,
     load_simulation_result,
     simulation_result_from_dict,
 )
 from core.simulation.spec import (
+    BeamDivergenceSpec,
+    BeamModelSpec,
+    BeamSpotSpec,
     DetectorRuntimeSpec,
     GeometryRuntimeSpec,
     PhysicsRuntimeSpec,
@@ -21,6 +26,9 @@ from core.simulation.spec import (
 
 __all__ = [
     "build_simulation_spec",
+    "BeamDivergenceSpec",
+    "BeamModelSpec",
+    "BeamSpotSpec",
     "DetectorRuntimeSpec",
     "GeometryRuntimeSpec",
     "PhysicsRuntimeSpec",
@@ -30,6 +38,8 @@ __all__ = [
     "SimulationDetectorResult",
     "SimulationResult",
     "SimulationScoringResult",
+    "SimulationSourceModelResult",
+    "SimulationSourceSamplingResult",
     "ScoringSpec",
     "SimulationSpec",
     "SourceRuntimeSpec",
