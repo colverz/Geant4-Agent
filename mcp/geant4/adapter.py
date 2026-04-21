@@ -59,20 +59,27 @@ def _load_run_summary_payload(
             "artifact_dir": str(artifact_dir),
             "run_summary_path": str(summary_path),
         }
+    role_map = _runtime_volume_roles(runtime_payload)
+    role_stats = None
+    if not result.scoring.role_stats:
+        role_stats = derive_role_stats(result.scoring.volume_stats, role_map)
+
     payload = result.to_payload()
-    role_map = None
-    if isinstance(runtime_payload, dict):
-        scoring = runtime_payload.get("scoring", {})
-        if isinstance(scoring, dict) and isinstance(scoring.get("volume_roles"), dict):
-            role_map = scoring["volume_roles"]
-    existing_role_stats = payload.get("scoring", {}).get("role_stats")
-    if not existing_role_stats:
-        role_stats = derive_role_stats(payload.get("scoring", {}).get("volume_stats"), role_map)
-        if role_stats:
-            payload["scoring"]["role_stats"] = role_stats
+    if role_stats:
+        payload["scoring"]["role_stats"] = role_stats
     payload["artifact_dir"] = str(artifact_dir)
     payload["run_summary_path"] = str(summary_path)
     return payload
+
+
+def _runtime_volume_roles(runtime_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(runtime_payload, dict):
+        return None
+    scoring = runtime_payload.get("scoring", {})
+    if not isinstance(scoring, dict):
+        return None
+    volume_roles = scoring.get("volume_roles")
+    return volume_roles if isinstance(volume_roles, dict) else None
 
 
 class Geant4RuntimeAdapter(ABC):

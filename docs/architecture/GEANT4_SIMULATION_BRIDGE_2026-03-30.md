@@ -133,6 +133,18 @@ Implemented in:
 
 This layer turns the runtime artifact back into a stable app-side result object.
 
+The runtime JSON remains a compatibility boundary and may keep flat scorer keys such as
+`plane_crossing_count` or `target_edep_total_mev`. Inside Python, scorer data is grouped under
+`SimulationScoringResult` subobjects:
+
+- `SimulationTargetScoringResult`
+- `SimulationDetectorCrossingResult`
+- `SimulationPlaneCrossingResult`
+- `SimulationVolumeStatsResult`
+
+Flat result properties and payload keys are preserved for current UI/MCP consumers, but new bridge
+logic should prefer the structured result objects.
+
 The current result schema version is:
 
 - `2026-04-14.v7`
