@@ -14,6 +14,7 @@ def _strings(value: object) -> tuple[str, ...]:
 class V2PipelineMetaView:
     missing_fields: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
 
     @classmethod
     def from_raw(cls, value: object) -> V2PipelineMetaView:
@@ -22,6 +23,7 @@ class V2PipelineMetaView:
         return cls(
             missing_fields=_strings(value.get("missing_fields")),
             errors=_strings(value.get("errors")),
+            warnings=_strings(value.get("warnings")),
         )
 
 
@@ -29,6 +31,7 @@ class V2PipelineMetaView:
 class V2PipelineDebugView:
     geometry: V2PipelineMetaView = V2PipelineMetaView()
     source: V2PipelineMetaView = V2PipelineMetaView()
+    spatial: V2PipelineMetaView = V2PipelineMetaView()
     spatial_source: V2PipelineMetaView = V2PipelineMetaView()
 
     @classmethod
@@ -38,5 +41,6 @@ class V2PipelineDebugView:
         return cls(
             geometry=V2PipelineMetaView.from_raw(slot_debug.get("geometry_v2")),
             source=V2PipelineMetaView.from_raw(slot_debug.get("source_v2")),
+            spatial=V2PipelineMetaView.from_raw(spatial_meta),
             spatial_source=V2PipelineMetaView.from_raw(spatial_source_meta),
         )

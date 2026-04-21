@@ -4,6 +4,8 @@ import unittest
 
 from core.orchestrator.session_manager import (
     _apply_updates,
+    _merge_v2_missing_paths,
+    _prioritize_spatial_questions,
     _prioritize_v2_compile_questions,
     _v2_compile_missing_paths,
 )
@@ -82,6 +84,21 @@ class SessionUpdateOpsTest(unittest.TestCase):
             prioritized,
             ["source.energy", "source.type", "source.particle"],
         )
+
+    def test_spatial_review_warnings_prioritize_source_position(self) -> None:
+        slot_debug = {
+            "spatial_v2": {
+                "warnings": ["source_inside_target"],
+            },
+        }
+        missing_paths = _merge_v2_missing_paths(["source.direction"], slot_debug)
+        self.assertEqual(missing_paths, ["source.direction", "source.position"])
+        prioritized = _prioritize_spatial_questions(
+            ["source.direction", "source.position"],
+            missing_paths,
+            slot_debug,
+        )
+        self.assertEqual(prioritized, ["source.position", "source.direction"])
 
 
 if __name__ == "__main__":

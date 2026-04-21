@@ -47,7 +47,7 @@ from core.orchestrator.candidate_preprocess import (
 from core.orchestrator.constraint_ledger import lock_from_candidate
 from core.orchestrator.path_ops import deep_copy, get_path, remove_path, set_path
 from core.orchestrator.phase_machine import decide_phase_transition
-from core.orchestrator.pipeline_debug import V2PipelineDebugView
+from core.orchestrator.pipeline_debug import V2PipelineDebugView, V2PipelineMetaView
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.orchestrator.turn_transaction import begin_turn, commit_turn
 from core.orchestrator.types import CandidateUpdate, Intent, Phase, Producer, SessionState, UpdateOp
@@ -585,9 +585,8 @@ def _strip_source_updates(candidate: CandidateUpdate | None) -> CandidateUpdate 
     )
 
 
-def _spatial_review_missing_paths(spatial_meta: dict[str, Any]) -> list[str]:
-    warnings = {str(item) for item in spatial_meta.get("warnings", [])}
-    if {"source_inside_target", "source_on_target_face"} & warnings:
+def _spatial_review_missing_paths(spatial_meta: V2PipelineMetaView) -> list[str]:
+    if {"source_inside_target", "source_on_target_face"} & set(spatial_meta.warnings):
         return ["source.position"]
     return []
 
@@ -597,10 +596,10 @@ def _prioritize_spatial_questions(
     missing_fields: list[str],
     slot_debug: dict[str, Any],
 ) -> list[str]:
-    spatial_meta = slot_debug.get("spatial_v2")
-    if not isinstance(spatial_meta, dict):
+    debug_view = V2PipelineDebugView.from_slot_debug(slot_debug)
+    if not debug_view.spatial.warnings:
         return asked_fields
-    spatial_required = _spatial_review_missing_paths(spatial_meta)
+    spatial_required = _spatial_review_missing_paths(debug_view.spatial)
     if not spatial_required:
         return asked_fields
     prioritized = [path for path in spatial_required if path in missing_fields]
@@ -661,9 +660,8 @@ def _merge_v2_missing_paths(
 ) -> list[str]:
     merged = _dedupe_paths(list(base_missing_paths) + _v2_compile_missing_paths(slot_debug))
     if include_spatial:
-        spatial_meta = slot_debug.get("spatial_v2")
-        if isinstance(spatial_meta, dict):
-            merged = _dedupe_paths(merged + _spatial_review_missing_paths(spatial_meta))
+        debug_view = V2PipelineDebugView.from_slot_debug(slot_debug)
+        merged = _dedupe_paths(merged + _spatial_review_missing_paths(debug_view.spatial))
     return merged
 
 

@@ -165,6 +165,12 @@ Optional environment variables:
 Without a configured command, `Geant4McpServer` remains in-memory so ordinary UI and unit-test flows
 do not accidentally launch Geant4.
 
+For a local manual smoke test after setting the runtime command:
+
+```powershell
+python tools/local_geant4_smoke.py --events 1 --require-runtime
+```
+
 The current bridge also carries a reproducibility baseline:
 
 - explicit `run.seed`
