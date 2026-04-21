@@ -135,7 +135,7 @@ This layer turns the runtime artifact back into a stable app-side result object.
 
 The current result schema version is:
 
-- `2026-04-14.v4`
+- `2026-04-14.v6`
 
 The local Geant4 runtime now parses payloads with a real JSON parser rather than regex extraction.
 
@@ -158,6 +158,16 @@ The first source-runtime realism extension is intentionally still small:
 - `beam` may now carry `divergence_half_angle_deg`
 
 These are passed through the bridge and emitted back in the runtime result schema so they can be benchmarked and consumed explicitly.
+
+The runtime also emits a source sampling summary:
+
+- `source_primary_count`
+- `source_sampled_position_mean_mm`
+- `source_sampled_position_rms_mm`
+- `source_sampled_direction_mean`
+- `source_sampled_direction_rms`
+
+This keeps the beam model observable: later source-model changes can be validated against actual sampled primary positions and directions, not just against input parameters.
 
 ## References
 

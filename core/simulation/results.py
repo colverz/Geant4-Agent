@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v5"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v6"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -70,6 +70,11 @@ class SimulationResult:
     source_divergence_half_angle_deg: float = 0.0
     source_position_mm: tuple[float, float, float] | None = None
     source_direction: tuple[float, float, float] | None = None
+    source_primary_count: int = 0
+    source_sampled_position_mean_mm: tuple[float, float, float] | None = None
+    source_sampled_position_rms_mm: tuple[float, float, float] | None = None
+    source_sampled_direction_mean: tuple[float, float, float] | None = None
+    source_sampled_direction_rms: tuple[float, float, float] | None = None
     payload_sha256: str | None = None
     geant4_version: str | None = None
     run_seed: int = 1337
@@ -215,6 +220,11 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         source_divergence_half_angle_deg=float(data.get("source_divergence_half_angle_deg", 0.0) or 0.0),
         source_position_mm=_coerce_triplet(data.get("source_position_mm")),
         source_direction=_coerce_triplet(data.get("source_direction")),
+        source_primary_count=int(data.get("source_primary_count", 0) or 0),
+        source_sampled_position_mean_mm=_coerce_triplet(data.get("source_sampled_position_mean_mm")),
+        source_sampled_position_rms_mm=_coerce_triplet(data.get("source_sampled_position_rms_mm")),
+        source_sampled_direction_mean=_coerce_triplet(data.get("source_sampled_direction_mean")),
+        source_sampled_direction_rms=_coerce_triplet(data.get("source_sampled_direction_rms")),
         payload_sha256=data.get("payload_sha256"),
         geant4_version=data.get("geant4_version"),
         run_seed=int(data.get("run_seed", 1337) or 1337),

@@ -209,6 +209,12 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertEqual(summary["particle"], "proton")
         self.assertEqual(summary["source_spot_radius_mm"], 2.5)
         self.assertEqual(summary["source_divergence_half_angle_deg"], 1.25)
+        self.assertEqual(summary["source_primary_count"], 2)
+        self.assertEqual(len(summary["source_sampled_position_mean_mm"]), 3)
+        self.assertEqual(len(summary["source_sampled_position_rms_mm"]), 3)
+        self.assertEqual(len(summary["source_sampled_direction_mean"]), 3)
+        self.assertEqual(len(summary["source_sampled_direction_rms"]), 3)
+        self.assertGreater(summary["source_sampled_direction_mean"][2], 0.99)
         self.assertEqual(summary["run_seed"], 7777)
 
 

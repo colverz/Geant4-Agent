@@ -43,7 +43,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-14.v5";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v6";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -165,6 +165,55 @@ struct RuntimeScoringState {
   std::set<std::string> current_event_plane_crossing_particles;
   std::map<std::string, VolumeScoringMetrics> volume_stats;
 };
+
+struct RuntimeSourceSamplingState {
+  int primary_count = 0;
+  double position_sum_x_mm = 0.0;
+  double position_sum_y_mm = 0.0;
+  double position_sum_z_mm = 0.0;
+  double position_sq_sum_x_mm = 0.0;
+  double position_sq_sum_y_mm = 0.0;
+  double position_sq_sum_z_mm = 0.0;
+  double direction_sum_x = 0.0;
+  double direction_sum_y = 0.0;
+  double direction_sum_z = 0.0;
+  double direction_sq_sum_x = 0.0;
+  double direction_sq_sum_y = 0.0;
+  double direction_sq_sum_z = 0.0;
+
+  void record(const G4ThreeVector& position, const G4ThreeVector& direction) {
+    const auto x_mm = position.x() / mm;
+    const auto y_mm = position.y() / mm;
+    const auto z_mm = position.z() / mm;
+    const auto unit_direction = direction.mag() > 0.0 ? direction.unit() : G4ThreeVector(0., 0., 1.);
+    primary_count += 1;
+    position_sum_x_mm += x_mm;
+    position_sum_y_mm += y_mm;
+    position_sum_z_mm += z_mm;
+    position_sq_sum_x_mm += x_mm * x_mm;
+    position_sq_sum_y_mm += y_mm * y_mm;
+    position_sq_sum_z_mm += z_mm * z_mm;
+    direction_sum_x += unit_direction.x();
+    direction_sum_y += unit_direction.y();
+    direction_sum_z += unit_direction.z();
+    direction_sq_sum_x += unit_direction.x() * unit_direction.x();
+    direction_sq_sum_y += unit_direction.y() * unit_direction.y();
+    direction_sq_sum_z += unit_direction.z() * unit_direction.z();
+  }
+};
+
+double sampling_mean(double sum, int count) {
+  return count > 0 ? sum / static_cast<double>(count) : 0.0;
+}
+
+double sampling_rms(double sum, double squared_sum, int count) {
+  if (count <= 0) {
+    return 0.0;
+  }
+  const auto mean = sampling_mean(sum, count);
+  const auto variance = squared_sum / static_cast<double>(count) - mean * mean;
+  return std::sqrt(std::max(0.0, variance));
+}
 
 std::map<std::string, VolumeScoringMetrics> derive_role_stats(
     const std::map<std::string, VolumeScoringMetrics>& volume_stats,
@@ -475,8 +524,8 @@ class RuntimeDetectorConstruction : public G4VUserDetectorConstruction {
 
 class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
  public:
-  explicit RuntimePrimaryGeneratorAction(RuntimeConfig config)
-      : config_(std::move(config)), particle_gun_(new G4ParticleGun(1)) {
+  RuntimePrimaryGeneratorAction(RuntimeConfig config, RuntimeSourceSamplingState* source_sampling_state)
+      : config_(std::move(config)), source_sampling_state_(source_sampling_state), particle_gun_(new G4ParticleGun(1)) {
     auto* particle_table = G4ParticleTable::GetParticleTable();
     auto* particle = particle_table->FindParticle(config_.particle);
     if (!particle) {
@@ -500,12 +549,19 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
   ~RuntimePrimaryGeneratorAction() override { delete particle_gun_; }
 
   void GeneratePrimaries(G4Event* event) override {
+    G4ThreeVector sampled_position;
+    G4ThreeVector sampled_direction;
     if (config_.source_type == "beam") {
-      particle_gun_->SetParticlePosition(sample_beam_position());
-      particle_gun_->SetParticleMomentumDirection(sample_beam_direction());
+      sampled_position = sample_beam_position();
+      sampled_direction = sample_beam_direction();
     } else {
-      particle_gun_->SetParticlePosition(nominal_position_);
-      particle_gun_->SetParticleMomentumDirection(nominal_direction_);
+      sampled_position = nominal_position_;
+      sampled_direction = nominal_direction_;
+    }
+    particle_gun_->SetParticlePosition(sampled_position);
+    particle_gun_->SetParticleMomentumDirection(sampled_direction);
+    if (source_sampling_state_) {
+      source_sampling_state_->record(sampled_position, sampled_direction);
     }
     particle_gun_->GeneratePrimaryVertex(event);
   }
@@ -553,6 +609,7 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
   }
 
   RuntimeConfig config_;
+  RuntimeSourceSamplingState* source_sampling_state_ = nullptr;
   G4ParticleGun* particle_gun_;
   G4ThreeVector nominal_direction_;
   G4ThreeVector nominal_position_;
@@ -780,6 +837,7 @@ int main(int argc, char** argv) {
   }
   run_manager->SetUserInitialization(physics);
   RuntimeScoringState scoring_state;
+  RuntimeSourceSamplingState source_sampling_state;
   scoring_state.target_volume_name = cfg.root_volume_name;
   scoring_state.scoring_plane_name = cfg.scoring_plane_name;
   scoring_state.scoring_plane_z_mm = cfg.scoring_plane_z_mm;
@@ -788,7 +846,7 @@ int main(int argc, char** argv) {
       scoring_state.volume_stats.emplace(volume_name, VolumeScoringMetrics{});
     }
   }
-  run_manager->SetUserAction(new RuntimePrimaryGeneratorAction(cfg));
+  run_manager->SetUserAction(new RuntimePrimaryGeneratorAction(cfg, &source_sampling_state));
   run_manager->SetUserAction(new RuntimeEventAction(&scoring_state));
   run_manager->SetUserAction(new RuntimeTrackingAction());
   run_manager->SetUserAction(new RuntimeSteppingAction(cfg, &scoring_state));
@@ -827,6 +885,31 @@ int main(int argc, char** argv) {
 
   std::ofstream summary(artifact_dir / "run_summary.json", std::ios::trunc);
   const auto role_stats = derive_role_stats(scoring_state.volume_stats, cfg.scoring_volume_roles);
+  const auto primary_count = source_sampling_state.primary_count;
+  const auto sampled_pos_mean_x =
+      sampling_mean(source_sampling_state.position_sum_x_mm, primary_count);
+  const auto sampled_pos_mean_y =
+      sampling_mean(source_sampling_state.position_sum_y_mm, primary_count);
+  const auto sampled_pos_mean_z =
+      sampling_mean(source_sampling_state.position_sum_z_mm, primary_count);
+  const auto sampled_pos_rms_x =
+      sampling_rms(source_sampling_state.position_sum_x_mm, source_sampling_state.position_sq_sum_x_mm, primary_count);
+  const auto sampled_pos_rms_y =
+      sampling_rms(source_sampling_state.position_sum_y_mm, source_sampling_state.position_sq_sum_y_mm, primary_count);
+  const auto sampled_pos_rms_z =
+      sampling_rms(source_sampling_state.position_sum_z_mm, source_sampling_state.position_sq_sum_z_mm, primary_count);
+  const auto sampled_dir_mean_x =
+      sampling_mean(source_sampling_state.direction_sum_x, primary_count);
+  const auto sampled_dir_mean_y =
+      sampling_mean(source_sampling_state.direction_sum_y, primary_count);
+  const auto sampled_dir_mean_z =
+      sampling_mean(source_sampling_state.direction_sum_z, primary_count);
+  const auto sampled_dir_rms_x =
+      sampling_rms(source_sampling_state.direction_sum_x, source_sampling_state.direction_sq_sum_x, primary_count);
+  const auto sampled_dir_rms_y =
+      sampling_rms(source_sampling_state.direction_sum_y, source_sampling_state.direction_sq_sum_y, primary_count);
+  const auto sampled_dir_rms_z =
+      sampling_rms(source_sampling_state.direction_sum_z, source_sampling_state.direction_sq_sum_z, primary_count);
   summary << "{\n"
           << "  \"schema_version\": \"" << kResultSchemaVersion << "\",\n"
           << "  \"run_ok\": true,\n"
@@ -845,6 +928,15 @@ int main(int argc, char** argv) {
           << "],\n"
           << "  \"source_direction\": [" << cfg.direction_x << ", " << cfg.direction_y << ", " << cfg.direction_z
           << "],\n"
+          << "  \"source_primary_count\": " << primary_count << ",\n"
+          << "  \"source_sampled_position_mean_mm\": [" << sampled_pos_mean_x << ", " << sampled_pos_mean_y << ", "
+          << sampled_pos_mean_z << "],\n"
+          << "  \"source_sampled_position_rms_mm\": [" << sampled_pos_rms_x << ", " << sampled_pos_rms_y << ", "
+          << sampled_pos_rms_z << "],\n"
+          << "  \"source_sampled_direction_mean\": [" << sampled_dir_mean_x << ", " << sampled_dir_mean_y << ", "
+          << sampled_dir_mean_z << "],\n"
+          << "  \"source_sampled_direction_rms\": [" << sampled_dir_rms_x << ", " << sampled_dir_rms_y << ", "
+          << sampled_dir_rms_z << "],\n"
           << "  \"physics_list\": \"" << cfg.physics_list << "\",\n"
           << "  \"events\": " << events << ",\n"
           << "  \"mode\": \"" << cfg.mode << "\",\n"
