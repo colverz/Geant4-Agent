@@ -22,6 +22,10 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                     "spot_radius_mm": 0.5,
                     "divergence_half_angle_deg": 0.25,
+                    "spot_profile": "gaussian",
+                    "spot_sigma_mm": 0.2,
+                    "divergence_profile": "gaussian",
+                    "divergence_sigma_deg": 0.1,
                 },
                 "physics": {"physics_list": "FTFP_BERT"},
                 "run": {"seed": 31415},
@@ -46,8 +50,16 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["direction"]["z"], 1.0)
         self.assertEqual(payload["source"]["spot_radius_mm"], 0.5)
         self.assertEqual(payload["source"]["divergence_half_angle_deg"], 0.25)
+        self.assertEqual(payload["source"]["spot_profile"], "gaussian")
+        self.assertEqual(payload["source"]["spot_sigma_mm"], 0.2)
+        self.assertEqual(payload["source"]["divergence_profile"], "gaussian")
+        self.assertEqual(payload["source"]["divergence_sigma_deg"], 0.1)
         self.assertEqual(payload["source_spot_radius_mm"], 0.5)
         self.assertEqual(payload["source_divergence_half_angle_deg"], 0.25)
+        self.assertEqual(payload["source_spot_profile"], "gaussian")
+        self.assertEqual(payload["source_spot_sigma_mm"], 0.2)
+        self.assertEqual(payload["source_divergence_profile"], "gaussian")
+        self.assertEqual(payload["source_divergence_sigma_deg"], 0.1)
 
     def test_tubs_payload_prefers_volume_material_map(self) -> None:
         payload = build_runtime_payload(
@@ -77,6 +89,8 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
                     "energy": 250.0,
                     "spot_radius_mm": 2.0,
                     "divergence_half_angle_deg": 1.0,
+                    "spot_profile": "uniform_disk",
+                    "divergence_profile": "uniform_cone",
                 },
                 "physics_list": {"name": "QGSP_BERT"},
                 "scoring": {"plane_crossings": True, "plane": {"name": "DetectorPlane", "z_mm": 40.0}},
@@ -99,6 +113,8 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["source"]["type"], "beam")
         self.assertEqual(payload["source"]["spot_radius_mm"], 2.0)
         self.assertEqual(payload["source"]["divergence_half_angle_deg"], 1.0)
+        self.assertEqual(payload["source"]["spot_profile"], "uniform_disk")
+        self.assertEqual(payload["source"]["divergence_profile"], "uniform_cone")
 
 
 if __name__ == "__main__":

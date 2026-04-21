@@ -49,6 +49,11 @@ def _nonnegative_float(value: Any, fallback: float = 0.0) -> float:
     return max(0.0, _coerce_float(value, fallback))
 
 
+def _choice(value: Any, *, allowed: set[str], fallback: str) -> str:
+    candidate = str(value or fallback).strip().lower()
+    return candidate if candidate in allowed else fallback
+
+
 def _first_material(config: dict[str, Any]) -> str:
     materials = config.get("materials", {}) if isinstance(config.get("materials"), dict) else {}
     vmap = materials.get("volume_material_map")
@@ -241,6 +246,24 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         ),
         divergence_half_angle_deg=_nonnegative_float(
             source.get("divergence_half_angle_deg", source.get("divergence_deg")),
+            0.0,
+        ),
+        spot_profile=_choice(
+            source.get("spot_profile", source.get("beam_spot_profile")),
+            allowed={"uniform_disk", "gaussian"},
+            fallback="uniform_disk",
+        ),
+        spot_sigma_mm=_nonnegative_float(
+            source.get("spot_sigma_mm", source.get("beam_spot_sigma_mm")),
+            0.0,
+        ),
+        divergence_profile=_choice(
+            source.get("divergence_profile", source.get("beam_divergence_profile")),
+            allowed={"uniform_cone", "gaussian"},
+            fallback="uniform_cone",
+        ),
+        divergence_sigma_deg=_nonnegative_float(
+            source.get("divergence_sigma_deg", source.get("beam_divergence_sigma_deg")),
             0.0,
         ),
     )

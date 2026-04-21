@@ -34,6 +34,10 @@ class SourceRuntimeSpec:
     direction_vec: tuple[float, float, float]
     spot_radius_mm: float = 0.0
     divergence_half_angle_deg: float = 0.0
+    spot_profile: str = "uniform_disk"
+    spot_sigma_mm: float = 0.0
+    divergence_profile: str = "uniform_cone"
+    divergence_sigma_deg: float = 0.0
 
 
 @dataclass(frozen=True)

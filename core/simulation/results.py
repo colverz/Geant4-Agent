@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v6"
+SIMULATION_RESULT_SCHEMA_VERSION = "2026-04-14.v7"
 
 
 def _coerce_triplet(value: object) -> tuple[float, float, float] | None:
@@ -68,6 +68,10 @@ class SimulationResult:
     source_type: str | None = None
     source_spot_radius_mm: float = 0.0
     source_divergence_half_angle_deg: float = 0.0
+    source_spot_profile: str = "uniform_disk"
+    source_spot_sigma_mm: float = 0.0
+    source_divergence_profile: str = "uniform_cone"
+    source_divergence_sigma_deg: float = 0.0
     source_position_mm: tuple[float, float, float] | None = None
     source_direction: tuple[float, float, float] | None = None
     source_primary_count: int = 0
@@ -218,6 +222,10 @@ def simulation_result_from_dict(data: dict[str, Any]) -> SimulationResult:
         source_type=data.get("source_type"),
         source_spot_radius_mm=float(data.get("source_spot_radius_mm", 0.0) or 0.0),
         source_divergence_half_angle_deg=float(data.get("source_divergence_half_angle_deg", 0.0) or 0.0),
+        source_spot_profile=str(data.get("source_spot_profile") or "uniform_disk"),
+        source_spot_sigma_mm=float(data.get("source_spot_sigma_mm", 0.0) or 0.0),
+        source_divergence_profile=str(data.get("source_divergence_profile") or "uniform_cone"),
+        source_divergence_sigma_deg=float(data.get("source_divergence_sigma_deg", 0.0) or 0.0),
         source_position_mm=_coerce_triplet(data.get("source_position_mm")),
         source_direction=_coerce_triplet(data.get("source_direction")),
         source_primary_count=int(data.get("source_primary_count", 0) or 0),

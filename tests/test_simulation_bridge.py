@@ -46,6 +46,10 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(spec.source.position_mm, (0.0, 0.0, -20.0))
         self.assertEqual(spec.source.spot_radius_mm, 0.0)
         self.assertEqual(spec.source.divergence_half_angle_deg, 0.0)
+        self.assertEqual(spec.source.spot_profile, "uniform_disk")
+        self.assertEqual(spec.source.spot_sigma_mm, 0.0)
+        self.assertEqual(spec.source.divergence_profile, "uniform_cone")
+        self.assertEqual(spec.source.divergence_sigma_deg, 0.0)
         self.assertEqual(spec.run.events, 25)
         self.assertEqual(spec.run.seed, 20260414)
         self.assertTrue(spec.scoring.target_edep)
@@ -82,6 +86,10 @@ class SimulationBridgeTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                     "spot_radius_mm": 3.0,
                     "divergence_half_angle_deg": 1.5,
+                    "spot_profile": "gaussian",
+                    "spot_sigma_mm": 1.25,
+                    "divergence_profile": "gaussian",
+                    "divergence_sigma_deg": 0.5,
                 },
                 "physics": {"physics_list": "QGSP_BERT"},
                 "run": {"seed": 4242},
@@ -97,6 +105,10 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(payload["source"]["type"], "beam")
         self.assertEqual(payload["source"]["spot_radius_mm"], 3.0)
         self.assertEqual(payload["source"]["divergence_half_angle_deg"], 1.5)
+        self.assertEqual(payload["source"]["spot_profile"], "gaussian")
+        self.assertEqual(payload["source"]["spot_sigma_mm"], 1.25)
+        self.assertEqual(payload["source"]["divergence_profile"], "gaussian")
+        self.assertEqual(payload["source"]["divergence_sigma_deg"], 0.5)
         self.assertEqual(payload["physics"]["list"], "QGSP_BERT")
         self.assertEqual(payload["run"]["seed"], 4242)
         self.assertEqual(payload["run_manifest"]["bridge"], "simulation_bridge")
@@ -117,6 +129,10 @@ class SimulationBridgeTest(unittest.TestCase):
         self.assertEqual(payload["detector_position"]["z"], 60.0)
         self.assertEqual(payload["source_spot_radius_mm"], 3.0)
         self.assertEqual(payload["source_divergence_half_angle_deg"], 1.5)
+        self.assertEqual(payload["source_spot_profile"], "gaussian")
+        self.assertEqual(payload["source_spot_sigma_mm"], 1.25)
+        self.assertEqual(payload["source_divergence_profile"], "gaussian")
+        self.assertEqual(payload["source_divergence_sigma_deg"], 0.5)
         self.assertEqual(payload["radius"], 5.0)
         self.assertEqual(payload["half_length"], 40.0)
 

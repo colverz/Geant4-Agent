@@ -198,6 +198,10 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
                     "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
                     "spot_radius_mm": 2.5,
                     "divergence_half_angle_deg": 1.25,
+                    "spot_profile": "gaussian",
+                    "spot_sigma_mm": 0.75,
+                    "divergence_profile": "gaussian",
+                    "divergence_sigma_deg": 0.35,
                 },
                 "physics": {"physics_list": "QGSP_BERT"},
                 "run": {"seed": 7777},
@@ -209,6 +213,10 @@ class SimulationBridgeBenchmarkTest(unittest.TestCase):
         self.assertEqual(summary["particle"], "proton")
         self.assertEqual(summary["source_spot_radius_mm"], 2.5)
         self.assertEqual(summary["source_divergence_half_angle_deg"], 1.25)
+        self.assertEqual(summary["source_spot_profile"], "gaussian")
+        self.assertEqual(summary["source_spot_sigma_mm"], 0.75)
+        self.assertEqual(summary["source_divergence_profile"], "gaussian")
+        self.assertEqual(summary["source_divergence_sigma_deg"], 0.35)
         self.assertEqual(summary["source_primary_count"], 2)
         self.assertEqual(len(summary["source_sampled_position_mean_mm"]), 3)
         self.assertEqual(len(summary["source_sampled_position_rms_mm"]), 3)

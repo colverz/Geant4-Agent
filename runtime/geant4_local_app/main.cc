@@ -33,6 +33,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <cctype>
 #include <map>
 #include <set>
 #include <sstream>
@@ -43,7 +44,7 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-constexpr const char* kResultSchemaVersion = "2026-04-14.v6";
+constexpr const char* kResultSchemaVersion = "2026-04-14.v7";
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -60,6 +61,10 @@ struct RuntimeConfig {
   double direction_z = 1.0;
   double source_spot_radius_mm = 0.0;
   double source_divergence_half_angle_deg = 0.0;
+  std::string source_spot_profile = "uniform_disk";
+  double source_spot_sigma_mm = 0.0;
+  std::string source_divergence_profile = "uniform_cone";
+  double source_divergence_sigma_deg = 0.0;
   double size_x_mm = 50.0;
   double size_y_mm = 50.0;
   double size_z_mm = 50.0;
@@ -292,6 +297,14 @@ bool contains_name(const std::vector<std::string>& names, const std::string& val
   return false;
 }
 
+std::string normalized_choice(const std::string& value, const std::string& fallback, const std::set<std::string>& allowed) {
+  auto candidate = value.empty() ? fallback : value;
+  for (auto& c : candidate) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return allowed.count(candidate) ? candidate : fallback;
+}
+
 RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const fs::path& artifact_dir) {
   RuntimeConfig cfg;
   cfg.events = events;
@@ -308,6 +321,12 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.source_spot_radius_mm = json_value<double>(payload, "source_spot_radius_mm", cfg.source_spot_radius_mm);
   cfg.source_divergence_half_angle_deg =
       json_value<double>(payload, "source_divergence_half_angle_deg", cfg.source_divergence_half_angle_deg);
+  cfg.source_spot_profile = json_value<std::string>(payload, "source_spot_profile", cfg.source_spot_profile);
+  cfg.source_spot_sigma_mm = json_value<double>(payload, "source_spot_sigma_mm", cfg.source_spot_sigma_mm);
+  cfg.source_divergence_profile =
+      json_value<std::string>(payload, "source_divergence_profile", cfg.source_divergence_profile);
+  cfg.source_divergence_sigma_deg =
+      json_value<double>(payload, "source_divergence_sigma_deg", cfg.source_divergence_sigma_deg);
 
   if (payload.contains("source") && payload.at("source").is_object()) {
     const auto& source = payload.at("source");
@@ -317,6 +336,12 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
     cfg.source_spot_radius_mm = json_value<double>(source, "spot_radius_mm", cfg.source_spot_radius_mm);
     cfg.source_divergence_half_angle_deg =
         json_value<double>(source, "divergence_half_angle_deg", cfg.source_divergence_half_angle_deg);
+    cfg.source_spot_profile = json_value<std::string>(source, "spot_profile", cfg.source_spot_profile);
+    cfg.source_spot_sigma_mm = json_value<double>(source, "spot_sigma_mm", cfg.source_spot_sigma_mm);
+    cfg.source_divergence_profile =
+        json_value<std::string>(source, "divergence_profile", cfg.source_divergence_profile);
+    cfg.source_divergence_sigma_deg =
+        json_value<double>(source, "divergence_sigma_deg", cfg.source_divergence_sigma_deg);
     if (source.contains("position_mm") && source.at("position_mm").is_array() && source.at("position_mm").size() >= 3) {
       cfg.source_x_mm = source.at("position_mm").at(0).get<double>();
       cfg.source_y_mm = source.at("position_mm").at(1).get<double>();
@@ -411,6 +436,12 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.payload_sha256 = json_value<std::string>(payload, "payload_sha256", cfg.payload_sha256);
   cfg.source_spot_radius_mm = std::max(0.0, cfg.source_spot_radius_mm);
   cfg.source_divergence_half_angle_deg = std::max(0.0, cfg.source_divergence_half_angle_deg);
+  cfg.source_spot_sigma_mm = std::max(0.0, cfg.source_spot_sigma_mm);
+  cfg.source_divergence_sigma_deg = std::max(0.0, cfg.source_divergence_sigma_deg);
+  cfg.source_spot_profile =
+      normalized_choice(cfg.source_spot_profile, "uniform_disk", {"uniform_disk", "gaussian"});
+  cfg.source_divergence_profile =
+      normalized_choice(cfg.source_divergence_profile, "uniform_cone", {"uniform_cone", "gaussian"});
   return cfg;
 }
 
@@ -542,6 +573,10 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
     nominal_position_ = G4ThreeVector(config_.source_x_mm * mm, config_.source_y_mm * mm, config_.source_z_mm * mm);
     beam_spot_radius_ = std::max(0.0, config_.source_spot_radius_mm) * mm;
     beam_divergence_half_angle_ = std::max(0.0, config_.source_divergence_half_angle_deg) * deg;
+    beam_spot_profile_ = config_.source_spot_profile;
+    beam_spot_sigma_ = std::max(0.0, config_.source_spot_sigma_mm) * mm;
+    beam_divergence_profile_ = config_.source_divergence_profile;
+    beam_divergence_sigma_ = std::max(0.0, config_.source_divergence_sigma_deg) * deg;
     particle_gun_->SetParticleMomentumDirection(nominal_direction_);
     particle_gun_->SetParticlePosition(nominal_position_);
   }
@@ -585,22 +620,31 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
   }
 
   G4ThreeVector sample_beam_position() const {
+    const auto u = basis_u();
+    const auto v = basis_v(u);
+    if (beam_spot_profile_ == "gaussian" && beam_spot_sigma_ > 0.0) {
+      return nominal_position_ + u * G4RandGauss::shoot(0.0, beam_spot_sigma_) +
+             v * G4RandGauss::shoot(0.0, beam_spot_sigma_);
+    }
     if (beam_spot_radius_ <= 0.0) {
       return nominal_position_;
     }
-    const auto u = basis_u();
-    const auto v = basis_v(u);
     const auto r = beam_spot_radius_ * std::sqrt(G4UniformRand());
     const auto phi = CLHEP::twopi * G4UniformRand();
     return nominal_position_ + u * (r * std::cos(phi)) + v * (r * std::sin(phi));
   }
 
   G4ThreeVector sample_beam_direction() const {
+    const auto u = basis_u();
+    const auto v = basis_v(u);
+    if (beam_divergence_profile_ == "gaussian" && beam_divergence_sigma_ > 0.0) {
+      const auto theta_u = G4RandGauss::shoot(0.0, beam_divergence_sigma_);
+      const auto theta_v = G4RandGauss::shoot(0.0, beam_divergence_sigma_);
+      return (nominal_direction_ + u * theta_u + v * theta_v).unit();
+    }
     if (beam_divergence_half_angle_ <= 0.0) {
       return nominal_direction_;
     }
-    const auto u = basis_u();
-    const auto v = basis_v(u);
     const auto cos_theta_min = std::cos(beam_divergence_half_angle_);
     const auto cos_theta = 1.0 - G4UniformRand() * (1.0 - cos_theta_min);
     const auto sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
@@ -615,6 +659,10 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
   G4ThreeVector nominal_position_;
   double beam_spot_radius_ = 0.0;
   double beam_divergence_half_angle_ = 0.0;
+  std::string beam_spot_profile_ = "uniform_disk";
+  double beam_spot_sigma_ = 0.0;
+  std::string beam_divergence_profile_ = "uniform_cone";
+  double beam_divergence_sigma_ = 0.0;
 };
 
 class RuntimeTrackingAction : public G4UserTrackingAction {
@@ -922,6 +970,10 @@ int main(int argc, char** argv) {
           << "  \"source_type\": \"" << cfg.source_type << "\",\n"
           << "  \"source_spot_radius_mm\": " << cfg.source_spot_radius_mm << ",\n"
           << "  \"source_divergence_half_angle_deg\": " << cfg.source_divergence_half_angle_deg << ",\n"
+          << "  \"source_spot_profile\": \"" << cfg.source_spot_profile << "\",\n"
+          << "  \"source_spot_sigma_mm\": " << cfg.source_spot_sigma_mm << ",\n"
+          << "  \"source_divergence_profile\": \"" << cfg.source_divergence_profile << "\",\n"
+          << "  \"source_divergence_sigma_deg\": " << cfg.source_divergence_sigma_deg << ",\n"
           << "  \"payload_sha256\": \"" << cfg.payload_sha256 << "\",\n"
           << "  \"geant4_version\": \"" << G4Version << "\",\n"
           << "  \"source_position_mm\": [" << cfg.source_x_mm << ", " << cfg.source_y_mm << ", " << cfg.source_z_mm

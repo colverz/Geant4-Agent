@@ -135,7 +135,7 @@ This layer turns the runtime artifact back into a stable app-side result object.
 
 The current result schema version is:
 
-- `2026-04-14.v6`
+- `2026-04-14.v7`
 
 The local Geant4 runtime now parses payloads with a real JSON parser rather than regex extraction.
 
@@ -156,8 +156,19 @@ The first source-runtime realism extension is intentionally still small:
 
 - `beam` may now carry `spot_radius_mm`
 - `beam` may now carry `divergence_half_angle_deg`
+- `beam` may now carry `spot_profile`
+- `beam` may now carry `spot_sigma_mm`
+- `beam` may now carry `divergence_profile`
+- `beam` may now carry `divergence_sigma_deg`
 
 These are passed through the bridge and emitted back in the runtime result schema so they can be benchmarked and consumed explicitly.
+
+The first supported beam profiles are:
+
+- `spot_profile = uniform_disk`
+- `spot_profile = gaussian`
+- `divergence_profile = uniform_cone`
+- `divergence_profile = gaussian`
 
 The runtime also emits a source sampling summary:
 
