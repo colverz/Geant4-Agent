@@ -151,6 +151,20 @@ The current result schema version is:
 
 The local Geant4 runtime now parses payloads with a real JSON parser rather than regex extraction.
 
+The MCP server uses the deterministic in-memory adapter by default. To opt into a real local
+Geant4 process, configure one of:
+
+- `GEANT4_RUNTIME_COMMAND_JSON`, a JSON string list such as `["runtime/geant4_local_app/build/Release/geant4_local_app.exe"]`
+- `GEANT4_RUNTIME_COMMAND`, a shell-style command string
+
+Optional environment variables:
+
+- `GEANT4_ROOT`
+- `GEANT4_WORKING_DIR`
+
+Without a configured command, `Geant4McpServer` remains in-memory so ordinary UI and unit-test flows
+do not accidentally launch Geant4.
+
 The current bridge also carries a reproducibility baseline:
 
 - explicit `run.seed`

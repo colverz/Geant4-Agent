@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import os
+import shlex
 import subprocess
 import tempfile
 from typing import Any
@@ -80,6 +81,39 @@ def _runtime_volume_roles(runtime_payload: dict[str, Any] | None) -> dict[str, A
         return None
     volume_roles = scoring.get("volume_roles")
     return volume_roles if isinstance(volume_roles, dict) else None
+
+
+def _parse_runtime_command(raw_command: str) -> list[str]:
+    value = str(raw_command or "").strip()
+    if not value:
+        return []
+    if value.startswith("["):
+        parsed = json.loads(value)
+        if not isinstance(parsed, list) or not all(isinstance(item, str) and item for item in parsed):
+            raise ValueError("GEANT4_RUNTIME_COMMAND_JSON must be a JSON string list")
+        return list(parsed)
+    return shlex.split(value, posix=False)
+
+
+def build_geant4_adapter_from_env(env: dict[str, str] | None = None) -> Geant4RuntimeAdapter:
+    """
+    Build the default MCP adapter from environment configuration.
+
+    If no runtime command is configured, the in-memory adapter remains the safe default.
+    This keeps existing tests and UI flows deterministic while giving real Geant4 runs a
+    standard activation path.
+    """
+
+    env_map = env if env is not None else os.environ
+    raw_command = env_map.get("GEANT4_RUNTIME_COMMAND_JSON") or env_map.get("GEANT4_RUNTIME_COMMAND")
+    command = _parse_runtime_command(raw_command or "")
+    if not command:
+        return InMemoryGeant4Adapter()
+    return LocalProcessGeant4Adapter(
+        command,
+        geant4_root=env_map.get("GEANT4_ROOT", r"F:\Geant4"),
+        working_dir=env_map.get("GEANT4_WORKING_DIR") or None,
+    )
 
 
 class Geant4RuntimeAdapter(ABC):

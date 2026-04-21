@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from core.runtime.types import Geant4RuntimePhase, RuntimeActionStatus, ToolCallRequest
-from mcp.geant4.adapter import LocalProcessGeant4Adapter
+from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter, build_geant4_adapter_from_env
 from mcp.geant4.server import Geant4McpServer
 
 
@@ -51,6 +51,20 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(init_obs.status, RuntimeActionStatus.COMPLETED)
         self.assertEqual(run_obs.status, RuntimeActionStatus.COMPLETED)
         self.assertEqual(run_obs.payload["events"], 4)
+
+    def test_default_adapter_uses_in_memory_without_runtime_env(self) -> None:
+        adapter = build_geant4_adapter_from_env({})
+        self.assertIsInstance(adapter, InMemoryGeant4Adapter)
+
+    def test_default_adapter_can_be_configured_from_runtime_env(self) -> None:
+        adapter = build_geant4_adapter_from_env(
+            {
+                "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, "-c", "print('ok')"]),
+                "GEANT4_ROOT": "F:\\Geant4Test",
+                "GEANT4_WORKING_DIR": "F:\\geant4agent",
+            }
+        )
+        self.assertIsInstance(adapter, LocalProcessGeant4Adapter)
 
     def test_local_process_adapter_executes_command(self) -> None:
         adapter = LocalProcessGeant4Adapter(

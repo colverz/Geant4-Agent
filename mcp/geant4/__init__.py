@@ -1,4 +1,4 @@
-from .adapter import Geant4RuntimeAdapter, InMemoryGeant4Adapter, LocalProcessGeant4Adapter
+from .adapter import Geant4RuntimeAdapter, InMemoryGeant4Adapter, LocalProcessGeant4Adapter, build_geant4_adapter_from_env
 from .server import Geant4McpServer
 from .tools import DEFAULT_TOOL_SPECS, get_default_tool_specs
 
@@ -8,5 +8,6 @@ __all__ = [
     "Geant4RuntimeAdapter",
     "InMemoryGeant4Adapter",
     "LocalProcessGeant4Adapter",
+    "build_geant4_adapter_from_env",
     "get_default_tool_specs",
 ]
