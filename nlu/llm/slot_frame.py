@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -26,6 +27,9 @@ from nlu.uncertainty import (
     has_uncertainty_signal,
     infer_unresolved_targets,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 _INTENT_MAP = {x.value: x for x in Intent}
@@ -1647,6 +1651,7 @@ def build_llm_slot_frame(
         resp = chat(prompt, config_path=config_path, temperature=0.0)
         llm_raw = str(resp.get("response", ""))
     except Exception:
+        logger.warning("LLM slot-frame call failed; returning structured failure.", exc_info=True)
         return LlmSlotBuildResult(
             ok=False,
             frame=None,

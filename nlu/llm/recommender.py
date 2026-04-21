@@ -1,9 +1,13 @@
 ﻿from __future__ import annotations
 
+import logging
 import re
 
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 from nlu.llm_support.ollama_client import chat, extract_json
+
+
+logger = logging.getLogger(__name__)
 
 
 def _clean_text(raw: str) -> str:
@@ -84,6 +88,7 @@ def recommend_physics_list(
         if isinstance(maybe, dict):
             parsed = maybe
     except Exception:
+        logger.warning("LLM physics-list recommendation failed; using rule fallback.", exc_info=True)
         parsed = {}
 
     main = _pick_known(parsed.get("physics_list", ""), allowed_lists)

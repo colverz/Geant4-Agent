@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -44,7 +45,7 @@ from core.orchestrator.candidate_preprocess import (
     partition_candidate_by_pending_paths,
 )
 from core.orchestrator.constraint_ledger import lock_from_candidate
-from core.orchestrator.path_ops import deep_copy, get_path, set_path
+from core.orchestrator.path_ops import deep_copy, get_path, remove_path, set_path
 from core.orchestrator.phase_machine import decide_phase_transition
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.orchestrator.turn_transaction import begin_turn, commit_turn
@@ -78,6 +79,7 @@ KNOWLEDGE_DIR = ROOT / "knowledge" / "data"
 
 
 SESSIONS: dict[str, SessionState] = {}
+_SESSIONS_LOCK = threading.RLock()
 
 
 def _load_knowledge() -> dict[str, list[str]]:
@@ -154,20 +156,22 @@ def default_config() -> dict[str, Any]:
 
 def get_or_create_session(session_id: str | None) -> SessionState:
     sid = session_id or str(uuid.uuid4())
-    if sid in SESSIONS:
-        return SESSIONS[sid]
-    state = SessionState(
-        session_id=sid,
-        phase=Phase.GEOMETRY,
-        turn_id=0,
-        config=default_config(),
-    )
-    SESSIONS[sid] = state
-    return state
+    with _SESSIONS_LOCK:
+        if sid in SESSIONS:
+            return SESSIONS[sid]
+        state = SessionState(
+            session_id=sid,
+            phase=Phase.GEOMETRY,
+            turn_id=0,
+            config=default_config(),
+        )
+        SESSIONS[sid] = state
+        return state
 
 
 def reset_session(session_id: str) -> None:
-    SESSIONS.pop(session_id, None)
+    with _SESSIONS_LOCK:
+        SESSIONS.pop(session_id, None)
 
 
 def _build_context_summary(state: SessionState) -> str:
@@ -448,7 +452,7 @@ def _stage_dependent_source_updates_for_pending(
 def _apply_updates(config: dict, updates: list) -> None:
     for upd in updates:
         if upd.op == "remove":
-            # remove-path is intentionally omitted in v0.2 prototype to keep state trace stable.
+            remove_path(config, upd.path)
             continue
         set_path(config, upd.path, upd.value)
 
@@ -646,9 +650,9 @@ def _v2_compile_missing_paths(slot_debug: dict[str, Any]) -> list[str]:
                 paths.append(path)
     spatial_meta = slot_debug.get("spatial_v2")
     if isinstance(spatial_meta, dict):
-        source_meta = spatial_meta.get("source_meta")
-        if isinstance(source_meta, dict):
-            for field in source_meta.get("missing_fields", []) or []:
+        spatial_source_meta = spatial_meta.get("source_meta")
+        if isinstance(spatial_source_meta, dict):
+            for field in spatial_source_meta.get("missing_fields", []) or []:
                 path = _v2_missing_field_to_path("source", str(field))
                 if path:
                     paths.append(path)
@@ -1002,9 +1006,9 @@ def _prioritize_v2_compile_questions(
     prioritized: list[str] = []
     spatial_meta = slot_debug.get("spatial_v2")
     if isinstance(spatial_meta, dict):
-        source_meta = spatial_meta.get("source_meta")
-        if isinstance(source_meta, dict):
-            for field in source_meta.get("missing_fields", []) or []:
+        spatial_source_meta = spatial_meta.get("source_meta")
+        if isinstance(spatial_source_meta, dict):
+            for field in spatial_source_meta.get("missing_fields", []) or []:
                 path = _v2_missing_field_to_path("source", str(field))
                 if path and path in missing_fields and path not in prioritized:
                     prioritized.append(path)
@@ -2221,7 +2225,8 @@ def process_turn(
 
 
 def get_session_audit(session_id: str) -> list[dict]:
-    state = SESSIONS.get(session_id)
+    with _SESSIONS_LOCK:
+        state = SESSIONS.get(session_id)
     if not state:
         return []
     return state.audit_trail

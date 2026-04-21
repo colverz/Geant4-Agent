@@ -1,12 +1,16 @@
 ﻿from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any, List
 
 from core.config.field_registry import clarification_items, friendly_labels
 from core.config.prompt_registry import clarification_fallback, clarification_prompt
 from nlu.llm_support.ollama_client import chat
+
+
+logger = logging.getLogger(__name__)
 
 
 def _clean_chat_text(raw: Any) -> str:
@@ -152,7 +156,7 @@ def ask_missing(
         ):
             return text
     except Exception:
-        pass
+        logger.warning("LLM clarification generation failed; using deterministic fallback.", exc_info=True)
     return _fallback_question_for_paths(missing, friendly, lang)
 
 
@@ -276,6 +280,6 @@ def naturalize_response(
         if text and not _is_invalid_naturalization(text, action=action, lang=lang):
             return text
     except Exception:
-        pass
+        logger.warning("LLM response naturalization failed; using grounded base message.", exc_info=True)
     return base_message
 

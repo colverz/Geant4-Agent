@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -15,6 +16,9 @@ from core.validation.error_codes import (
     E_LLM_FRAME_SCHEMA_INVALID,
 )
 from nlu.llm_support.ollama_client import chat, extract_json
+
+
+logger = logging.getLogger(__name__)
 
 
 _ALLOWED_PREFIXES = ("geometry.", "materials.", "source.", "physics.", "output.")
@@ -455,6 +459,7 @@ def build_llm_semantic_frame(
         resp = chat(prompt, config_path=config_path, temperature=0.0)
         llm_raw = str(resp.get("response", ""))
     except Exception:
+        logger.warning("LLM semantic-frame call failed; returning structured failure.", exc_info=True)
         return LlmFrameBuildResult(
             ok=False,
             candidate=None,

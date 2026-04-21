@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -7,6 +8,9 @@ from core.orchestrator.types import Intent
 from nlu.llm_support.llm_bridge import build_normalization_prompt
 from nlu.llm_support.ollama_client import chat, extract_json
 from nlu.uncertainty import has_uncertainty_signal, infer_unresolved_targets
+
+
+logger = logging.getLogger(__name__)
 
 
 _TARGET_HINTS = {
@@ -367,6 +371,7 @@ def normalize_user_turn(
                 structure_hint = str(parsed.get("structure_hint", "")).strip()
                 confidence = 0.8 if normalized_text else 0.6
         except Exception:
+            logger.warning("LLM normalization failed; using raw user text fallback.", exc_info=True)
             normalized_text = ""
 
     if not normalized_text:
