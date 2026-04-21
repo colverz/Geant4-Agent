@@ -6,6 +6,8 @@ import unittest
 
 from core.simulation import (
     SIMULATION_RESULT_SCHEMA_VERSION,
+    SimulationScoringResult,
+    SimulationVolumeStatsResult,
     derive_role_stats,
     load_simulation_result,
     simulation_result_from_dict,
@@ -125,24 +127,34 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.source_sampling.sampled_direction_mean, (0.0, 0.0, 1.0))
         self.assertEqual(result.run_manifest["geometry_root_volume"], "Target")
         self.assertEqual(result.scoring.plane_crossing_name, "CheckPlane")
+        self.assertEqual(result.scoring.plane_crossing.name, "CheckPlane")
         self.assertEqual(result.scoring.plane_crossing_count, 5)
+        self.assertEqual(result.scoring.plane_crossing.count, 5)
         self.assertEqual(result.scoring.plane_crossing_forward_count, 5)
         self.assertEqual(result.scoring.plane_crossing_reverse_count, 0)
         self.assertAlmostEqual(result.scoring.plane_crossing_mean_per_event, 1.25)
+        self.assertAlmostEqual(result.scoring.plane_crossing.mean_per_event, 1.25)
         self.assertEqual(result.scoring.plane_crossing_particle_counts["gamma"], 5)
+        self.assertEqual(result.scoring.plane_crossing.particles.counts["gamma"], 5)
         self.assertEqual(result.scoring.plane_crossing_particle_events["gamma"], 4)
         self.assertEqual(result.source_position_mm, (0.0, 0.0, -20.0))
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.detector.volume_name, "Detector")
         self.assertEqual(result.scoring.detector_crossing_count, 2)
+        self.assertEqual(result.scoring.detector_crossing.count, 2)
         self.assertEqual(result.scoring.detector_crossing_events, 2)
         self.assertAlmostEqual(result.scoring.detector_crossing_mean_per_event, 0.5)
+        self.assertAlmostEqual(result.scoring.detector_crossing.mean_per_event, 0.5)
         self.assertEqual(result.scoring.detector_crossing_particle_counts["gamma"], 2)
+        self.assertEqual(result.scoring.detector_crossing.particles.counts["gamma"], 2)
         self.assertEqual(result.scoring.detector_crossing_particle_events["gamma"], 2)
         self.assertEqual(result.scoring.target_hit_events, 3)
+        self.assertEqual(result.scoring.target.hit_events, 3)
         self.assertEqual(result.scoring.target_step_count, 18)
         self.assertEqual(result.scoring.volume_stats["Target"]["track_entries"], 4)
+        self.assertEqual(result.scoring.volume_stats["Target"].track_entries, 4)
         self.assertEqual(result.scoring.role_stats["target"]["track_entries"], 4)
+        self.assertEqual(result.scoring.role_stats["target"].track_entries, 4)
         self.assertAlmostEqual(result.scoring.role_stats["target"]["crossing_mean_per_event"], 0.5)
 
     def test_load_simulation_result_reads_run_summary(self) -> None:
@@ -274,31 +286,65 @@ class SimulationResultTest(unittest.TestCase):
         self.assertEqual(result.run_seed, 2718)
         self.assertEqual(result.run_manifest["detector_volume_name"], "Detector")
         self.assertEqual(result.scoring.plane_crossing_name, "DetectorPlane")
+        self.assertEqual(result.scoring.plane_crossing.name, "DetectorPlane")
         self.assertEqual(result.scoring.plane_crossing_events, 2)
+        self.assertEqual(result.scoring.plane_crossing.events, 2)
         self.assertEqual(result.scoring.plane_crossing_forward_events, 2)
         self.assertAlmostEqual(result.scoring.plane_crossing_mean_per_event, 1.0)
         self.assertEqual(result.scoring.plane_crossing_particle_counts["proton"], 2)
+        self.assertEqual(result.scoring.plane_crossing.particles.counts["proton"], 2)
         self.assertEqual(result.scoring.plane_crossing_particle_events["proton"], 2)
         self.assertTrue(result.detector.enabled)
         self.assertEqual(result.scoring.detector_crossing_count, 1)
+        self.assertEqual(result.scoring.detector_crossing.count, 1)
         self.assertAlmostEqual(result.scoring.detector_crossing_mean_per_event, 0.5)
         self.assertEqual(result.scoring.detector_crossing_particle_counts["proton"], 1)
+        self.assertEqual(result.scoring.detector_crossing.particles.counts["proton"], 1)
         self.assertEqual(result.scoring.detector_crossing_particle_events["proton"], 1)
         self.assertAlmostEqual(result.scoring.target_edep_total_mev, 1.25)
+        self.assertAlmostEqual(result.scoring.target.edep_total_mev, 1.25)
         self.assertEqual(result.scoring.volume_stats["Target"]["step_count"], 9)
+        self.assertEqual(result.scoring.volume_stats["Target"].step_count, 9)
         self.assertEqual(result.scoring.role_stats["target"]["step_count"], 9)
+        self.assertEqual(result.scoring.role_stats["target"].step_count, 9)
         self.assertAlmostEqual(result.scoring.role_stats["target"]["crossing_mean_per_event"], 0.0)
+
+    def test_scoring_result_keeps_legacy_constructor_and_payload(self) -> None:
+        scoring = SimulationScoringResult(
+            target_edep_enabled=True,
+            target_edep_total_mev=3.5,
+            detector_crossings_enabled=True,
+            detector_crossing_count=2,
+            detector_crossing_particle_counts={"gamma": 2},
+            plane_crossings_enabled=True,
+            plane_crossing_name="ExitPlane",
+            plane_crossing_count=4,
+            plane_crossing_particle_events={"gamma": 3},
+            volume_stats={"Target": {"track_entries": 7}},
+        )
+        self.assertTrue(scoring.target_edep_enabled)
+        self.assertAlmostEqual(scoring.target.edep_total_mev, 3.5)
+        self.assertEqual(scoring.detector_crossing.count, 2)
+        self.assertEqual(scoring.detector_crossing_particle_counts["gamma"], 2)
+        self.assertEqual(scoring.plane_crossing.name, "ExitPlane")
+        self.assertEqual(scoring.plane_crossing_particle_events["gamma"], 3)
+        self.assertEqual(scoring.volume_stats["Target"].track_entries, 7)
+        payload = scoring.to_payload()
+        self.assertEqual(payload["target_edep_total_mev"], 3.5)
+        self.assertEqual(payload["detector_crossing_count"], 2)
+        self.assertEqual(payload["plane_crossing_name"], "ExitPlane")
+        self.assertEqual(payload["volume_stats"]["Target"]["track_entries"], 7)
 
     def test_derive_role_stats_aggregates_named_volumes(self) -> None:
         role_stats = derive_role_stats(
             {
-                "target_core": {
-                    "edep_total_mev": 1.0,
-                    "edep_mean_mev_per_event": 0.5,
-                    "hit_events": 2,
-                    "step_count": 10,
-                    "track_entries": 2,
-                },
+                "target_core": SimulationVolumeStatsResult(
+                    edep_total_mev=1.0,
+                    edep_mean_mev_per_event=0.5,
+                    hit_events=2,
+                    step_count=10,
+                    track_entries=2,
+                ),
                 "target_shell": {
                     "edep_total_mev": 0.5,
                     "edep_mean_mev_per_event": 0.25,
