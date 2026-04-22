@@ -47,7 +47,16 @@ from core.orchestrator.candidate_preprocess import (
 from core.orchestrator.constraint_ledger import lock_from_candidate
 from core.orchestrator.path_ops import deep_copy, get_path, remove_path, set_path
 from core.orchestrator.phase_machine import decide_phase_transition
-from core.orchestrator.pipeline_debug import V2PipelineDebugView, V2PipelineMetaView
+from core.orchestrator.pipeline_debug import (
+    V2PipelineDebugView,
+    V2PipelineMetaView,
+    compile_v2_missing_paths,
+    merge_v2_meta,
+    merge_v2_missing_paths,
+    prioritize_spatial_questions,
+    prioritize_v2_compile_questions,
+    v2_missing_field_to_path,
+)
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.orchestrator.turn_transaction import begin_turn, commit_turn
 from core.orchestrator.types import CandidateUpdate, Intent, Phase, Producer, SessionState, UpdateOp
@@ -586,9 +595,7 @@ def _strip_source_updates(candidate: CandidateUpdate | None) -> CandidateUpdate 
 
 
 def _spatial_review_missing_paths(spatial_meta: V2PipelineMetaView) -> list[str]:
-    if {"source_inside_target", "source_on_target_face"} & set(spatial_meta.warnings):
-        return ["source.position"]
-    return []
+    return V2PipelineDebugView(spatial=spatial_meta).spatial_review_missing_paths()
 
 
 def _prioritize_spatial_questions(
@@ -596,60 +603,15 @@ def _prioritize_spatial_questions(
     missing_fields: list[str],
     slot_debug: dict[str, Any],
 ) -> list[str]:
-    debug_view = V2PipelineDebugView.from_slot_debug(slot_debug)
-    if not debug_view.spatial.warnings:
-        return asked_fields
-    spatial_required = _spatial_review_missing_paths(debug_view.spatial)
-    if not spatial_required:
-        return asked_fields
-    prioritized = [path for path in spatial_required if path in missing_fields]
-    for path in asked_fields:
-        if path not in prioritized:
-            prioritized.append(path)
-        if len(prioritized) >= max(2, len(asked_fields)):
-            break
-    return prioritized[: max(1, len(asked_fields))]
+    return prioritize_spatial_questions(asked_fields, missing_fields, slot_debug)
 
 
 def _v2_missing_field_to_path(domain: str, field: str) -> str:
-    mapping = {
-        ("geometry", "size_triplet_mm"): "geometry.params.module_x",
-        ("geometry", "radius_mm"): "geometry.params.child_rmax",
-        ("geometry", "half_length_mm"): "geometry.params.child_hz",
-        ("geometry", "radius1_mm"): "geometry.params.rmax1",
-        ("geometry", "radius2_mm"): "geometry.params.rmax2",
-        ("geometry", "x1_mm"): "geometry.params.x1",
-        ("geometry", "x2_mm"): "geometry.params.x2",
-        ("geometry", "y1_mm"): "geometry.params.y1",
-        ("geometry", "y2_mm"): "geometry.params.y2",
-        ("geometry", "z_mm"): "geometry.params.module_z",
-        ("source", "particle"): "source.particle",
-        ("source", "energy_mev"): "source.energy",
-        ("source", "position_mm"): "source.position",
-        ("source", "direction_vec"): "source.direction",
-        ("source", "source_type"): "source.type",
-    }
-    return mapping.get((domain, field), "")
+    return v2_missing_field_to_path(domain, field)
 
 
 def _v2_compile_missing_paths(slot_debug: dict[str, Any]) -> list[str]:
-    paths: list[str] = []
-    debug_view = V2PipelineDebugView.from_slot_debug(slot_debug)
-    if "missing_geometry_structure" in debug_view.geometry.errors:
-        paths.append("geometry.structure")
-    for field in debug_view.geometry.missing_fields:
-        path = _v2_missing_field_to_path("geometry", field)
-        if path:
-            paths.append(path)
-    for field in debug_view.source.missing_fields:
-        path = _v2_missing_field_to_path("source", field)
-        if path:
-            paths.append(path)
-    for field in debug_view.spatial_source.missing_fields:
-        path = _v2_missing_field_to_path("source", field)
-        if path:
-            paths.append(path)
-    return _dedupe_paths(paths)
+    return compile_v2_missing_paths(slot_debug)
 
 
 def _merge_v2_missing_paths(
@@ -658,11 +620,7 @@ def _merge_v2_missing_paths(
     *,
     include_spatial: bool = True,
 ) -> list[str]:
-    merged = _dedupe_paths(list(base_missing_paths) + _v2_compile_missing_paths(slot_debug))
-    if include_spatial:
-        debug_view = V2PipelineDebugView.from_slot_debug(slot_debug)
-        merged = _dedupe_paths(merged + _spatial_review_missing_paths(debug_view.spatial))
-    return merged
+    return merge_v2_missing_paths(base_missing_paths, slot_debug, include_spatial=include_spatial)
 
 
 def _candidate_has_update_prefix(candidate: CandidateUpdate | None, prefix: str) -> bool:
@@ -672,19 +630,7 @@ def _candidate_has_update_prefix(candidate: CandidateUpdate | None, prefix: str)
 
 
 def _merge_v2_meta(existing: Any, incoming: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(existing, dict):
-        return dict(incoming)
-    if existing.get("compile_ok"):
-        return dict(existing)
-    if incoming.get("compile_ok"):
-        return dict(incoming)
-    merged = dict(existing)
-    merged["missing_fields"] = _dedupe_paths(list(existing.get("missing_fields", []) or []) + list(incoming.get("missing_fields", []) or []))
-    merged["errors"] = _dedupe_paths(list(existing.get("errors", []) or []) + list(incoming.get("errors", []) or []))
-    merged["warnings"] = _dedupe_paths(list(existing.get("warnings", []) or []) + list(incoming.get("warnings", []) or []))
-    merged["runtime_ready"] = bool(existing.get("runtime_ready") or incoming.get("runtime_ready"))
-    merged["finalization_status"] = str(existing.get("finalization_status") or incoming.get("finalization_status") or "missing")
-    return merged
+    return merge_v2_meta(existing, incoming)
 
 
 def _build_geometry_evidence_from_slot_frame(frame: Any) -> dict[str, Any]:
@@ -995,24 +941,7 @@ def _prioritize_v2_compile_questions(
     missing_fields: list[str],
     slot_debug: dict[str, Any],
 ) -> list[str]:
-    prioritized: list[str] = []
-    debug_view = V2PipelineDebugView.from_slot_debug(slot_debug)
-    for field in debug_view.spatial_source.missing_fields:
-        path = _v2_missing_field_to_path("source", field)
-        if path and path in missing_fields and path not in prioritized:
-            prioritized.append(path)
-    for field in debug_view.source.missing_fields:
-        path = _v2_missing_field_to_path("source", field)
-        if path and path in missing_fields and path not in prioritized:
-            prioritized.append(path)
-    for field in debug_view.geometry.missing_fields:
-        path = _v2_missing_field_to_path("geometry", field)
-        if path and path in missing_fields and path not in prioritized:
-            prioritized.append(path)
-    for path in asked_fields:
-        if path not in prioritized:
-            prioritized.append(path)
-    return prioritized[: max(1, len(asked_fields))]
+    return prioritize_v2_compile_questions(asked_fields, missing_fields, slot_debug)
 
 
 def _augment_geometry_targets(
