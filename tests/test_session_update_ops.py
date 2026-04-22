@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from core.orchestrator.session_manager import (
-    _apply_updates,
-    _merge_v2_missing_paths,
-    _prioritize_spatial_questions,
-    _prioritize_v2_compile_questions,
-    _v2_compile_missing_paths,
+from core.orchestrator.pipeline_debug import (
+    compile_v2_missing_paths,
+    merge_v2_missing_paths,
+    prioritize_spatial_questions,
+    prioritize_v2_compile_questions,
 )
+from core.orchestrator.session_manager import _apply_updates
 from core.orchestrator.types import Producer, UpdateOp
 
 
@@ -67,7 +67,7 @@ class SessionUpdateOpsTest(unittest.TestCase):
                 },
             },
         }
-        missing_paths = _v2_compile_missing_paths(slot_debug)
+        missing_paths = compile_v2_missing_paths(slot_debug)
         self.assertEqual(
             missing_paths,
             ["source.particle", "source.energy", "source.type"],
@@ -75,7 +75,7 @@ class SessionUpdateOpsTest(unittest.TestCase):
         self.assertEqual(slot_debug["source_v2"]["missing_fields"], ["particle"])
         self.assertEqual(slot_debug["spatial_v2"]["source_meta"]["missing_fields"], ["energy_mev", "source_type"])
 
-        prioritized = _prioritize_v2_compile_questions(
+        prioritized = prioritize_v2_compile_questions(
             ["source.particle", "source.energy", "source.type"],
             missing_paths,
             slot_debug,
@@ -91,9 +91,9 @@ class SessionUpdateOpsTest(unittest.TestCase):
                 "warnings": ["source_inside_target"],
             },
         }
-        missing_paths = _merge_v2_missing_paths(["source.direction"], slot_debug)
+        missing_paths = merge_v2_missing_paths(["source.direction"], slot_debug)
         self.assertEqual(missing_paths, ["source.direction", "source.position"])
-        prioritized = _prioritize_spatial_questions(
+        prioritized = prioritize_spatial_questions(
             ["source.direction", "source.position"],
             missing_paths,
             slot_debug,

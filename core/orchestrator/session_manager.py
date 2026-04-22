@@ -47,16 +47,7 @@ from core.orchestrator.candidate_preprocess import (
 from core.orchestrator.constraint_ledger import lock_from_candidate
 from core.orchestrator.path_ops import deep_copy, get_path, remove_path, set_path
 from core.orchestrator.phase_machine import decide_phase_transition
-from core.orchestrator.pipeline_debug import (
-    V2PipelineDebugView,
-    V2PipelineMetaView,
-    compile_v2_missing_paths,
-    merge_v2_meta,
-    merge_v2_missing_paths,
-    prioritize_spatial_questions,
-    prioritize_v2_compile_questions,
-    v2_missing_field_to_path,
-)
+from core.orchestrator.pipeline_debug import merge_v2_meta, merge_v2_missing_paths, prioritize_spatial_questions, prioritize_v2_compile_questions
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.orchestrator.turn_transaction import begin_turn, commit_turn
 from core.orchestrator.types import CandidateUpdate, Intent, Phase, Producer, SessionState, UpdateOp
@@ -594,43 +585,10 @@ def _strip_source_updates(candidate: CandidateUpdate | None) -> CandidateUpdate 
     )
 
 
-def _spatial_review_missing_paths(spatial_meta: V2PipelineMetaView) -> list[str]:
-    return V2PipelineDebugView(spatial=spatial_meta).spatial_review_missing_paths()
-
-
-def _prioritize_spatial_questions(
-    asked_fields: list[str],
-    missing_fields: list[str],
-    slot_debug: dict[str, Any],
-) -> list[str]:
-    return prioritize_spatial_questions(asked_fields, missing_fields, slot_debug)
-
-
-def _v2_missing_field_to_path(domain: str, field: str) -> str:
-    return v2_missing_field_to_path(domain, field)
-
-
-def _v2_compile_missing_paths(slot_debug: dict[str, Any]) -> list[str]:
-    return compile_v2_missing_paths(slot_debug)
-
-
-def _merge_v2_missing_paths(
-    base_missing_paths: list[str],
-    slot_debug: dict[str, Any],
-    *,
-    include_spatial: bool = True,
-) -> list[str]:
-    return merge_v2_missing_paths(base_missing_paths, slot_debug, include_spatial=include_spatial)
-
-
 def _candidate_has_update_prefix(candidate: CandidateUpdate | None, prefix: str) -> bool:
     if candidate is None:
         return False
     return any(str(update.path).startswith(prefix) for update in candidate.updates)
-
-
-def _merge_v2_meta(existing: Any, incoming: dict[str, Any]) -> dict[str, Any]:
-    return merge_v2_meta(existing, incoming)
 
 
 def _build_geometry_evidence_from_slot_frame(frame: Any) -> dict[str, Any]:
@@ -934,14 +892,6 @@ def _build_interpreter_bridge_candidates(
         }
 
     return bridge_candidates, bridge_meta
-
-
-def _prioritize_v2_compile_questions(
-    asked_fields: list[str],
-    missing_fields: list[str],
-    slot_debug: dict[str, Any],
-) -> list[str]:
-    return prioritize_v2_compile_questions(asked_fields, missing_fields, slot_debug)
 
 
 def _augment_geometry_targets(
@@ -1578,7 +1528,7 @@ def process_turn(
                     bridge_paths = [update.path for candidate in bridge_candidates for update in candidate.updates]
                     user_candidate = _augment_user_targets(user_candidate, bridge_paths)
                 for key, meta in bridge_meta.items():
-                    slot_debug[key] = _merge_v2_meta(slot_debug.get(key), meta)
+                    slot_debug[key] = merge_v2_meta(slot_debug.get(key), meta)
             interpreter_bridge_candidates: list[CandidateUpdate] = []
             interpreter_bridge_meta: dict[str, Any] = {}
             if enable_interpreter and interpreter_debug and interpreter_debug.get("ok"):
@@ -1607,7 +1557,7 @@ def process_turn(
             llm_used = True
             llm_raw = slot_result.llm_raw
             llm_schema_errors = list(slot_result.schema_errors)
-            semantic_missing_paths = _merge_v2_missing_paths(
+            semantic_missing_paths = merge_v2_missing_paths(
                 list(semantic_missing_paths),
                 slot_debug,
                 include_spatial=spatial_v2_meta is not None,
@@ -1683,7 +1633,7 @@ def process_turn(
                     bridge_paths = [update.path for candidate in bridge_candidates for update in candidate.updates]
                     user_candidate = _augment_user_targets(user_candidate, bridge_paths)
                 for key, meta in bridge_meta.items():
-                    slot_debug[key] = _merge_v2_meta(slot_debug.get(key), meta)
+                    slot_debug[key] = merge_v2_meta(slot_debug.get(key), meta)
                 if semantic_candidate.updates:
                     content_candidates.append(semantic_candidate)
                 content_candidates.extend(bridge_candidates)
@@ -1752,7 +1702,7 @@ def process_turn(
             bridge_paths = [update.path for candidate in bridge_candidates for update in candidate.updates]
             user_candidate = _augment_user_targets(user_candidate, bridge_paths)
         for key, meta in bridge_meta.items():
-            slot_debug[key] = _merge_v2_meta(slot_debug.get(key), meta)
+            slot_debug[key] = merge_v2_meta(slot_debug.get(key), meta)
         content_candidates = [*bridge_candidates, primary_candidate]
         normalization_payload = {
             "intent": norm["intent"].value,
@@ -1938,7 +1888,7 @@ def process_turn(
         user_candidate=user_candidate,
     ):
         semantic_missing_paths = _semantic_missing_from_debug(debug)
-    semantic_missing_paths = _merge_v2_missing_paths(
+    semantic_missing_paths = merge_v2_missing_paths(
         list(semantic_missing_paths),
         slot_debug,
         include_spatial=True,
@@ -1994,8 +1944,8 @@ def process_turn(
         last_asked_paths=state.last_asked_paths,
         question_attempts=state.question_attempts,
     )
-    asked_fields = _prioritize_v2_compile_questions(asked_fields, final_missing_paths, slot_debug)
-    asked_fields = _prioritize_spatial_questions(asked_fields, final_missing_paths, slot_debug)
+    asked_fields = prioritize_v2_compile_questions(asked_fields, final_missing_paths, slot_debug)
+    asked_fields = prioritize_spatial_questions(asked_fields, final_missing_paths, slot_debug)
     if asked_fields:
         for path in asked_fields:
             if path in final_missing_paths and path not in state.open_questions:
