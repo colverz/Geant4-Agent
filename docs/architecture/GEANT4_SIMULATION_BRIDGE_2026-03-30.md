@@ -171,6 +171,16 @@ For a local manual smoke test after setting the runtime command:
 python tools/local_geant4_smoke.py --events 1 --require-runtime
 ```
 
+For a pytest-managed live smoke, opt in explicitly so normal regression runs stay deterministic:
+
+```powershell
+$env:GEANT4_LIVE_SMOKE = "1"
+$env:GEANT4_RUNTIME_COMMAND_JSON = '["runtime/geant4_local_app/build/Release/geant4_local_app.exe"]'
+python -m pytest tests/test_geant4_live_smoke.py -q
+```
+
+Without `GEANT4_LIVE_SMOKE=1`, this test is skipped.
+
 The current bridge also carries a reproducibility baseline:
 
 - explicit `run.seed`
