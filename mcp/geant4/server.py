@@ -36,6 +36,12 @@ class Geant4McpServer:
             )
         if name == "apply_config_patch":
             return self._adapter.apply_config_patch(arguments.get("patch", {}))
+        if name == "validate_config":
+            return self._adapter.validate_config(
+                config=arguments.get("config"),
+                patch=arguments.get("patch"),
+                events=int(arguments.get("events", 1) or 1),
+            )
         if name == "initialize_run":
             return self._adapter.initialize_run()
         if name == "run_beam":

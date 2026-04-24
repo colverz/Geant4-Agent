@@ -17,7 +17,9 @@ from core.runtime.types import (
     RuntimeActionStatus,
     RuntimeStateSnapshot,
 )
-from core.simulation import derive_role_stats, load_simulation_result
+from core.orchestrator.path_ops import get_path
+from core.simulation import build_simulation_spec, derive_role_stats, load_simulation_result
+from core.validation.minimal_schema import get_minimal_required_paths
 from mcp.geant4.runtime_payload import build_runtime_payload
 
 
@@ -83,6 +85,87 @@ def _runtime_volume_roles(runtime_payload: dict[str, Any] | None) -> dict[str, A
     return volume_roles if isinstance(volume_roles, dict) else None
 
 
+def _is_missing(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    if isinstance(value, (dict, list, tuple)) and len(value) == 0:
+        return True
+    return False
+
+
+def _runtime_physics_present(config: dict[str, Any]) -> bool:
+    physics_list = config.get("physics_list")
+    if isinstance(physics_list, dict) and not _is_missing(physics_list.get("name")):
+        return True
+    if isinstance(physics_list, str) and physics_list.strip():
+        return True
+    return not _is_missing(get_path(config, "physics.physics_list"))
+
+
+def _runtime_required_missing_paths(config: dict[str, Any]) -> list[str]:
+    agent_only_paths = {"materials.volume_material_map", "output.format", "output.path", "physics.physics_list"}
+    missing: list[str] = []
+    for path in get_minimal_required_paths(config):
+        if path in agent_only_paths:
+            continue
+        if _is_missing(get_path(config, path)):
+            missing.append(path)
+    if not _runtime_physics_present(config):
+        missing.append("physics.physics_list")
+    return list(dict.fromkeys(missing))
+
+
+def _runtime_payload_preview(runtime_payload: dict[str, Any]) -> dict[str, Any]:
+    preview_keys = (
+        "structure",
+        "material",
+        "root_volume_name",
+        "source_type",
+        "particle",
+        "energy",
+        "position",
+        "direction",
+        "physics_list",
+        "detector_enabled",
+        "run",
+        "run_manifest",
+        "scoring",
+    )
+    return {key: deepcopy(runtime_payload.get(key)) for key in preview_keys if key in runtime_payload}
+
+
+def _preflight_payload(config: dict[str, Any], *, events: int) -> tuple[bool, dict[str, Any], list[str], list[str]]:
+    missing_paths = _runtime_required_missing_paths(config)
+    readiness = {
+        "geometry": not any(path.startswith("geometry.") for path in missing_paths),
+        "source": not any(path.startswith("source.") for path in missing_paths),
+        "physics": "physics.physics_list" not in missing_paths,
+    }
+    payload: dict[str, Any] = {
+        "ok": not missing_paths,
+        "readiness": readiness,
+        "missing_paths": list(missing_paths),
+        "runtime_required_paths": [path for path in get_minimal_required_paths(config) if not path.startswith(("materials.", "output."))],
+    }
+    errors = [f"missing:{path}" for path in missing_paths]
+    warnings: list[str] = []
+    if not missing_paths:
+        try:
+            runtime_payload = build_runtime_payload(build_simulation_spec(config, events=max(1, int(events))))
+        except Exception as exc:
+            payload["ok"] = False
+            payload["build_error"] = f"{type(exc).__name__}: {exc}"
+            errors.append("runtime_payload_build_failed")
+        else:
+            payload["runtime_payload_preview"] = _runtime_payload_preview(runtime_payload)
+            payload["runtime_payload_keys"] = sorted(runtime_payload.keys())
+    else:
+        warnings.append("runtime_payload_preview_omitted_until_required_fields_are_present")
+    return bool(payload["ok"]), payload, errors, warnings
+
+
 def _parse_runtime_command(raw_command: str) -> list[str]:
     value = str(raw_command or "").strip()
     if not value:
@@ -123,6 +206,16 @@ class Geant4RuntimeAdapter(ABC):
 
     @abstractmethod
     def apply_config_patch(self, patch: dict[str, Any]) -> ExecutionObservation:
+        raise NotImplementedError
+
+    @abstractmethod
+    def validate_config(
+        self,
+        *,
+        config: dict[str, Any] | None = None,
+        patch: dict[str, Any] | None = None,
+        events: int = 1,
+    ) -> ExecutionObservation:
         raise NotImplementedError
 
     @abstractmethod
@@ -172,6 +265,26 @@ class InMemoryGeant4Adapter(Geant4RuntimeAdapter):
             status=RuntimeActionStatus.COMPLETED,
             message="Configuration patch applied.",
             payload={"config": deepcopy(self._config)},
+            runtime_phase=self._snapshot.runtime_phase,
+        )
+
+    def validate_config(
+        self,
+        *,
+        config: dict[str, Any] | None = None,
+        patch: dict[str, Any] | None = None,
+        events: int = 1,
+    ) -> ExecutionObservation:
+        validation_config = deepcopy(config) if isinstance(config, dict) else deepcopy(self._config)
+        if isinstance(patch, dict):
+            validation_config = _deep_merge(validation_config, patch)
+        ok, payload, errors, warnings = _preflight_payload(validation_config, events=max(1, int(events)))
+        return ExecutionObservation(
+            status=RuntimeActionStatus.COMPLETED,
+            message="Configuration preflight passed." if ok else "Configuration preflight found missing runtime fields.",
+            payload=payload,
+            errors=errors,
+            warnings=warnings,
             runtime_phase=self._snapshot.runtime_phase,
         )
 
@@ -286,6 +399,26 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
                 "config": deepcopy(self._config),
                 "runtime_payload": deepcopy(self._runtime_payload),
             },
+            runtime_phase=self._snapshot.runtime_phase,
+        )
+
+    def validate_config(
+        self,
+        *,
+        config: dict[str, Any] | None = None,
+        patch: dict[str, Any] | None = None,
+        events: int = 1,
+    ) -> ExecutionObservation:
+        validation_config = deepcopy(config) if isinstance(config, dict) else deepcopy(self._config)
+        if isinstance(patch, dict):
+            validation_config = _deep_merge(validation_config, patch)
+        ok, payload, errors, warnings = _preflight_payload(validation_config, events=max(1, int(events)))
+        return ExecutionObservation(
+            status=RuntimeActionStatus.COMPLETED,
+            message="Configuration preflight passed." if ok else "Configuration preflight found missing runtime fields.",
+            payload=payload,
+            errors=errors,
+            warnings=warnings,
             runtime_phase=self._snapshot.runtime_phase,
         )
 

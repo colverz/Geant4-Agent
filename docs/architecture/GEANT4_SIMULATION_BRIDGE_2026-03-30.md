@@ -165,6 +165,14 @@ Optional environment variables:
 Without a configured command, `Geant4McpServer` remains in-memory so ordinary UI and unit-test flows
 do not accidentally launch Geant4.
 
+The MCP runtime boundary now includes a preflight tool:
+
+- `validate_config`
+
+This tool checks the runtime-required fields before initialization, then builds a
+`SimulationSpec` and `RuntimePayload` preview when the config is ready. It reports missing fields
+in `payload["missing_paths"]` while keeping the tool call itself deterministic and non-mutating.
+
 For a local manual smoke test after setting the runtime command:
 
 ```powershell

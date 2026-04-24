@@ -32,6 +32,28 @@ DEFAULT_TOOL_SPECS: list[ToolSpec] = [
         ),
     ),
     ToolSpec(
+        name="validate_config",
+        description="Preflight a Geant4 configuration before initialization or execution.",
+        input_schema=_object_schema(
+            required=[],
+            properties={
+                "config": {
+                    "type": "object",
+                    "description": "Optional full configuration to validate instead of the adapter's current snapshot.",
+                },
+                "patch": {
+                    "type": "object",
+                    "description": "Optional patch applied to the current or provided configuration before validation.",
+                },
+                "events": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Number of events used when building the runtime payload preview.",
+                },
+            },
+        ),
+    ),
+    ToolSpec(
         name="initialize_run",
         description="Initialize the Geant4 runtime after geometry, source, and physics are ready.",
         input_schema=_object_schema(required=[], properties={}),
