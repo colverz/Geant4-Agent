@@ -147,7 +147,8 @@ logic should prefer the structured result objects.
 
 Payloads also expose `result_summary`, a compact agent/UI-facing view of run completion,
 configuration, source sampling, target scoring, detector crossings, plane crossings, and role/volume
-stats.
+stats. `run_beam` returns this summary at the top level when a structured runtime result is
+available, so agent/UI callers do not need to depend on the full `simulation_result` shape.
 
 The current result schema version is:
 
@@ -169,18 +170,39 @@ Optional environment variables:
 Without a configured command, `Geant4McpServer` remains in-memory so ordinary UI and unit-test flows
 do not accidentally launch Geant4.
 
-The MCP runtime boundary now includes a preflight tool:
+The MCP runtime boundary now includes result-oriented tools:
 
 - `validate_config`
+- `summarize_last_result`
 
-This tool checks the runtime-required fields before initialization, then builds a
+`validate_config` checks the runtime-required fields before initialization, then builds a
 `SimulationSpec` and `RuntimePayload` preview when the config is ready. It reports missing fields
 in `payload["missing_paths"]` while keeping the tool call itself deterministic and non-mutating.
+
+`summarize_last_result` returns the latest cached `result_summary` after a completed run. It is a
+small consumption surface for agents and UI panels that need to answer "what happened in the last
+simulation?" without parsing the raw Geant4 artifact payload.
+
+Manual and live smoke runs also build a compact `RuntimeSmokeReport` from the same result summary.
+This report is the stable top-level contract for quick checks and demos:
+
+- schema version
+- requested/completed events
+- compact configuration identity
+- key scoring metrics
+- artifact directory and `run_summary.json` path
+- full `result_summary` for deeper inspection
 
 For a local manual smoke test after setting the runtime command:
 
 ```powershell
 python tools/local_geant4_smoke.py --events 1 --require-runtime
+```
+
+For automation-friendly output:
+
+```powershell
+python tools/local_geant4_smoke.py --events 1 --require-runtime --json
 ```
 
 For a pytest-managed live smoke, opt in explicitly so normal regression runs stay deterministic:

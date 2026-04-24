@@ -5,7 +5,13 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from core.simulation import SIMULATION_RESULT_SCHEMA_VERSION, build_simulation_spec, simulation_result_from_dict
+from core.simulation import (
+    RUNTIME_SMOKE_REPORT_SCHEMA_VERSION,
+    SIMULATION_RESULT_SCHEMA_VERSION,
+    build_runtime_smoke_report,
+    build_simulation_spec,
+    simulation_result_from_dict,
+)
 from mcp.geant4.adapter import _load_run_summary_payload
 from mcp.geant4.runtime_payload import build_runtime_payload
 
@@ -194,6 +200,25 @@ class SimulationWorkflowContractTest(unittest.TestCase):
         self.assertEqual(mcp_payload["result_summary"]["scoring"]["roles"]["target"]["track_entries"], 3)
         self.assertEqual(mcp_payload["result_summary"]["scoring"]["roles"]["detector"]["track_entries"], 1)
         self.assertIn("run_summary_path", mcp_payload)
+
+        smoke_report = build_runtime_smoke_report(
+            events=3,
+            run_payload={"simulation_result": mcp_payload, "result_summary": mcp_payload["result_summary"]},
+            summary_payload={
+                "result_summary": mcp_payload["result_summary"],
+                "artifact_dir": mcp_payload["artifact_dir"],
+                "run_summary_path": mcp_payload["run_summary_path"],
+            },
+        )
+        self.assertEqual(smoke_report["schema_version"], RUNTIME_SMOKE_REPORT_SCHEMA_VERSION)
+        self.assertTrue(smoke_report["ok"])
+        self.assertEqual(smoke_report["events_requested"], 3)
+        self.assertEqual(smoke_report["events_completed"], 3)
+        self.assertEqual(smoke_report["configuration"]["geometry_structure"], "single_box")
+        self.assertEqual(smoke_report["configuration"]["particle"], "gamma")
+        self.assertEqual(smoke_report["key_metrics"]["target_edep_total_mev"], 0.8)
+        self.assertEqual(smoke_report["key_metrics"]["plane_crossing_count"], 2)
+        self.assertEqual(smoke_report["run_summary_path"], mcp_payload["run_summary_path"])
 
     def test_runtime_payload_covers_cpp_consumed_schema_keys(self) -> None:
         runtime_payload = build_runtime_payload(build_simulation_spec(_representative_config(), events=3))

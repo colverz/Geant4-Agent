@@ -137,6 +137,76 @@ def _runtime_payload_preview(runtime_payload: dict[str, Any]) -> dict[str, Any]:
     return {key: deepcopy(runtime_payload.get(key)) for key in preview_keys if key in runtime_payload}
 
 
+def _config_physics_list(config: dict[str, Any]) -> str | None:
+    physics_list = config.get("physics_list")
+    if isinstance(physics_list, dict):
+        name = physics_list.get("name")
+        return str(name) if name else None
+    if isinstance(physics_list, str) and physics_list.strip():
+        return physics_list.strip()
+    physics = config.get("physics")
+    if isinstance(physics, dict):
+        name = physics.get("physics_list")
+        return str(name) if name else None
+    return None
+
+
+def _config_detector_enabled(config: dict[str, Any]) -> bool:
+    simulation = config.get("simulation")
+    if not isinstance(simulation, dict):
+        return False
+    detector = simulation.get("detector")
+    return bool(detector.get("enabled")) if isinstance(detector, dict) else False
+
+
+def _config_material(config: dict[str, Any]) -> str | None:
+    materials = config.get("materials")
+    if not isinstance(materials, dict):
+        return None
+    selected = materials.get("selected_materials")
+    if isinstance(selected, list) and selected:
+        return str(selected[0])
+    material = materials.get("material")
+    return str(material) if material else None
+
+
+def _build_design_result_summary(config: dict[str, Any], events: int) -> dict[str, Any]:
+    geometry = config.get("geometry") if isinstance(config.get("geometry"), dict) else {}
+    source = config.get("source") if isinstance(config.get("source"), dict) else {}
+    return {
+        "run": {
+            "ok": True,
+            "events_requested": int(events),
+            "events_completed": int(events),
+            "completion_fraction": 1.0,
+            "mode": "design",
+            "seed": None,
+        },
+        "configuration": {
+            "geometry_structure": geometry.get("structure"),
+            "material": _config_material(config),
+            "source_type": source.get("type"),
+            "particle": source.get("particle"),
+            "physics_list": _config_physics_list(config),
+            "detector_enabled": _config_detector_enabled(config),
+        },
+        "source": {
+            "primary_count": int(events),
+            "sampled_position_mean_mm": None,
+            "sampled_position_rms_mm": None,
+            "sampled_direction_mean": None,
+            "sampled_direction_rms": None,
+        },
+        "scoring": {
+            "target": {},
+            "detector_crossing": {},
+            "plane_crossing": {},
+            "roles": {},
+            "volumes": {},
+        },
+    }
+
+
 def _preflight_payload(config: dict[str, Any], *, events: int) -> tuple[bool, dict[str, Any], list[str], list[str]]:
     missing_paths = _runtime_required_missing_paths(config)
     readiness = {
@@ -228,6 +298,10 @@ class Geant4RuntimeAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def summarize_last_result(self) -> ExecutionObservation:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_last_log(self) -> ExecutionObservation:
         raise NotImplementedError
 
@@ -238,6 +312,7 @@ class InMemoryGeant4Adapter(Geant4RuntimeAdapter):
     def __init__(self) -> None:
         self._config: dict[str, Any] = {}
         self._last_log: list[str] = []
+        self._last_result_summary: dict[str, Any] | None = None
         self._snapshot = RuntimeStateSnapshot(
             connected=True,
             runtime_phase=Geant4RuntimePhase.IDLE,
@@ -250,6 +325,7 @@ class InMemoryGeant4Adapter(Geant4RuntimeAdapter):
 
     def apply_config_patch(self, patch: dict[str, Any]) -> ExecutionObservation:
         self._config = _deep_merge(self._config, patch)
+        self._last_result_summary = None
         self._snapshot.geometry_ready = bool(self._config.get("geometry"))
         self._snapshot.source_ready = bool(self._config.get("source"))
         self._snapshot.physics_ready = bool(self._config.get("physics_list") or self._config.get("physics"))
@@ -324,12 +400,36 @@ class InMemoryGeant4Adapter(Geant4RuntimeAdapter):
         self._snapshot.runtime_phase = Geant4RuntimePhase.RUNNING
         self._snapshot.last_action = "run_beam"
         self._last_log.append(f"run started with {events} events")
-        payload = {"events": int(events), "status": "simulated"}
+        result_summary = _build_design_result_summary(self._config, int(events))
+        self._last_result_summary = deepcopy(result_summary)
+        payload = {"events": int(events), "status": "simulated", "result_summary": result_summary}
         self._snapshot.runtime_phase = Geant4RuntimePhase.INITIALIZED
+        self._snapshot.available_actions = [
+            "get_runtime_state",
+            "apply_config_patch",
+            "get_last_log",
+            "run_beam",
+            "summarize_last_result",
+        ]
         return ExecutionObservation(
             status=RuntimeActionStatus.COMPLETED,
             message="Beam run completed.",
             payload=payload,
+            runtime_phase=self._snapshot.runtime_phase,
+        )
+
+    def summarize_last_result(self) -> ExecutionObservation:
+        if not self._last_result_summary:
+            return ExecutionObservation(
+                status=RuntimeActionStatus.REJECTED,
+                message="No simulation result summary is available yet.",
+                errors=["no_result_summary_available"],
+                runtime_phase=self._snapshot.runtime_phase,
+            )
+        return ExecutionObservation(
+            status=RuntimeActionStatus.COMPLETED,
+            message="Latest simulation result summary fetched.",
+            payload={"result_summary": deepcopy(self._last_result_summary)},
             runtime_phase=self._snapshot.runtime_phase,
         )
 
@@ -364,6 +464,7 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
         self._config: dict[str, Any] = {}
         self._runtime_payload: dict[str, Any] = {}
         self._last_log: list[str] = []
+        self._last_result_payload: dict[str, Any] | None = None
         self._snapshot = RuntimeStateSnapshot(
             connected=bool(self._command),
             runtime_phase=Geant4RuntimePhase.IDLE if self._command else Geant4RuntimePhase.DETACHED,
@@ -380,6 +481,7 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
 
     def apply_config_patch(self, patch: dict[str, Any]) -> ExecutionObservation:
         self._config = _deep_merge(self._config, patch)
+        self._last_result_payload = None
         self._runtime_payload = build_runtime_payload(self._config)
         self._snapshot.geometry_ready = bool(self._config.get("geometry"))
         self._snapshot.source_ready = bool(self._config.get("source"))
@@ -464,6 +566,7 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
             )
 
         config_path = None
+        self._last_result_payload = None
         self._snapshot.runtime_phase = Geant4RuntimePhase.RUNNING
         self._snapshot.last_action = "run_beam"
         try:
@@ -514,20 +617,33 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
                     errors=["runtime_process_failed"],
                     runtime_phase=self._snapshot.runtime_phase,
                 )
+            simulation_result = _load_run_summary_payload(
+                stdout_lines,
+                stderr_lines,
+                runtime_payload,
+            )
+            payload = {
+                "events": int(events),
+                "returncode": completed.returncode,
+                "stdout_tail": stdout_lines[-20:],
+                "stderr_tail": stderr_lines[-20:],
+                "simulation_result": simulation_result,
+            }
+            if isinstance(simulation_result, dict) and isinstance(simulation_result.get("result_summary"), dict):
+                payload["result_summary"] = deepcopy(simulation_result["result_summary"])
+            self._last_result_payload = deepcopy(payload)
+            if "result_summary" in payload:
+                self._snapshot.available_actions = [
+                    "get_runtime_state",
+                    "apply_config_patch",
+                    "get_last_log",
+                    "run_beam",
+                    "summarize_last_result",
+                ]
             return ExecutionObservation(
                 status=RuntimeActionStatus.COMPLETED,
                 message="Beam run completed.",
-                payload={
-                    "events": int(events),
-                    "returncode": completed.returncode,
-                    "stdout_tail": stdout_lines[-20:],
-                    "stderr_tail": stderr_lines[-20:],
-                    "simulation_result": _load_run_summary_payload(
-                        stdout_lines,
-                        stderr_lines,
-                        runtime_payload,
-                    ),
-                },
+                payload=payload,
                 runtime_phase=self._snapshot.runtime_phase,
             )
         except OSError as exc:
@@ -546,6 +662,35 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
                     Path(config_path).unlink(missing_ok=True)
                 except OSError:
                     pass
+
+    def summarize_last_result(self) -> ExecutionObservation:
+        if not self._last_result_payload:
+            return ExecutionObservation(
+                status=RuntimeActionStatus.REJECTED,
+                message="No simulation result summary is available yet.",
+                errors=["no_result_summary_available"],
+                runtime_phase=self._snapshot.runtime_phase,
+            )
+        summary = self._last_result_payload.get("result_summary")
+        if not isinstance(summary, dict):
+            return ExecutionObservation(
+                status=RuntimeActionStatus.REJECTED,
+                message="The latest run did not produce a structured result summary.",
+                errors=["no_structured_result_summary"],
+                runtime_phase=self._snapshot.runtime_phase,
+            )
+        payload: dict[str, Any] = {"result_summary": deepcopy(summary)}
+        simulation_result = self._last_result_payload.get("simulation_result")
+        if isinstance(simulation_result, dict):
+            for key in ("artifact_dir", "run_summary_path"):
+                if key in simulation_result:
+                    payload[key] = simulation_result[key]
+        return ExecutionObservation(
+            status=RuntimeActionStatus.COMPLETED,
+            message="Latest simulation result summary fetched.",
+            payload=payload,
+            runtime_phase=self._snapshot.runtime_phase,
+        )
 
     def get_last_log(self) -> ExecutionObservation:
         return ExecutionObservation(

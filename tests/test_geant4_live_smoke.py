@@ -61,6 +61,7 @@ class Geant4LiveSmokeTest(unittest.TestCase):
 
         run_obs = server.call_tool(ToolCallRequest(tool_name="run_beam", arguments={"events": 1}))
         self.assertEqual(run_obs.status, RuntimeActionStatus.COMPLETED)
+        self.assertIsInstance(run_obs.payload.get("result_summary"), dict)
         result = run_obs.payload.get("simulation_result")
         self.assertIsInstance(result, dict)
         assert isinstance(result, dict)
@@ -69,6 +70,10 @@ class Geant4LiveSmokeTest(unittest.TestCase):
         self.assertEqual(result["particle"], "gamma")
         self.assertIn("run_summary_path", result)
         self.assertIn("artifact_dir", result)
+        summary_obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
+        self.assertEqual(summary_obs.status, RuntimeActionStatus.COMPLETED)
+        self.assertEqual(summary_obs.payload["result_summary"]["run"]["events_completed"], 1)
+        self.assertEqual(summary_obs.payload["result_summary"]["configuration"]["geometry_structure"], "single_box")
 
 
 if __name__ == "__main__":

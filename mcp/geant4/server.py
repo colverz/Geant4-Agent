@@ -46,6 +46,8 @@ class Geant4McpServer:
             return self._adapter.initialize_run()
         if name == "run_beam":
             return self._adapter.run_beam(int(arguments.get("events", 0)))
+        if name == "summarize_last_result":
+            return self._adapter.summarize_last_result()
         if name == "get_last_log":
             return self._adapter.get_last_log()
         snapshot = self._adapter.snapshot()

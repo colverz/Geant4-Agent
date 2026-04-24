@@ -23,9 +23,16 @@ class Geant4McpAdapterTest(unittest.TestCase):
                 "validate_config",
                 "initialize_run",
                 "run_beam",
+                "summarize_last_result",
                 "get_last_log",
             ],
         )
+
+    def test_summarize_last_result_requires_completed_run(self) -> None:
+        server = Geant4McpServer()
+        obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
+        self.assertEqual(obs.status, RuntimeActionStatus.REJECTED)
+        self.assertIn("no_result_summary_available", obs.errors)
 
     def test_run_requires_initialization(self) -> None:
         server = Geant4McpServer()
@@ -52,6 +59,11 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(init_obs.status, RuntimeActionStatus.COMPLETED)
         self.assertEqual(run_obs.status, RuntimeActionStatus.COMPLETED)
         self.assertEqual(run_obs.payload["events"], 4)
+        self.assertEqual(run_obs.payload["result_summary"]["run"]["events_completed"], 4)
+        summary_obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
+        self.assertEqual(summary_obs.status, RuntimeActionStatus.COMPLETED)
+        self.assertEqual(summary_obs.payload["result_summary"]["configuration"]["particle"], "gamma")
+        self.assertEqual(summary_obs.payload["result_summary"]["configuration"]["physics_list"], "FTFP_BERT")
 
     def test_validate_config_reports_missing_runtime_fields(self) -> None:
         server = Geant4McpServer()
@@ -285,10 +297,16 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(result["scoring"]["volume_stats"]["target"]["step_count"], 12)
         self.assertEqual(result["scoring"]["role_stats"]["target"]["track_entries"], 3)
         self.assertEqual(result["scoring"]["role_stats"]["detector"]["track_entries"], 1)
+        self.assertEqual(run_obs.payload["result_summary"]["run"]["events_completed"], 3)
+        self.assertEqual(run_obs.payload["result_summary"]["scoring"]["roles"]["target"]["track_entries"], 3)
         self.assertEqual(result["result_summary"]["run"]["events_completed"], 3)
         self.assertEqual(result["result_summary"]["configuration"]["detector_enabled"], True)
         self.assertEqual(result["result_summary"]["scoring"]["roles"]["target"]["track_entries"], 3)
         self.assertEqual(result["result_summary"]["scoring"]["roles"]["detector"]["track_entries"], 1)
+        summary_obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
+        self.assertEqual(summary_obs.status, RuntimeActionStatus.COMPLETED)
+        self.assertEqual(summary_obs.payload["result_summary"]["scoring"]["roles"]["detector"]["track_entries"], 1)
+        self.assertEqual(summary_obs.payload["run_summary_path"], str(summary_path))
 
 
 if __name__ == "__main__":

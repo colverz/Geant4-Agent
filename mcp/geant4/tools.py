@@ -73,6 +73,11 @@ DEFAULT_TOOL_SPECS: list[ToolSpec] = [
         ),
     ),
     ToolSpec(
+        name="summarize_last_result",
+        description="Return the latest structured simulation result summary without exposing the full raw result payload.",
+        input_schema=_object_schema(required=[], properties={}),
+    ),
+    ToolSpec(
         name="get_last_log",
         description="Return the latest runtime log, warnings, and errors from the Geant4 side.",
         input_schema=_object_schema(required=[], properties={}),

@@ -16,6 +16,7 @@ from core.simulation.results import (
     load_simulation_result,
     simulation_result_from_dict,
 )
+from core.simulation.smoke_report import RUNTIME_SMOKE_REPORT_SCHEMA_VERSION, build_runtime_smoke_report
 from core.simulation.spec import (
     BeamDivergenceSpec,
     BeamModelSpec,
@@ -39,6 +40,7 @@ __all__ = [
     "GeometryRuntimeSpec",
     "PhysicsRuntimeSpec",
     "RunControlSpec",
+    "RUNTIME_SMOKE_REPORT_SCHEMA_VERSION",
     "ScoringPlaneSpec",
     "SIMULATION_RESULT_SCHEMA_VERSION",
     "SimulationDetectorResult",
@@ -52,6 +54,7 @@ __all__ = [
     "SimulationTargetScoringResult",
     "SimulationVolumeStatsResult",
     "build_result_summary_payload",
+    "build_runtime_smoke_report",
     "ScoringSpec",
     "SimulationSpec",
     "SourceRuntimeSpec",
