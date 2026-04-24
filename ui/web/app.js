@@ -815,6 +815,40 @@ function runtimeResultMessage(report) {
   ].join("\n");
 }
 
+function isRuntimeResultQuestion(text) {
+  const raw = String(text || "").trim().toLowerCase();
+  if (!raw) return false;
+  const zhHit = /(刚才|上次|最近|当前).*(结果|模拟|运行|计分|得分)|结果怎么样|模拟怎么样|运行怎么样|剂量多少|沉积能量|hit|crossing/i.test(raw);
+  const enHit = /\b(last|latest|previous|current)\b.*\b(result|simulation|run|scoring|score|edep|hit|crossing)\b|\bwhat happened\b.*\b(run|simulation)\b|\bhow did\b.*\b(run|simulation)\b/.test(raw);
+  return zhHit || enHit;
+}
+
+async function answerRuntimeResultQuestion() {
+  const res = await fetch("/api/geant4/summary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lang: state.lang,
+      llm_result_summary: $("llm-question")?.checked === true,
+      ollama_config_path: state.ollamaConfigPath,
+    }),
+  });
+  const data = await res.json();
+  if (res.ok && data.runtime_smoke_report) {
+    state.lastRuntimeSmokeReport = data.runtime_smoke_report;
+    renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
+  }
+  if (data.runtime_result_explanation?.message) {
+    return data.runtime_result_explanation.message;
+  }
+  if (data.errors?.includes("no_result_summary_available")) {
+    return state.lang === "zh"
+      ? "当前还没有可解释的 Geant4 运行结果。请先显式点击运行按钮，再询问结果。"
+      : "No Geant4 runtime result is available yet. Please explicitly run the simulation first, then ask about the result.";
+  }
+  return data.message || (state.lang === "zh" ? "暂时无法读取运行结果。" : "I could not read the runtime result yet.");
+}
+
 function updateDebugPanelVisibility() {
   const blocks = [
     ["debug-terminal-block", $("geant4-log")?.textContent],
@@ -1092,6 +1126,13 @@ async function sendStep() {
   createThinkingMessage();
 
   try {
+    if (isRuntimeResultQuestion(text)) {
+      const answer = await answerRuntimeResultQuestion();
+      finalizeThinkingMessage(answer);
+      await refreshGeant4State();
+      return;
+    }
+
     const payload = {
       session_id: state.sessionId || null,
       text,

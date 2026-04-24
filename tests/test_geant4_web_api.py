@@ -67,7 +67,20 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("renderRuntimeResultSummary", app_js)
         self.assertIn("runtime_smoke_report", app_js)
         self.assertIn("runtime_result_explanation", app_js)
+        self.assertIn("isRuntimeResultQuestion", app_js)
+        self.assertIn("answerRuntimeResultQuestion", app_js)
         self.assertIn("/api/geant4/summary", app_js)
+
+    def test_frontend_runtime_result_question_uses_summary_not_run(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        question_branch = app_js[
+            app_js.index("if (isRuntimeResultQuestion(text))") : app_js.index("const payload = {", app_js.index("if (isRuntimeResultQuestion(text))"))
+        ]
+
+        self.assertIn("answerRuntimeResultQuestion", question_branch)
+        self.assertIn("return;", question_branch)
+        self.assertNotIn("/api/geant4/run", question_branch)
+        self.assertNotIn("/api/step_async", question_branch)
 
 
 if __name__ == "__main__":

@@ -208,6 +208,10 @@ Runtime result explanation follows the same grounded pattern:
 - reject LLM rewrites that introduce new numeric values or mismatch the selected language
 - fall back to the deterministic explanation whenever the LLM is unavailable or unsafe
 
+User follow-up questions about the latest result are read-only: the UI answers them through
+`/api/geant4/summary` and must not trigger `run_beam` or viewer launch unless the user explicitly
+uses the run/viewer controls.
+
 For a local manual smoke test after setting the runtime command:
 
 ```powershell
