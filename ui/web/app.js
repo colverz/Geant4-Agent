@@ -10,6 +10,7 @@ const state = {
   lastMeta: null,
   lastProcess: null,
   geant4State: null,
+  lastRuntimeSmokeReport: null,
   sending: false,
   activeThinkingNode: null,
   activeThinkingProgress: [],
@@ -57,6 +58,8 @@ const i18n = {
     config: "配置",
     runtime_state: "运行状态",
     runtime_log: "运行日志",
+    runtime_result: "运行结果",
+    no_runtime_result: "尚无运行结果。完成一次 Geant4 run 后这里会显示摘要。",
     process: "过程",
     internal_trace: "内部轨迹",
     geometry_compare: "几何对比",
@@ -153,6 +156,8 @@ const i18n = {
     config: "Config",
     runtime_state: "Runtime State",
     runtime_log: "Runtime Log",
+    runtime_result: "Runtime Result",
+    no_runtime_result: "No runtime result yet. Complete a Geant4 run to see the summary here.",
     process: "Process",
     internal_trace: "Internal Trace",
     geometry_compare: "Geometry Compare",
@@ -738,6 +743,78 @@ function renderRuntimeLogSummary(payload = {}) {
   });
 }
 
+function formatRuntimeValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (Math.abs(value) > 0 && Math.abs(value) < 0.001) return value.toExponential(3);
+    return Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(6)));
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+}
+
+function buildRuntimeResultRows(report = {}) {
+  const config = report.configuration || {};
+  const metrics = report.key_metrics || {};
+  const completed = report.events_completed;
+  const requested = report.events_requested;
+  const eventText = completed === null || completed === undefined
+    ? formatRuntimeValue(requested)
+    : `${formatRuntimeValue(completed)} / ${formatRuntimeValue(requested)}`;
+  return [
+    ["ok", report.ok],
+    ["events", eventText],
+    ["completion", report.completion_fraction],
+    ["geometry", config.geometry_structure],
+    ["material", config.material],
+    ["particle", config.particle],
+    ["physics", config.physics_list],
+    ["target edep MeV", metrics.target_edep_total_mev],
+    ["target hits", metrics.target_hit_events],
+    ["detector crossings", metrics.detector_crossing_count],
+    ["plane crossings", metrics.plane_crossing_count],
+    ["run summary", report.run_summary_path],
+  ];
+}
+
+function renderRuntimeResultSummary(report = null) {
+  const root = $("runtime-result-summary");
+  if (!root) return;
+  root.innerHTML = "";
+  if (!report) {
+    const empty = document.createElement("div");
+    empty.className = "result-empty";
+    empty.textContent = t("no_runtime_result");
+    root.appendChild(empty);
+    return;
+  }
+  buildRuntimeResultRows(report).forEach(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "result-row";
+    const key = document.createElement("span");
+    key.className = "result-label";
+    key.textContent = label;
+    const val = document.createElement("strong");
+    val.className = "result-value";
+    val.textContent = formatRuntimeValue(value);
+    row.appendChild(key);
+    row.appendChild(val);
+    root.appendChild(row);
+  });
+}
+
+function runtimeResultMessage(report) {
+  if (!report) return "";
+  const metrics = report.key_metrics || {};
+  return [
+    `events_completed=${formatRuntimeValue(report.events_completed)}`,
+    `completion_fraction=${formatRuntimeValue(report.completion_fraction)}`,
+    `target_edep_total_mev=${formatRuntimeValue(metrics.target_edep_total_mev)}`,
+    `detector_crossing_count=${formatRuntimeValue(metrics.detector_crossing_count)}`,
+    `plane_crossing_count=${formatRuntimeValue(metrics.plane_crossing_count)}`,
+  ].join("\n");
+}
+
 function updateDebugPanelVisibility() {
   const blocks = [
     ["debug-terminal-block", $("geant4-log")?.textContent],
@@ -828,6 +905,7 @@ function applyI18n() {
   renderRuntimeNotice();
   renderConfigInspector(parseConfigFromResponse());
   renderRuntimeInspector(state.geant4State || {});
+  renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
   updateDebugPanelVisibility();
   setComposerStatus(state.sending ? t("composer_busy") : t("composer_hint"), state.sending ? "busy" : "neutral");
 }
@@ -853,6 +931,21 @@ async function refreshGeant4Log() {
   $("geant4-log").textContent = summarizeGeant4Log(payload);
   renderRuntimeLogSummary(payload);
   updateDebugPanelVisibility();
+}
+
+async function refreshGeant4Summary() {
+  const res = await fetch("/api/geant4/summary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const data = await res.json();
+  if (res.ok && data.runtime_smoke_report) {
+    state.lastRuntimeSmokeReport = data.runtime_smoke_report;
+  } else if (data.errors?.includes("no_result_summary_available")) {
+    state.lastRuntimeSmokeReport = null;
+  }
+  renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
 }
 
 async function syncGeant4Config() {
@@ -885,13 +978,18 @@ async function openGeant4Viewer() {
   });
   const data = await res.json();
   await refreshGeant4State();
+  state.lastRuntimeSmokeReport = data.runtime_smoke_report || state.lastRuntimeSmokeReport;
+  renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
   $("geant4-log").textContent = summarizeGeant4Log({
     lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
   });
   renderRuntimeLogSummary({
     lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
   });
-  if (data.message) addMessage("assistant", `${t("geant4_prefix")}: ${data.message}`, "system");
+  if (data.message) {
+    const resultText = data.runtime_smoke_report ? `\n${runtimeResultMessage(data.runtime_smoke_report)}` : "";
+    addMessage("assistant", `${t("geant4_prefix")}: ${data.message}${resultText}`, "system");
+  }
 }
 
 async function runGeant4(events) {
@@ -1058,6 +1156,7 @@ async function resetSession() {
   state.sessionId = "";
   state.lastMeta = null;
   state.lastProcess = null;
+  state.lastRuntimeSmokeReport = null;
   state.activeThinkingNode = null;
   state.activeThinkingProgress = [];
   localStorage.removeItem("g4_session_id");
@@ -1072,6 +1171,7 @@ async function resetSession() {
   $("geant4-state").textContent = "";
   $("geant4-log").textContent = "";
   renderRuntimeLogSummary({});
+  renderRuntimeResultSummary(null);
   renderRuntimeInspector({});
   updateDebugPanelVisibility();
   renderTopbar();
@@ -1098,6 +1198,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadRuntimeConfigs().catch((err) => addMessage("assistant", `Runtime config load failed: ${err.message}`, "error"));
   refreshGeant4State().catch(() => {});
   refreshGeant4Log().catch(() => {});
+  refreshGeant4Summary().catch(() => {});
 
   $("run-btn").addEventListener("click", sendStep);
   $("reset-btn").addEventListener("click", resetSession);
@@ -1109,6 +1210,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("g4-refresh-btn").addEventListener("click", async () => {
     await refreshGeant4State();
     await refreshGeant4Log();
+    await refreshGeant4Summary();
   });
   $("lang-select").addEventListener("change", (event) => {
     state.lang = event.target.value || "zh";

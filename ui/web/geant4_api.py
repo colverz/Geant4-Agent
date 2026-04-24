@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from core.runtime.types import ToolCallRequest
+from core.simulation import build_runtime_smoke_report
 from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
 from mcp.geant4.runtime_payload import build_runtime_payload
 from mcp.geant4.server import Geant4McpServer
@@ -52,6 +53,25 @@ def geant4_state_payload() -> dict[str, Any]:
     payload["message"] = obs.message
     payload["runtime_phase"] = obs.runtime_phase.value
     return payload
+
+
+def _observation_body(obs) -> dict[str, Any]:
+    body = asdict(obs)
+    body["status"] = obs.status.value
+    body["runtime_phase"] = obs.runtime_phase.value
+    return body
+
+
+def _report_events(summary_payload: dict[str, Any] | None, default: int = 0) -> int:
+    result_summary = summary_payload.get("result_summary") if isinstance(summary_payload, dict) else None
+    run = result_summary.get("run") if isinstance(result_summary, dict) else None
+    if isinstance(run, dict):
+        for key in ("events_requested", "events_completed"):
+            try:
+                return int(run.get(key) or default)
+            except (TypeError, ValueError):
+                continue
+    return int(default)
 
 
 def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -131,15 +151,27 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
     elif path == "/api/geant4/initialize":
         obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
     elif path == "/api/geant4/run":
+        events = int(payload.get("events", 1))
         obs = server.call_tool(
-            ToolCallRequest(tool_name="run_beam", arguments={"events": int(payload.get("events", 1))})
+            ToolCallRequest(tool_name="run_beam", arguments={"events": events})
         )
+        body = _observation_body(obs)
+        if obs.status.value == "completed":
+            body["runtime_smoke_report"] = build_runtime_smoke_report(events=events, run_payload=obs.payload)
+        return (200 if obs.status.value in {"completed", "accepted"} else 400), body
+    elif path == "/api/geant4/summary":
+        obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
+        body = _observation_body(obs)
+        if obs.status.value == "completed":
+            body["runtime_smoke_report"] = build_runtime_smoke_report(
+                events=_report_events(obs.payload),
+                summary_payload=obs.payload,
+            )
+        return (200 if obs.status.value in {"completed", "accepted"} else 400), body
     elif path == "/api/geant4/log":
         obs = server.call_tool(ToolCallRequest(tool_name="get_last_log", arguments={}))
     else:
         obs = server.call_tool(ToolCallRequest(tool_name="get_runtime_state", arguments={}))
 
-    body = asdict(obs)
-    body["status"] = obs.status.value
-    body["runtime_phase"] = obs.runtime_phase.value
+    body = _observation_body(obs)
     return (200 if obs.status.value in {"completed", "accepted"} else 400), body

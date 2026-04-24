@@ -19,6 +19,7 @@ POST_PATHS = {
     "/api/geant4/apply",
     "/api/geant4/initialize",
     "/api/geant4/run",
+    "/api/geant4/summary",
     "/api/geant4/log",
     "/api/geant4/viewer/open",
 }

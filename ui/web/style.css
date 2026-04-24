@@ -872,6 +872,48 @@ button.wide {
   color: #6b7280;
 }
 
+.result-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f6f9fc 100%);
+  border: 1px solid #e7edf4;
+}
+
+.result-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.result-value {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.result-empty {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px dashed #d7dee8;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .debug-card {
   padding: 0;
   overflow: hidden;

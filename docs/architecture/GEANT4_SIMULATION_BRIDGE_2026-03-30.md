@@ -193,6 +193,14 @@ This report is the stable top-level contract for quick checks and demos:
 - artifact directory and `run_summary.json` path
 - full `result_summary` for deeper inspection
 
+The web-facing Geant4 API exposes the same contract:
+
+- `/api/geant4/run` preserves the raw MCP observation and adds `runtime_smoke_report`
+- `/api/geant4/summary` returns the latest cached `runtime_smoke_report`
+
+UI and agent-facing result displays should prefer `runtime_smoke_report` over parsing
+`simulation_result` directly.
+
 For a local manual smoke test after setting the runtime command:
 
 ```powershell
