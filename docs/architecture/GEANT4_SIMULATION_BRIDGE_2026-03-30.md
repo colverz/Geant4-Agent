@@ -145,6 +145,10 @@ The runtime JSON remains a compatibility boundary and may keep flat scorer keys 
 Flat result properties and payload keys are preserved for current UI/MCP consumers, but new bridge
 logic should prefer the structured result objects.
 
+Payloads also expose `result_summary`, a compact agent/UI-facing view of run completion,
+configuration, source sampling, target scoring, detector crossings, plane crossings, and role/volume
+stats.
+
 The current result schema version is:
 
 - `2026-04-14.v7`

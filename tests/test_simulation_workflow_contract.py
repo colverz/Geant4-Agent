@@ -171,6 +171,11 @@ class SimulationWorkflowContractTest(unittest.TestCase):
         self.assertEqual(payload["scoring"]["plane_crossing_count"], 2)
         self.assertEqual(payload["source_model"]["spot_profile"], "gaussian")
         self.assertEqual(payload["source_spot_profile"], "gaussian")
+        self.assertEqual(payload["result_summary"]["run"]["completion_fraction"], 1.0)
+        self.assertEqual(payload["result_summary"]["configuration"]["source_type"], "beam")
+        self.assertEqual(payload["result_summary"]["scoring"]["target"]["target_hit_events"], 2)
+        self.assertEqual(payload["result_summary"]["scoring"]["plane_crossing"]["plane_crossing_count"], 2)
+        self.assertEqual(payload["result_summary"]["scoring"]["volumes"]["Detector"]["track_entries"], 1)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             artifact_dir = Path(tmpdir) / "artifacts"
@@ -186,6 +191,8 @@ class SimulationWorkflowContractTest(unittest.TestCase):
         self.assertEqual(mcp_payload["scoring"]["plane_crossing_count"], 2)
         self.assertEqual(mcp_payload["scoring"]["role_stats"]["target"]["track_entries"], 3)
         self.assertEqual(mcp_payload["scoring"]["role_stats"]["detector"]["track_entries"], 1)
+        self.assertEqual(mcp_payload["result_summary"]["scoring"]["roles"]["target"]["track_entries"], 3)
+        self.assertEqual(mcp_payload["result_summary"]["scoring"]["roles"]["detector"]["track_entries"], 1)
         self.assertIn("run_summary_path", mcp_payload)
 
     def test_runtime_payload_covers_cpp_consumed_schema_keys(self) -> None:

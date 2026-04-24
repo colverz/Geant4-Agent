@@ -285,6 +285,10 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(result["scoring"]["volume_stats"]["target"]["step_count"], 12)
         self.assertEqual(result["scoring"]["role_stats"]["target"]["track_entries"], 3)
         self.assertEqual(result["scoring"]["role_stats"]["detector"]["track_entries"], 1)
+        self.assertEqual(result["result_summary"]["run"]["events_completed"], 3)
+        self.assertEqual(result["result_summary"]["configuration"]["detector_enabled"], True)
+        self.assertEqual(result["result_summary"]["scoring"]["roles"]["target"]["track_entries"], 3)
+        self.assertEqual(result["result_summary"]["scoring"]["roles"]["detector"]["track_entries"], 1)
 
 
 if __name__ == "__main__":

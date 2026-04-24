@@ -437,6 +437,69 @@ class SimulationSourceSamplingResult:
     sampled_direction_rms: tuple[float, float, float] | None = None
 
 
+def _completion_fraction(completed: int, requested: int) -> float:
+    if requested <= 0:
+        return 0.0
+    return max(0.0, min(1.0, float(completed) / float(requested)))
+
+
+def _volume_stats_summary(
+    stats_map: dict[str, SimulationVolumeStatsResult] | None,
+) -> dict[str, dict[str, float | int]]:
+    if not stats_map:
+        return {}
+    return {name: stats.to_payload() for name, stats in stats_map.items()}
+
+
+def _role_stats_summary(
+    role_stats: dict[str, SimulationVolumeStatsResult | dict[str, float | int]] | None,
+) -> dict[str, dict[str, float | int]]:
+    if not role_stats:
+        return {}
+    normalized = _normalize_volume_stats_map(role_stats)
+    return _volume_stats_summary(normalized)
+
+
+def build_result_summary_payload(
+    result: SimulationResult,
+    *,
+    role_stats_override: dict[str, SimulationVolumeStatsResult | dict[str, float | int]] | None = None,
+) -> dict[str, Any]:
+    role_stats = _role_stats_summary(role_stats_override) if role_stats_override is not None else _volume_stats_summary(result.scoring.role_stats)
+    return {
+        "run": {
+            "ok": result.run_ok,
+            "events_requested": result.events_requested,
+            "events_completed": result.events_completed,
+            "completion_fraction": _completion_fraction(result.events_completed, result.events_requested),
+            "mode": result.mode,
+            "seed": result.run_seed,
+        },
+        "configuration": {
+            "geometry_structure": result.geometry_structure,
+            "material": result.material,
+            "source_type": result.source_type,
+            "particle": result.particle,
+            "physics_list": result.physics_list,
+            "detector_enabled": result.detector.enabled,
+        },
+        "source": {
+            "primary_count": result.source_primary_count,
+            "sampled_position_mean_mm": result.source_sampled_position_mean_mm,
+            "sampled_position_rms_mm": result.source_sampled_position_rms_mm,
+            "sampled_direction_mean": result.source_sampled_direction_mean,
+            "sampled_direction_rms": result.source_sampled_direction_rms,
+        },
+        "scoring": {
+            "target": result.scoring.target.to_payload(),
+            "detector_crossing": result.scoring.detector_crossing.to_payload(),
+            "plane_crossing": result.scoring.plane_crossing.to_payload(),
+            "roles": role_stats,
+            "volumes": _volume_stats_summary(result.scoring.volume_stats),
+        },
+    }
+
+
 @dataclass(frozen=True)
 class SimulationResult:
     run_ok: bool
@@ -509,6 +572,7 @@ class SimulationResult:
         payload = asdict(self)
         payload["scoring"] = self.scoring.to_payload()
         payload["detector"] = asdict(self.detector)
+        payload["result_summary"] = build_result_summary_payload(self)
         # Compatibility fields for current API consumers while internal code uses structured objects.
         payload.update(
             {

@@ -18,7 +18,7 @@ from core.runtime.types import (
     RuntimeStateSnapshot,
 )
 from core.orchestrator.path_ops import get_path
-from core.simulation import build_simulation_spec, derive_role_stats, load_simulation_result
+from core.simulation import build_result_summary_payload, build_simulation_spec, derive_role_stats, load_simulation_result
 from core.validation.minimal_schema import get_minimal_required_paths
 from mcp.geant4.runtime_payload import build_runtime_payload
 
@@ -70,6 +70,7 @@ def _load_run_summary_payload(
     payload = result.to_payload()
     if role_stats:
         payload["scoring"]["role_stats"] = role_stats
+        payload["result_summary"] = build_result_summary_payload(result, role_stats_override=role_stats)
     payload["artifact_dir"] = str(artifact_dir)
     payload["run_summary_path"] = str(summary_path)
     return payload
