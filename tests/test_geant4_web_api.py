@@ -41,17 +41,21 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertEqual(init_status, 200)
         self.assertEqual(run_status, 200)
         report = run_body["runtime_smoke_report"]
+        explanation = run_body["runtime_result_explanation"]
         self.assertEqual(report["events_requested"], 4)
         self.assertEqual(report["events_completed"], 4)
         self.assertEqual(report["configuration"]["geometry_structure"], "single_box")
         self.assertEqual(report["configuration"]["particle"], "gamma")
         self.assertEqual(report["configuration"]["physics_list"], "FTFP_BERT")
         self.assertIn("result_summary", report)
+        self.assertEqual(explanation["source"], "deterministic")
+        self.assertIn("4 / 4", explanation["message"])
 
         summary_status, summary_body = geant4_api.handle_geant4_post("/api/geant4/summary", {})
         self.assertEqual(summary_status, 200)
         self.assertEqual(summary_body["runtime_smoke_report"]["events_completed"], 4)
         self.assertEqual(summary_body["runtime_smoke_report"]["configuration"]["particle"], "gamma")
+        self.assertIn("runtime_result_explanation", summary_body)
 
 
 class RuntimeResultFrontendStaticTest(unittest.TestCase):
@@ -62,6 +66,7 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn('id="runtime-result-summary"', index_html)
         self.assertIn("renderRuntimeResultSummary", app_js)
         self.assertIn("runtime_smoke_report", app_js)
+        self.assertIn("runtime_result_explanation", app_js)
         self.assertIn("/api/geant4/summary", app_js)
 
 

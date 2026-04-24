@@ -13,6 +13,7 @@ from core.simulation import build_runtime_smoke_report
 from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
 from mcp.geant4.runtime_payload import build_runtime_payload
 from mcp.geant4.server import Geant4McpServer
+from planner.runtime_result import naturalize_runtime_result_message
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -72,6 +73,15 @@ def _report_events(summary_payload: dict[str, Any] | None, default: int = 0) -> 
             except (TypeError, ValueError):
                 continue
     return int(default)
+
+
+def _result_explanation(report: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    return naturalize_runtime_result_message(
+        report,
+        lang=str(payload.get("lang", "zh")).lower(),
+        use_llm=bool(payload.get("llm_result_summary", False)),
+        ollama_config=str(payload.get("ollama_config_path", "nlu/llm_support/configs/ollama_config.json")),
+    )
 
 
 def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -157,16 +167,20 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
         )
         body = _observation_body(obs)
         if obs.status.value == "completed":
-            body["runtime_smoke_report"] = build_runtime_smoke_report(events=events, run_payload=obs.payload)
+            report = build_runtime_smoke_report(events=events, run_payload=obs.payload)
+            body["runtime_smoke_report"] = report
+            body["runtime_result_explanation"] = _result_explanation(report, payload)
         return (200 if obs.status.value in {"completed", "accepted"} else 400), body
     elif path == "/api/geant4/summary":
         obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
         body = _observation_body(obs)
         if obs.status.value == "completed":
-            body["runtime_smoke_report"] = build_runtime_smoke_report(
+            report = build_runtime_smoke_report(
                 events=_report_events(obs.payload),
                 summary_payload=obs.payload,
             )
+            body["runtime_smoke_report"] = report
+            body["runtime_result_explanation"] = _result_explanation(report, payload)
         return (200 if obs.status.value in {"completed", "accepted"} else 400), body
     elif path == "/api/geant4/log":
         obs = server.call_tool(ToolCallRequest(tool_name="get_last_log", arguments={}))

@@ -201,6 +201,13 @@ The web-facing Geant4 API exposes the same contract:
 UI and agent-facing result displays should prefer `runtime_smoke_report` over parsing
 `simulation_result` directly.
 
+Runtime result explanation follows the same grounded pattern:
+
+- first build a deterministic user-facing explanation from `runtime_smoke_report`
+- optionally let the LLM rewrite that explanation in the selected UI language
+- reject LLM rewrites that introduce new numeric values or mismatch the selected language
+- fall back to the deterministic explanation whenever the LLM is unavailable or unsafe
+
 For a local manual smoke test after setting the runtime command:
 
 ```powershell

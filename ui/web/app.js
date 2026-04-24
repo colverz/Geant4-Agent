@@ -937,7 +937,11 @@ async function refreshGeant4Summary() {
   const res = await fetch("/api/geant4/summary", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({
+      lang: state.lang,
+      llm_result_summary: $("llm-question")?.checked === true,
+      ollama_config_path: state.ollamaConfigPath,
+    }),
   });
   const data = await res.json();
   if (res.ok && data.runtime_smoke_report) {
@@ -996,7 +1000,12 @@ async function runGeant4(events) {
   const res = await fetch("/api/geant4/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ events }),
+    body: JSON.stringify({
+      events,
+      lang: state.lang,
+      llm_result_summary: $("llm-question")?.checked === true,
+      ollama_config_path: state.ollamaConfigPath,
+    }),
   });
   const data = await res.json();
   await refreshGeant4State();
@@ -1006,7 +1015,13 @@ async function runGeant4(events) {
   renderRuntimeLogSummary({
     lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
   });
-  if (data.message) addMessage("assistant", `${t("geant4_prefix")}: ${data.message}`, "system");
+  if (data.message) {
+    const explanation = data.runtime_result_explanation?.message || (
+      data.runtime_smoke_report ? runtimeResultMessage(data.runtime_smoke_report) : ""
+    );
+    const resultText = explanation ? `\n${explanation}` : "";
+    addMessage("assistant", `${t("geant4_prefix")}: ${data.message}${resultText}`, "system");
+  }
 }
 
 async function loadRuntimeConfigs() {
