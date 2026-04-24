@@ -8,11 +8,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from core.runtime.types import ToolCallRequest
+from core.runtime.types import ActionSafetyClass, ToolCallRequest
 from core.simulation import build_runtime_smoke_report
 from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
 from mcp.geant4.runtime_payload import build_runtime_payload
 from mcp.geant4.server import Geant4McpServer
+from planner.runtime_intent import classify_user_runtime_intent
 from planner.runtime_result import naturalize_runtime_result_message
 
 
@@ -98,6 +99,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                 "status": "failed",
                 "message": "Live viewer requires the local process adapter.",
                 "runtime_phase": adapter.snapshot().runtime_phase.value,
+                "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
             }
 
         with tempfile.NamedTemporaryFile(
@@ -152,8 +154,21 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                     "stderr_tail": completed.stderr.splitlines()[-20:],
                 },
                 "runtime_phase": adapter.snapshot().runtime_phase.value,
+                "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
             },
         )
+    elif path == "/api/geant4/intent":
+        classification = classify_user_runtime_intent(
+            str(payload.get("text", "")),
+            str(payload.get("lang", "zh")).lower(),
+        )
+        return 200, {
+            "status": "completed",
+            "intent": classification.intent.value,
+            "action_safety_class": classification.action_safety_class.value,
+            "prompt_profile_id": classification.prompt_profile_id,
+            "prompt_validation": classification.prompt_validation,
+        }
     elif path == "/api/geant4/apply":
         obs = server.call_tool(
             ToolCallRequest(tool_name="apply_config_patch", arguments={"patch": payload.get("patch", {})})
@@ -166,6 +181,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
             ToolCallRequest(tool_name="run_beam", arguments={"events": events})
         )
         body = _observation_body(obs)
+        body["action_safety_class"] = ActionSafetyClass.EXPENSIVE_RUNTIME.value
         if obs.status.value == "completed":
             report = build_runtime_smoke_report(events=events, run_payload=obs.payload)
             body["runtime_smoke_report"] = report
@@ -174,6 +190,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
     elif path == "/api/geant4/summary":
         obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
         body = _observation_body(obs)
+        body["action_safety_class"] = ActionSafetyClass.READ_ONLY.value
         if obs.status.value == "completed":
             report = build_runtime_smoke_report(
                 events=_report_events(obs.payload),
@@ -188,4 +205,12 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
         obs = server.call_tool(ToolCallRequest(tool_name="get_runtime_state", arguments={}))
 
     body = _observation_body(obs)
+    if path == "/api/geant4/log":
+        body["action_safety_class"] = ActionSafetyClass.READ_ONLY.value
+    elif path == "/api/geant4/apply":
+        body["action_safety_class"] = ActionSafetyClass.CONFIG_MUTATION.value
+    elif path == "/api/geant4/initialize":
+        body["action_safety_class"] = ActionSafetyClass.EXPENSIVE_RUNTIME.value
+    else:
+        body["action_safety_class"] = ActionSafetyClass.READ_ONLY.value
     return (200 if obs.status.value in {"completed", "accepted"} else 400), body

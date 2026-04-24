@@ -212,6 +212,14 @@ User follow-up questions about the latest result are read-only: the UI answers t
 `/api/geant4/summary` and must not trigger `run_beam` or viewer launch unless the user explicitly
 uses the run/viewer controls.
 
+The user-facing accuracy layer now has explicit prompt and action contracts:
+
+- `PromptProfile` defines task, language, output contract, temperature, and validator for each LLM-facing prompt.
+- Runtime result explanation and clarification prompts are routed through this profile layer first.
+- `result_question_route` classifies ordinary chat, latest-result questions, explicit run requests, and viewer requests.
+- `ActionSafetyClass` marks read-only, config mutation, and expensive runtime operations.
+- Ordinary chat can answer latest-result questions read-only, but explicit run/viewer requests are surfaced as guarded actions and are not auto-executed from chat.
+
 For a local manual smoke test after setting the runtime command:
 
 ```powershell

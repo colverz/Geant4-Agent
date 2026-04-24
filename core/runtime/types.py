@@ -21,6 +21,12 @@ class RuntimeActionStatus(str, Enum):
     FAILED = "failed"
 
 
+class ActionSafetyClass(str, Enum):
+    READ_ONLY = "read_only"
+    CONFIG_MUTATION = "config_mutation"
+    EXPENSIVE_RUNTIME = "expensive_runtime"
+
+
 @dataclass(frozen=True)
 class RuntimeAction:
     name: str

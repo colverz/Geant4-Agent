@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
 from typing import Any
 
+from core.config.prompt_profiles import PromptTask, build_prompt, validate_prompt_output
 from nlu.llm_support.ollama_client import chat
 
 
@@ -141,35 +141,51 @@ def naturalize_runtime_result_message(
     temperature: float = 0.2,
 ) -> dict[str, Any]:
     base_message = build_runtime_result_message(report, lang=lang)
-    if not use_llm:
-        return {"message": base_message, "source": "deterministic", "fallback_reason": None}
-
-    if lang == "zh":
-        rules = (
-            "你是 Geant4 模拟结果解释层。请把 base_message 改写得更自然，但必须严格受 report 约束。"
-            "不得新增任何数值、物理结论、过程解释或 report 中不存在的事实。"
-            "如果字段缺失，必须保留缺失含义。只输出最终中文回复。"
-        )
-    else:
-        rules = (
-            "You are the Geant4 simulation-result explanation layer. Rewrite base_message naturally, "
-            "but stay strictly grounded in report. Do not add any new numbers, physics conclusions, "
-            "process explanations, or facts not present in the report. If a field is missing, preserve that meaning. "
-            "Return only the final English answer."
-        )
-
-    prompt = (
-        f"{rules}\n\n"
-        f"Input JSON:\n{json.dumps({'lang': lang, 'report': report or {}, 'base_message': base_message}, ensure_ascii=False)}\n\n"
-        "Rewrite now."
+    prompt_build = build_prompt(
+        PromptTask.RUNTIME_RESULT_EXPLAIN,
+        lang,
+        {"payload": {"lang": lang, "report": report or {}, "base_message": base_message}},
     )
+    if not use_llm:
+        validation = validate_prompt_output(PromptTask.RUNTIME_RESULT_EXPLAIN, lang, base_message, {"base_message": base_message})
+        return {
+            "message": base_message,
+            "source": "deterministic",
+            "fallback_reason": None,
+            "prompt_profile_id": prompt_build.profile_id,
+            "prompt_validation": validation.__dict__,
+        }
     try:
-        resp = chat(prompt, config_path=ollama_config, temperature=temperature)
+        resp = chat(prompt_build.prompt, config_path=ollama_config, temperature=temperature)
         text = _clean_chat_text(resp.get("response", ""))
-        if not _invalid_llm_result_message(text, base_message=base_message, lang=lang):
-            return {"message": text, "source": "llm", "fallback_reason": None}
+        validation = validate_prompt_output(
+            PromptTask.RUNTIME_RESULT_EXPLAIN,
+            lang,
+            text,
+            {"base_message": base_message},
+        )
+        if validation.ok and not _invalid_llm_result_message(text, base_message=base_message, lang=lang):
+            return {
+                "message": text,
+                "source": "llm",
+                "fallback_reason": None,
+                "prompt_profile_id": prompt_build.profile_id,
+                "prompt_validation": validation.__dict__,
+            }
         logger.warning("LLM runtime-result explanation was rejected by grounded validation; using deterministic fallback.")
-        return {"message": base_message, "source": "deterministic", "fallback_reason": "invalid_llm_output"}
+        return {
+            "message": base_message,
+            "source": "deterministic",
+            "fallback_reason": "invalid_llm_output",
+            "prompt_profile_id": prompt_build.profile_id,
+            "prompt_validation": validation.__dict__,
+        }
     except Exception:
         logger.warning("LLM runtime-result explanation failed; using deterministic fallback.", exc_info=True)
-        return {"message": base_message, "source": "deterministic", "fallback_reason": "llm_failed"}
+        return {
+            "message": base_message,
+            "source": "deterministic",
+            "fallback_reason": "llm_failed",
+            "prompt_profile_id": prompt_build.profile_id,
+            "prompt_validation": {"ok": False, "validator_name": prompt_build.validator_name, "errors": ["llm_failed"]},
+        }

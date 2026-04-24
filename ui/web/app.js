@@ -823,6 +823,16 @@ function isRuntimeResultQuestion(text) {
   return zhHit || enHit;
 }
 
+async function classifyRuntimeIntent(text) {
+  const res = await fetch("/api/geant4/intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, lang: state.lang }),
+  });
+  if (!res.ok) return { intent: isRuntimeResultQuestion(text) ? "read_summary" : "normal_chat" };
+  return await res.json();
+}
+
 async function answerRuntimeResultQuestion() {
   const res = await fetch("/api/geant4/summary", {
     method: "POST",
@@ -847,6 +857,20 @@ async function answerRuntimeResultQuestion() {
       : "No Geant4 runtime result is available yet. Please explicitly run the simulation first, then ask about the result.";
   }
   return data.message || (state.lang === "zh" ? "暂时无法读取运行结果。" : "I could not read the runtime result yet.");
+}
+
+function explicitRuntimeActionMessage(intent) {
+  if (intent === "run_requested") {
+    return state.lang === "zh"
+      ? "这属于高占用 Geant4 运行操作。为了避免误触发，我不会从普通聊天里直接运行；请使用 Run 1 Event 或 Run 10 Events 按钮明确启动。"
+      : "That is an expensive Geant4 runtime operation. To avoid accidental execution, I will not run it from ordinary chat; please use the Run 1 Event or Run 10 Events button explicitly.";
+  }
+  if (intent === "viewer_requested") {
+    return state.lang === "zh"
+      ? "打开 viewer 属于显式运行时操作。为了避免误触发，请使用 Open Viewer 按钮启动。"
+      : "Opening the viewer is an explicit runtime operation. To avoid accidental launch, please use the Open Viewer button.";
+  }
+  return "";
 }
 
 function updateDebugPanelVisibility() {
@@ -1126,9 +1150,15 @@ async function sendStep() {
   createThinkingMessage();
 
   try {
-    if (isRuntimeResultQuestion(text)) {
+    const runtimeIntent = await classifyRuntimeIntent(text);
+    if (runtimeIntent.intent === "read_summary") {
       const answer = await answerRuntimeResultQuestion();
       finalizeThinkingMessage(answer);
+      await refreshGeant4State();
+      return;
+    }
+    if (runtimeIntent.intent === "run_requested" || runtimeIntent.intent === "viewer_requested") {
+      finalizeThinkingMessage(explicitRuntimeActionMessage(runtimeIntent.intent));
       await refreshGeant4State();
       return;
     }

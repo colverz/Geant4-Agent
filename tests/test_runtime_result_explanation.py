@@ -49,6 +49,8 @@ class RuntimeResultExplanationTest(unittest.TestCase):
 
         self.assertEqual(result["source"], "deterministic")
         self.assertIn("Events: 4 / 4", result["message"])
+        self.assertEqual(result["prompt_profile_id"], "runtime_result_explain_en_v1")
+        self.assertTrue(result["prompt_validation"]["ok"])
 
     def test_naturalize_runtime_result_message_accepts_grounded_llm_rewrite(self) -> None:
         with mock.patch(

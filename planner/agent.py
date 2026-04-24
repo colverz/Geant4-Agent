@@ -6,7 +6,8 @@ import re
 from typing import Any, List
 
 from core.config.field_registry import clarification_items, friendly_labels
-from core.config.prompt_registry import clarification_fallback, clarification_prompt
+from core.config.prompt_profiles import PromptTask, build_prompt, validate_prompt_output
+from core.config.prompt_registry import clarification_fallback
 from nlu.llm_support.ollama_client import chat
 
 
@@ -139,17 +140,22 @@ def ask_missing(
     if not missing:
         return ""
     friendly = clarification_items(missing, lang)
-    prompt = clarification_prompt(
-        friendly,
+    prompt_build = build_prompt(
+        PromptTask.CLARIFICATION,
         lang,
-        recent_user_text=recent_user_text,
-        confirmed_items=confirmed_items or [],
+        {
+            "recent_user_text": recent_user_text.strip() or ("无" if lang == "zh" else "N/A"),
+            "confirmed_items": ", ".join(confirmed_items or []) or ("无" if lang == "zh" else "N/A"),
+            "missing_items": ", ".join(friendly),
+        },
     )
     try:
-        resp = chat(prompt, config_path=ollama_config, temperature=temperature)
+        resp = chat(prompt_build.prompt, config_path=ollama_config, temperature=temperature)
         text = _clean_chat_text(resp.get("response", ""))
+        validation = validate_prompt_output(PromptTask.CLARIFICATION, lang, text)
         if (
             text
+            and validation.ok
             and not _contains_internal_field(text)
             and not _contains_internal_terms(text)
             and not _looks_language_mismatched(text, lang)
