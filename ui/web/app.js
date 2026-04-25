@@ -823,13 +823,25 @@ function isRuntimeResultQuestion(text) {
   return zhHit || enHit;
 }
 
+function isConfigQuestion(text) {
+  const raw = String(text || "").trim().toLowerCase();
+  if (!raw) return false;
+  const zhHit = /(配置|设置|当前|已经|还缺|缺少|几何|材料|源|物理|输出|config|setup).*(什么|多少|如何|怎么|状态|摘要|还缺|缺少|current|what|missing|summary|status)/i.test(raw);
+  const enHit = /\b(current|existing|configured|configuration|config|setup)\b.*\b(config|configuration|setup|geometry|material|source|physics|output|missing|need|status|summary)\b|\bwhat(?:'s| is)\b.*\b(configured|missing|left|current setup)\b|\bwhat do we still need\b/.test(raw);
+  return zhHit || enHit;
+}
+
 async function classifyRuntimeIntent(text) {
   const res = await fetch("/api/geant4/intent", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, lang: state.lang }),
   });
-  if (!res.ok) return { intent: isRuntimeResultQuestion(text) ? "read_summary" : "normal_chat" };
+  if (!res.ok) {
+    if (isRuntimeResultQuestion(text)) return { intent: "read_summary" };
+    if (isConfigQuestion(text)) return { intent: "read_config" };
+    return { intent: "normal_chat" };
+  }
   return await res.json();
 }
 
@@ -857,6 +869,38 @@ async function answerRuntimeResultQuestion() {
       : "No Geant4 runtime result is available yet. Please explicitly run the simulation first, then ask about the result.";
   }
   return data.message || (state.lang === "zh" ? "暂时无法读取运行结果。" : "I could not read the runtime result yet.");
+}
+
+async function answerConfigQuestion() {
+  const res = await fetch("/api/config/summary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: state.sessionId || "",
+      lang: state.lang,
+    }),
+  });
+  const data = await res.json();
+  if (res.ok && data.ok) {
+    state.lastMeta = {
+      phase: data.phase,
+      phase_title: data.phase_title,
+      asked_fields_friendly: data.last_asked_fields_friendly || [],
+      is_complete: !!data.is_complete,
+    };
+    $("summary").textContent = summarizeConfig(data.config || {});
+    $("response").textContent = JSON.stringify(data.config || {}, null, 2);
+    renderConfigInspector(data.config || {});
+    updateDebugPanelVisibility();
+    renderTopbar();
+    return data.message || (state.lang === "zh" ? "当前配置已读取。" : "Current configuration summary is available.");
+  }
+  if (data.error === "no_session_available") {
+    return state.lang === "zh"
+      ? "当前还没有可读取的配置会话。请先描述一次实验配置。"
+      : "No configuration session is available yet. Please describe an experiment first.";
+  }
+  return data.message || (state.lang === "zh" ? "暂时无法读取当前配置。" : "I could not read the current configuration yet.");
 }
 
 function explicitRuntimeActionMessage(intent) {
@@ -1153,6 +1197,12 @@ async function sendStep() {
     const runtimeIntent = await classifyRuntimeIntent(text);
     if (runtimeIntent.intent === "read_summary") {
       const answer = await answerRuntimeResultQuestion();
+      finalizeThinkingMessage(answer);
+      await refreshGeant4State();
+      return;
+    }
+    if (runtimeIntent.intent === "read_config") {
+      const answer = await answerConfigQuestion();
       finalizeThinkingMessage(answer);
       await refreshGeant4State();
       return;

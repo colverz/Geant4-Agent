@@ -38,11 +38,72 @@ class PromptProfilesTest(unittest.TestCase):
         ids = [profile.id for profile in list_prompt_profiles()]
         self.assertEqual(len(ids), len(set(ids)))
 
+    def test_slot_profile_uses_strict_prompt_builder(self) -> None:
+        built = build_prompt(
+            PromptTask.SLOT_EXTRACT,
+            "en",
+            {"user_text": "Output json.", "context_summary": "phase=output"},
+        )
+
+        self.assertEqual(built.profile_id, "slot_extract_en_strict_slot_v2")
+        self.assertIn("Use slots, not config paths.", built.prompt)
+        self.assertIn("Do not restate unrelated slots from previous turns", built.prompt)
+        self.assertIn('User: "Output json."', built.prompt)
+
+    def test_semantic_profile_uses_strict_prompt_builder(self) -> None:
+        built = build_prompt(
+            PromptTask.SEMANTIC_EXTRACT,
+            "en",
+            {"user_text": "set source", "context_summary": "phase=source"},
+        )
+
+        self.assertEqual(built.profile_id, "semantic_extract_en_strict_semantic_v1")
+        self.assertIn('"target_paths"', built.prompt)
+        self.assertIn("Context: phase=source", built.prompt)
+
     def test_json_validator_rejects_non_json_for_extraction_tasks(self) -> None:
         result = validate_prompt_output(PromptTask.SLOT_EXTRACT, "en", "not json")
 
         self.assertFalse(result.ok)
         self.assertIn("not_json", result.errors)
+
+    def test_slot_validator_rejects_fields_outside_prompt_contract(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.SLOT_EXTRACT,
+            "en",
+            {
+                "intent": "SET",
+                "confidence": 0.9,
+                "normalized_text": "run geant4",
+                "target_slots": [],
+                "slots": {"source": {"particle": "gamma", "api_key": "secret"}},
+                "candidates": {},
+                "run_now": True,
+            },
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:run_now", result.errors)
+        self.assertIn("unknown_json_key:slots.source.api_key", result.errors)
+
+    def test_semantic_validator_rejects_fields_outside_prompt_contract(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.SEMANTIC_EXTRACT,
+            "en",
+            {
+                "intent": "SET",
+                "target_paths": ["source.type"],
+                "normalized_text": "source type: point",
+                "structure_hint": "unknown",
+                "confidence": 0.8,
+                "updates": [{"path": "source.type", "op": "set", "value": "point", "tool": "run_beam"}],
+                "shell_command": "geant4",
+            },
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:shell_command", result.errors)
+        self.assertIn("unknown_json_key:updates[0].tool", result.errors)
 
     def test_route_validator_rejects_unknown_labels(self) -> None:
         result = validate_prompt_output(PromptTask.RESULT_QUESTION_ROUTE, "en", "please_run_shell")

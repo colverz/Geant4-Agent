@@ -53,6 +53,14 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertEqual(body["intent"], "run_requested")
         self.assertEqual(body["action_safety_class"], "expensive_runtime")
 
+        status, body = geant4_api.handle_geant4_post(
+            "/api/geant4/intent",
+            {"text": "What is the current configured source?", "lang": "en"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["intent"], "read_config")
+        self.assertEqual(body["action_safety_class"], "read_only")
+
     def test_run_returns_runtime_smoke_report_and_summary_reuses_it(self) -> None:
         apply_status, _ = geant4_api.handle_geant4_post("/api/geant4/apply", {"patch": _runtime_patch()})
         init_status, _ = geant4_api.handle_geant4_post("/api/geant4/initialize", {})
@@ -93,9 +101,12 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("runtime_smoke_report", app_js)
         self.assertIn("runtime_result_explanation", app_js)
         self.assertIn("isRuntimeResultQuestion", app_js)
+        self.assertIn("isConfigQuestion", app_js)
         self.assertIn("classifyRuntimeIntent", app_js)
         self.assertIn("answerRuntimeResultQuestion", app_js)
+        self.assertIn("answerConfigQuestion", app_js)
         self.assertIn("/api/geant4/summary", app_js)
+        self.assertIn("/api/config/summary", app_js)
 
     def test_frontend_runtime_result_question_uses_summary_not_run(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
@@ -106,6 +117,16 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("answerRuntimeResultQuestion", question_branch)
         self.assertIn("return;", question_branch)
         self.assertNotIn("/api/geant4/run", question_branch)
+        self.assertNotIn("/api/step_async", question_branch)
+
+    def test_frontend_config_question_uses_config_summary_not_step(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        question_branch = app_js[
+            app_js.index('runtimeIntent.intent === "read_config"') : app_js.index("const payload = {", app_js.index('runtimeIntent.intent === "read_config"'))
+        ]
+
+        self.assertIn("answerConfigQuestion", question_branch)
+        self.assertIn("return;", question_branch)
         self.assertNotIn("/api/step_async", question_branch)
 
     def test_frontend_explicit_runtime_requests_do_not_auto_run_from_chat(self) -> None:

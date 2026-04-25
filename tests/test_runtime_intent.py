@@ -26,6 +26,13 @@ class RuntimeIntentTest(unittest.TestCase):
         self.assertEqual(result.intent, RuntimeIntent.RUN_REQUESTED)
         self.assertEqual(result.action_safety_class, ActionSafetyClass.EXPENSIVE_RUNTIME)
 
+    def test_config_question_is_read_only(self) -> None:
+        result = classify_user_runtime_intent("What is the current configured source?", "en")
+
+        self.assertEqual(result.intent, RuntimeIntent.READ_CONFIG)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.READ_ONLY)
+        self.assertTrue(result.prompt_validation["ok"])
+
     def test_viewer_request_is_expensive_runtime(self) -> None:
         result = classify_user_runtime_intent("打开 Geant4 viewer", "zh")
 

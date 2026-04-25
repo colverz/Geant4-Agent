@@ -10,6 +10,7 @@ from core.runtime.types import ActionSafetyClass
 
 class RuntimeIntent(str, Enum):
     READ_SUMMARY = "read_summary"
+    READ_CONFIG = "read_config"
     RUN_REQUESTED = "run_requested"
     VIEWER_REQUESTED = "viewer_requested"
     NORMAL_CHAT = "normal_chat"
@@ -28,7 +29,7 @@ def _lang_key(lang: str) -> str:
 
 
 def _safety_for_intent(intent: RuntimeIntent) -> ActionSafetyClass:
-    if intent == RuntimeIntent.READ_SUMMARY:
+    if intent in {RuntimeIntent.READ_SUMMARY, RuntimeIntent.READ_CONFIG}:
         return ActionSafetyClass.READ_ONLY
     if intent in {RuntimeIntent.RUN_REQUESTED, RuntimeIntent.VIEWER_REQUESTED}:
         return ActionSafetyClass.EXPENSIVE_RUNTIME
@@ -38,6 +39,10 @@ def _safety_for_intent(intent: RuntimeIntent) -> ActionSafetyClass:
 def _classify_rule(text: str, lang: str) -> RuntimeIntent:
     raw = str(text or "").strip().lower()
     if not raw:
+        if re.search(r"(配置|设置|当前|已经|还缺|缺少|几何|材料|源|物理|输出|config|setup)", raw) and re.search(
+            r"(什么|多少|如何|怎么|状态|摘要|还缺|缺少|current|what|missing|summary|status)", raw
+        ):
+            return RuntimeIntent.READ_CONFIG
         return RuntimeIntent.NORMAL_CHAT
 
     if _lang_key(lang) == "zh":
@@ -58,6 +63,11 @@ def _classify_rule(text: str, lang: str) -> RuntimeIntent:
         raw,
     ):
         return RuntimeIntent.READ_SUMMARY
+    if re.search(
+        r"\b(current|existing|configured|configuration|config|setup)\b.*\b(config|configuration|setup|geometry|material|source|physics|output|missing|need|status|summary)\b|\bwhat(?:'s| is)\b.*\b(configured|missing|left|current setup)\b|\bwhat do we still need\b",
+        raw,
+    ):
+        return RuntimeIntent.READ_CONFIG
     return RuntimeIntent.NORMAL_CHAT
 
 

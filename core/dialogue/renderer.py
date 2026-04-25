@@ -71,8 +71,32 @@ def _format_preview_item(item: dict, *, lang: str) -> str:
         field = str(item.get("field") or (friendly_label(path, lang) if path else "")).strip()
     old_value = _humanize_preview_value(path, item.get("old"), lang=lang)
     new_value = _humanize_preview_value(path, item.get("new"), lang=lang)
+    if str(item.get("op") or "").strip() == "remove":
+        if lang == "zh":
+            return f"{field}：删除当前值 {old_value}"
+        return f"{field}: remove current value {old_value}"
+    if str(item.get("reason") or "").strip() == "low_confidence":
+        confidence = item.get("confidence")
+        suffix = ""
+        if isinstance(confidence, (int, float)):
+            suffix = f"（置信度 {float(confidence):.2f}）" if lang == "zh" else f" (confidence {float(confidence):.2f})"
+        if lang == "zh":
+            return f"{field}：{new_value}{suffix}"
+        return f"{field}: {new_value}{suffix}"
     if lang == "zh":
         return f"{field}：{old_value} -> {new_value}"
+    if str(item.get("op") or "").strip() == "remove":
+        if lang == "zh":
+            return f"{field}：删除当前值 {old_value}"
+        return f"{field}: remove current value {old_value}"
+    if str(item.get("reason") or "").strip() == "low_confidence":
+        confidence = item.get("confidence")
+        suffix = ""
+        if isinstance(confidence, (int, float)):
+            suffix = f"（置信度 {float(confidence):.2f}）" if lang == "zh" else f" (confidence {float(confidence):.2f})"
+        if lang == "zh":
+            return f"{field}：{new_value}{suffix}"
+        return f"{field}: {new_value}{suffix}"
     return f"{field}: {old_value} -> {new_value}"
 
 

@@ -7,9 +7,9 @@ from typing import Any
 
 from core.config.llm_prompt_registry import (
     STRICT_SLOT_PROMPT_PROFILE,
-    build_strict_slot_prompt,
 )
 from core.config.output_format_registry import canonical_output_format
+from core.config.prompt_profiles import PromptBuildResult, PromptTask, build_prompt, validate_prompt_output
 from core.domain.lexicon import BASE_MATERIAL_ALIASES
 from core.geometry.family_catalog import SUPPORTED_GEOMETRY_KINDS
 from core.orchestrator.types import Intent
@@ -134,8 +134,12 @@ def _clean_response(raw: str) -> str:
     return text
 
 
-def _build_prompt(user_text: str, context_summary: str) -> str:
-    return build_strict_slot_prompt(user_text, context_summary)
+def _build_prompt(user_text: str, context_summary: str) -> PromptBuildResult:
+    return build_prompt(
+        PromptTask.SLOT_EXTRACT,
+        "en",
+        {"user_text": user_text, "context_summary": context_summary},
+    )
 
 
 def _intent_from_any(value: Any) -> Intent:
@@ -1631,11 +1635,16 @@ def build_llm_slot_frame(
     context_summary: str,
     config_path: str,
 ) -> LlmSlotBuildResult:
-    prompt = _build_prompt(user_text, context_summary)
+    prompt_build = _build_prompt(user_text, context_summary)
+    prompt = prompt_build.prompt
     llm_raw = ""
     stage_trace: dict[str, Any] = {
         "mode": "slot_first",
         "prompt_profile": STRICT_SLOT_PROMPT_PROFILE,
+        "prompt_profile_id": prompt_build.profile_id,
+        "prompt_validator": prompt_build.validator_name,
+        "prompt_output_contract": prompt_build.output_contract,
+        "prompt_validation": None,
         "llm_json_parsed": False,
         "initial_schema_errors": [],
         "normalized_backfill_fields": [],
@@ -1677,6 +1686,26 @@ def build_llm_slot_frame(
         )
 
     stage_trace["llm_json_parsed"] = True
+    prompt_validation = validate_prompt_output(PromptTask.SLOT_EXTRACT, "en", payload)
+    stage_trace["prompt_validation"] = {
+        "ok": prompt_validation.ok,
+        "validator_name": prompt_validation.validator_name,
+        "errors": list(prompt_validation.errors),
+        "warnings": list(prompt_validation.warnings),
+    }
+    if not prompt_validation.ok:
+        stage_trace["final_status"] = E_LLM_SLOT_SCHEMA_INVALID
+        return LlmSlotBuildResult(
+            ok=False,
+            frame=None,
+            normalized_text=user_text,
+            confidence=0.0,
+            llm_raw=llm_raw,
+            fallback_reason=E_LLM_SLOT_SCHEMA_INVALID,
+            schema_errors=list(prompt_validation.errors),
+            stage_trace=stage_trace,
+        )
+
     frame, meta = _coerce_slot_payload(payload)
     stage_trace["initial_schema_errors"] = list(meta.get("schema_errors", []))
     stage_trace["content_after_payload"] = sorted(_present_slot_paths(frame))

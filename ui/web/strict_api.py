@@ -3,12 +3,13 @@ from __future__ import annotations
 
 def _load_session_manager():
     from core.orchestrator.session_manager import (
+        get_session_config_summary as get_session_config_summary_v2,
         get_session_audit as get_session_audit_v2,
         process_turn as process_turn_v2,
         reset_session as reset_session_v2,
     )
 
-    return get_session_audit_v2, process_turn_v2, reset_session_v2
+    return get_session_audit_v2, process_turn_v2, reset_session_v2, get_session_config_summary_v2
 
 
 def handle_strict_step(payload: dict, progress_cb=None) -> dict:
@@ -17,7 +18,7 @@ def handle_strict_step(payload: dict, progress_cb=None) -> dict:
     if progress_cb:
         progress_cb("loading_runtime", "Loading runtime", "Importing strict orchestration modules and model dependencies.")
     try:
-        _, process_turn_v2, _ = _load_session_manager()
+        _, process_turn_v2, _, _ = _load_session_manager()
     except ModuleNotFoundError as ex:
         missing = ex.name or "unknown_dependency"
         result = {
@@ -60,7 +61,7 @@ def handle_strict_reset(session_id: str | None) -> None:
     if not session_id:
         return
     try:
-        _, _, reset_session_v2 = _load_session_manager()
+        _, _, reset_session_v2, _ = _load_session_manager()
     except ModuleNotFoundError:
         return
     reset_session_v2(str(session_id))
@@ -68,7 +69,20 @@ def handle_strict_reset(session_id: str | None) -> None:
 
 def handle_strict_audit(session_id: str) -> list[dict]:
     try:
-        get_session_audit_v2, _, _ = _load_session_manager()
+        get_session_audit_v2, _, _, _ = _load_session_manager()
     except ModuleNotFoundError:
         return []
     return get_session_audit_v2(session_id)
+
+
+def handle_strict_config_summary(session_id: str, *, lang: str = "zh") -> dict:
+    try:
+        _, _, _, get_session_config_summary_v2 = _load_session_manager()
+    except ModuleNotFoundError as ex:
+        return {
+            "ok": False,
+            "error": f"missing_dependency:{ex.name or 'unknown_dependency'}",
+            "session_id": session_id,
+            "action_safety_class": "read_only",
+        }
+    return get_session_config_summary_v2(session_id, lang=lang)

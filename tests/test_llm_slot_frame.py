@@ -650,7 +650,28 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertEqual(result.frame.materials.primary, "G4_Cu")
         self.assertTrue(result.stage_trace.get("repair_used"))
         self.assertEqual(result.stage_trace.get("prompt_profile"), STRICT_SLOT_PROMPT_PROFILE)
+        self.assertEqual(result.stage_trace.get("prompt_profile_id"), "slot_extract_en_strict_slot_v2")
+        self.assertEqual(result.stage_trace.get("prompt_validator"), "json_only")
+        self.assertEqual(result.stage_trace.get("prompt_validation", {}).get("ok"), True)
         self.assertIn("confidence_not_number", result.stage_trace.get("initial_schema_errors", []))
+
+    def test_build_llm_slot_frame_rejects_prompt_contract_escape(self) -> None:
+        llm_payload = {
+            "intent": "SET",
+            "confidence": 0.8,
+            "normalized_text": "source.particle:gamma",
+            "target_slots": ["source.particle"],
+            "slots": {"source": {"particle": "gamma", "run_now": True}},
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(llm_payload)}):
+            result = build_llm_slot_frame(
+                "Set gamma source.",
+                context_summary="phase=source",
+                config_path="",
+            )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.stage_trace.get("prompt_validation", {}).get("ok"), False)
+        self.assertIn("unknown_json_key:slots.source.run_now", result.schema_errors)
 
     def test_build_llm_slot_frame_cylinder_prompt_backfill(self) -> None:
         llm_payload = {

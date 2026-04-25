@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.config.output_format_registry import canonical_output_format
-from core.config.llm_prompt_registry import build_strict_semantic_prompt
+from core.config.prompt_profiles import PromptBuildResult, PromptTask, build_prompt, validate_prompt_output
 from core.domain.lexicon import BASE_MATERIAL_ALIASES
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 from core.validation.error_codes import (
@@ -103,8 +103,12 @@ def _clean_response(raw: str) -> str:
     return text
 
 
-def _build_prompt(user_text: str, context_summary: str) -> str:
-    return build_strict_semantic_prompt(user_text, context_summary)
+def _build_prompt(user_text: str, context_summary: str) -> PromptBuildResult:
+    return build_prompt(
+        PromptTask.SEMANTIC_EXTRACT,
+        "en",
+        {"user_text": user_text, "context_summary": context_summary},
+    )
 
 
 def _intent_from_any(value: Any) -> Intent | None:
@@ -453,7 +457,8 @@ def build_llm_semantic_frame(
     config_path: str,
     turn_id: int,
 ) -> LlmFrameBuildResult:
-    prompt = _build_prompt(user_text, context_summary)
+    prompt_build = _build_prompt(user_text, context_summary)
+    prompt = prompt_build.prompt
     llm_raw = ""
     try:
         resp = chat(prompt, config_path=config_path, temperature=0.0)
@@ -485,6 +490,20 @@ def build_llm_semantic_frame(
             llm_raw=llm_raw,
             fallback_reason=E_LLM_FRAME_PARSE_FAILED,
             schema_errors=["json_parse_failed"],
+        )
+
+    prompt_validation = validate_prompt_output(PromptTask.SEMANTIC_EXTRACT, "en", payload)
+    if not prompt_validation.ok:
+        return LlmFrameBuildResult(
+            ok=False,
+            candidate=None,
+            user_candidate=None,
+            normalized_text=user_text,
+            structure_hint="",
+            confidence=0.0,
+            llm_raw=llm_raw,
+            fallback_reason=E_LLM_FRAME_SCHEMA_INVALID,
+            schema_errors=list(prompt_validation.errors),
         )
 
     candidate, user_candidate, meta = parse_semantic_frame_payload(payload, turn_id=turn_id)

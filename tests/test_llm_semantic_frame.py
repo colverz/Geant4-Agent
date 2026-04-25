@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import unittest
+from unittest.mock import patch
 
 from core.orchestrator.types import Producer
-from nlu.llm.semantic_frame import parse_semantic_frame_payload
+from nlu.llm.semantic_frame import build_llm_semantic_frame, parse_semantic_frame_payload
 
 
 class LlmSemanticFrameTest(unittest.TestCase):
@@ -84,6 +86,26 @@ class LlmSemanticFrameTest(unittest.TestCase):
         self.assertIn("physics.physics_list", user_candidate.target_paths)
         self.assertIn("output.format", user_candidate.target_paths)
         self.assertNotIn("update_invalid_source_type:gamma", meta.get("schema_errors", []))
+
+    def test_build_llm_semantic_frame_rejects_prompt_contract_escape(self) -> None:
+        payload = {
+            "intent": "SET",
+            "target_paths": ["source.type"],
+            "normalized_text": "source type: point",
+            "structure_hint": "unknown",
+            "confidence": 0.8,
+            "updates": [{"path": "source.type", "op": "set", "value": "point", "tool": "run_beam"}],
+        }
+        with patch("nlu.llm.semantic_frame.chat", return_value={"response": json.dumps(payload)}):
+            result = build_llm_semantic_frame(
+                "Set source type to point.",
+                context_summary="phase=source",
+                config_path="",
+                turn_id=1,
+            )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:updates[0].tool", result.schema_errors)
 
 
 if __name__ == "__main__":

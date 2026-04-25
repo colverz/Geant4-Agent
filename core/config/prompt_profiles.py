@@ -57,6 +57,76 @@ class PromptValidationResult:
 _CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 _INTERNAL_FIELD_PATTERN = re.compile(r"\b[a-z]+(?:\.[a-z_]+)+\b")
 _NUMBER_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?", flags=re.IGNORECASE)
+_SLOT_TOP_LEVEL_KEYS = {"intent", "confidence", "normalized_text", "target_slots", "slots", "candidates"}
+_SLOT_SLOT_SECTIONS = {"geometry", "materials", "source", "physics", "output"}
+_SLOT_FIELDS = {
+    "geometry": {
+        "kind",
+        "size_triplet_mm",
+        "radius_mm",
+        "half_length_mm",
+        "radius1_mm",
+        "radius2_mm",
+        "x1_mm",
+        "x2_mm",
+        "y1_mm",
+        "y2_mm",
+        "z_mm",
+        "z_planes_mm",
+        "radii_mm",
+        "polyhedra_sides",
+        "trap_x1_mm",
+        "trap_x2_mm",
+        "trap_x3_mm",
+        "trap_x4_mm",
+        "trap_y1_mm",
+        "trap_y2_mm",
+        "trap_z_mm",
+        "para_x_mm",
+        "para_y_mm",
+        "para_z_mm",
+        "para_alpha_deg",
+        "para_theta_deg",
+        "para_phi_deg",
+        "torus_major_radius_mm",
+        "torus_minor_radius_mm",
+        "ellipsoid_ax_mm",
+        "ellipsoid_by_mm",
+        "ellipsoid_cz_mm",
+        "elltube_ax_mm",
+        "elltube_by_mm",
+        "elltube_hz_mm",
+        "tilt_x_deg",
+        "tilt_y_deg",
+    },
+    "materials": {"primary"},
+    "source": {"kind", "particle", "energy_mev", "position_mm", "direction_vec"},
+    "physics": {"explicit_list", "recommendation_intent"},
+    "output": {"format", "path"},
+}
+_SLOT_CANDIDATE_SECTIONS = {"geometry", "source"}
+_SLOT_CANDIDATE_FIELDS = {
+    "geometry": {
+        "kind_candidate",
+        "side_length_mm",
+        "radius_mm",
+        "diameter_mm",
+        "half_length_mm",
+        "full_length_mm",
+        "thickness_mm",
+        "plate_size_xy_mm",
+    },
+    "source": {"relation", "offset_mm", "axis", "direction_mode", "direction_relation"},
+}
+_SEMANTIC_TOP_LEVEL_KEYS = {
+    "intent",
+    "target_paths",
+    "normalized_text",
+    "structure_hint",
+    "confidence",
+    "updates",
+}
+_SEMANTIC_UPDATE_KEYS = {"path", "op", "value"}
 
 
 def _lang_key(lang: str) -> str:
@@ -140,7 +210,7 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         validator_name="route_label_known_values",
         template=(
             "判断用户是否在询问最近一次 Geant4 运行结果，或是否明确要求运行/打开 viewer。"
-            "只输出 read_summary、run_requested、viewer_requested、normal_chat 之一。\n用户：$user_text\nRoute:"
+            "只输出 read_summary、read_config、run_requested、viewer_requested、normal_chat 之一。\n用户：$user_text\nRoute:"
         ),
     ),
     (PromptTask.RESULT_QUESTION_ROUTE, "en"): PromptProfile(
@@ -153,7 +223,7 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         validator_name="route_label_known_values",
         template=(
             "Classify whether the user asks about the latest Geant4 runtime result or explicitly asks to run/open viewer. "
-            "Return exactly one label: read_summary, run_requested, viewer_requested, normal_chat.\nUser: $user_text\nRoute:"
+            "Return exactly one label: read_summary, read_config, run_requested, viewer_requested, normal_chat.\nUser: $user_text\nRoute:"
         ),
     ),
     (PromptTask.RESPONSE_NATURALIZE, "zh"): PromptProfile(
@@ -177,44 +247,44 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         template="Rewrite base_message into natural English without adding facts.\nContext JSON:\n$payload_json\n\nRewrite now.",
     ),
     (PromptTask.SLOT_EXTRACT, "zh"): PromptProfile(
-        id="slot_extract_zh_v1",
+        id="slot_extract_zh_strict_slot_v2",
         task=PromptTask.SLOT_EXTRACT,
         lang="zh",
-        version="v1",
+        version="strict_slot_v2",
         output_contract=PromptOutputContract.JSON_ONLY,
         temperature=0.0,
         validator_name="json_only",
-        template="将用户请求转换为 Geant4 slot frame。只输出 JSON。\nContext: $context_summary\nUser: $user_text\nJSON:",
+        template="__STRICT_SLOT_PROMPT__",
     ),
     (PromptTask.SLOT_EXTRACT, "en"): PromptProfile(
-        id="slot_extract_en_v1",
+        id="slot_extract_en_strict_slot_v2",
         task=PromptTask.SLOT_EXTRACT,
         lang="en",
-        version="v1",
+        version="strict_slot_v2",
         output_contract=PromptOutputContract.JSON_ONLY,
         temperature=0.0,
         validator_name="json_only",
-        template="Convert the user request into a Geant4 slot frame. Return JSON only.\nContext: $context_summary\nUser: $user_text\nJSON:",
+        template="__STRICT_SLOT_PROMPT__",
     ),
     (PromptTask.SEMANTIC_EXTRACT, "zh"): PromptProfile(
-        id="semantic_extract_zh_v1",
+        id="semantic_extract_zh_strict_semantic_v1",
         task=PromptTask.SEMANTIC_EXTRACT,
         lang="zh",
-        version="v1",
+        version="strict_semantic_v1",
         output_contract=PromptOutputContract.JSON_ONLY,
         temperature=0.0,
         validator_name="json_only",
-        template="将用户请求转换为 strict semantic frame。只输出 JSON。\nContext: $context_summary\nUser: $user_text\nJSON:",
+        template="__STRICT_SEMANTIC_PROMPT__",
     ),
     (PromptTask.SEMANTIC_EXTRACT, "en"): PromptProfile(
-        id="semantic_extract_en_v1",
+        id="semantic_extract_en_strict_semantic_v1",
         task=PromptTask.SEMANTIC_EXTRACT,
         lang="en",
-        version="v1",
+        version="strict_semantic_v1",
         output_contract=PromptOutputContract.JSON_ONLY,
         temperature=0.0,
         validator_name="json_only",
-        template="Convert the user request into a strict semantic frame. Return JSON only.\nContext: $context_summary\nUser: $user_text\nJSON:",
+        template="__STRICT_SEMANTIC_PROMPT__",
     ),
 }
 
@@ -230,7 +300,27 @@ def list_prompt_profiles() -> list[PromptProfile]:
 
 
 def build_prompt(task: PromptTask | str, lang: str, context: dict[str, Any]) -> PromptBuildResult:
-    profile = get_prompt_profile(task, lang)
+    task_key = PromptTask(task)
+    profile = get_prompt_profile(task_key, lang)
+    if task_key in {PromptTask.SLOT_EXTRACT, PromptTask.SEMANTIC_EXTRACT}:
+        user_text = str(context.get("user_text", ""))
+        context_summary = str(context.get("context_summary", ""))
+        if task_key == PromptTask.SLOT_EXTRACT:
+            from core.config.llm_prompt_registry import build_strict_slot_prompt
+
+            prompt = build_strict_slot_prompt(user_text, context_summary)
+        else:
+            from core.config.llm_prompt_registry import build_strict_semantic_prompt
+
+            prompt = build_strict_semantic_prompt(user_text, context_summary)
+        return PromptBuildResult(
+            prompt=prompt,
+            profile_id=profile.id,
+            validator_name=profile.validator_name,
+            output_contract=profile.output_contract.value,
+            temperature=profile.temperature,
+        )
+
     values = {key: str(value) for key, value in context.items()}
     if "payload" in context and "payload_json" not in values:
         values["payload_json"] = json.dumps(context["payload"], ensure_ascii=False)
@@ -259,6 +349,44 @@ def _numeric_tokens(text: str) -> set[str]:
     return {token.lower() for token in _NUMBER_PATTERN.findall(str(text or ""))}
 
 
+def _append_unknown_keys(errors: list[str], data: dict[str, Any], allowed: set[str], prefix: str = "") -> None:
+    for key in data:
+        key_text = str(key)
+        if key_text not in allowed:
+            errors.append(f"unknown_json_key:{prefix}{key_text}")
+
+
+def _validate_slot_json_object(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _append_unknown_keys(errors, payload, _SLOT_TOP_LEVEL_KEYS)
+    slots = payload.get("slots")
+    if isinstance(slots, dict):
+        _append_unknown_keys(errors, slots, _SLOT_SLOT_SECTIONS, "slots.")
+        for section, allowed_fields in _SLOT_FIELDS.items():
+            section_payload = slots.get(section)
+            if isinstance(section_payload, dict):
+                _append_unknown_keys(errors, section_payload, allowed_fields, f"slots.{section}.")
+    candidates = payload.get("candidates")
+    if isinstance(candidates, dict):
+        _append_unknown_keys(errors, candidates, _SLOT_CANDIDATE_SECTIONS, "candidates.")
+        for section, allowed_fields in _SLOT_CANDIDATE_FIELDS.items():
+            section_payload = candidates.get(section)
+            if isinstance(section_payload, dict):
+                _append_unknown_keys(errors, section_payload, allowed_fields, f"candidates.{section}.")
+    return errors
+
+
+def _validate_semantic_json_object(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _append_unknown_keys(errors, payload, _SEMANTIC_TOP_LEVEL_KEYS)
+    updates = payload.get("updates")
+    if isinstance(updates, list):
+        for idx, item in enumerate(updates):
+            if isinstance(item, dict):
+                _append_unknown_keys(errors, item, _SEMANTIC_UPDATE_KEYS, f"updates[{idx}].")
+    return errors
+
+
 def validate_prompt_output(
     task: PromptTask | str,
     lang: str,
@@ -272,11 +400,17 @@ def validate_prompt_output(
 
     if profile.output_contract == PromptOutputContract.JSON_ONLY:
         try:
-            json.loads(text)
+            parsed = json.loads(text)
         except (TypeError, ValueError, json.JSONDecodeError):
             errors.append("not_json")
+            parsed = None
+        if isinstance(parsed, dict):
+            if profile.task == PromptTask.SLOT_EXTRACT:
+                errors.extend(_validate_slot_json_object(parsed))
+            if profile.task == PromptTask.SEMANTIC_EXTRACT:
+                errors.extend(_validate_semantic_json_object(parsed))
     if profile.output_contract == PromptOutputContract.ROUTE_LABEL:
-        if text.strip() not in {"read_summary", "run_requested", "viewer_requested", "normal_chat"}:
+        if text.strip() not in {"read_summary", "read_config", "run_requested", "viewer_requested", "normal_chat"}:
             errors.append("unknown_route_label")
     if profile.output_contract in {PromptOutputContract.QUESTION_ONLY, PromptOutputContract.GROUNDED_REWRITE}:
         if _INTERNAL_FIELD_PATTERN.search(text):

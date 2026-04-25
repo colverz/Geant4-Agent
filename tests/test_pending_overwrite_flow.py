@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from core.orchestrator.session_manager import (
     _augment_geometry_targets,
+    _candidate_from_pending_overwrite,
+    _extract_low_confidence_updates,
+    _extract_pending_overwrites,
     get_or_create_session,
     process_turn,
     reset_session,
@@ -66,6 +70,74 @@ class PendingOverwriteFlowTest(unittest.TestCase):
         augmented = _augment_geometry_targets(user_candidate, extracted_candidate)
         self.assertIsNotNone(augmented)
         self.assertEqual(augmented.target_paths, ["materials.selected_materials", "output.format"])
+
+    def test_low_confidence_update_is_staged_before_write(self) -> None:
+        state_like = SimpleNamespace(config={"output": {}})
+        candidate = CandidateUpdate(
+            producer=Producer.LLM_SEMANTIC_FRAME,
+            intent=Intent.SET,
+            target_paths=["output.format"],
+            updates=[
+                UpdateOp(
+                    path="output.format",
+                    op="set",
+                    value="json",
+                    producer=Producer.LLM_SEMANTIC_FRAME,
+                    confidence=0.42,
+                    turn_id=1,
+                )
+            ],
+            confidence=0.42,
+            rationale="low_confidence_test",
+        )
+
+        filtered, pending = _extract_low_confidence_updates(
+            state_like,
+            [candidate],
+            min_confidence=0.6,
+            lang="en",
+        )
+
+        self.assertEqual(filtered, [])
+        self.assertEqual(pending[0]["path"], "output.format")
+        self.assertEqual(pending[0]["reason"], "low_confidence")
+        self.assertEqual(pending[0]["confidence"], 0.42)
+
+    def test_remove_update_is_staged_and_confirm_preserves_remove_op(self) -> None:
+        state_like = SimpleNamespace(config={"output": {"path": "old.json"}})
+        user_candidate = CandidateUpdate(
+            producer=Producer.USER_EXPLICIT,
+            intent=Intent.REMOVE,
+            target_paths=["output.path"],
+            updates=[],
+            confidence=1.0,
+            rationale="user_remove",
+        )
+        candidate = CandidateUpdate(
+            producer=Producer.LLM_SEMANTIC_FRAME,
+            intent=Intent.REMOVE,
+            target_paths=["output.path"],
+            updates=[
+                UpdateOp(
+                    path="output.path",
+                    op="remove",
+                    value=None,
+                    producer=Producer.LLM_SEMANTIC_FRAME,
+                    confidence=0.9,
+                    turn_id=2,
+                )
+            ],
+            confidence=0.9,
+            rationale="remove_test",
+        )
+
+        filtered, pending = _extract_pending_overwrites(state_like, user_candidate, [candidate], lang="en")
+        confirmed = _candidate_from_pending_overwrite(pending, turn_id=3)
+
+        self.assertEqual(filtered, [])
+        self.assertEqual(pending[0]["reason"], "remove")
+        self.assertEqual(pending[0]["op"], "remove")
+        self.assertEqual(confirmed.updates[0].op, "remove")
 
     def test_geometry_overwrite_stages_structure_and_params_atomically(self) -> None:
         sid = "pending-atomic-geometry"

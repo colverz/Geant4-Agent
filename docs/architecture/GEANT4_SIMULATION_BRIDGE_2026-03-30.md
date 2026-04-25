@@ -216,6 +216,9 @@ The user-facing accuracy layer now has explicit prompt and action contracts:
 
 - `PromptProfile` defines task, language, output contract, temperature, and validator for each LLM-facing prompt.
 - Runtime result explanation and clarification prompts are routed through this profile layer first.
+- `slot_extract` and `semantic_extract` profiles wrap the existing strict prompt builders, so the main NLU path is traceable without replacing the hardened extraction prompts with thin placeholders.
+- Slot and semantic LLM outputs are now checked against prompt-contract field allowlists before parser coercion, so extra action/tool fields are rejected instead of being silently ignored.
+- Low-confidence `LLM_SEMANTIC_FRAME` writes and delete operations are staged through the existing pending-confirmation path instead of being silently applied.
 - `result_question_route` classifies ordinary chat, latest-result questions, explicit run requests, and viewer requests.
 - `ActionSafetyClass` marks read-only, config mutation, and expensive runtime operations.
 - Ordinary chat can answer latest-result questions read-only, but explicit run/viewer requests are surfaced as guarded actions and are not auto-executed from chat.

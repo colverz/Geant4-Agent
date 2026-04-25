@@ -1105,7 +1105,7 @@ def _extract_pending_overwrites(
     *,
     lang: str,
 ) -> tuple[list[CandidateUpdate], list[dict[str, Any]]]:
-    if user_candidate.intent not in {Intent.SET, Intent.MODIFY}:
+    if user_candidate.intent not in {Intent.SET, Intent.MODIFY, Intent.REMOVE}:
         return candidates, []
     pending: list[dict[str, Any]] = []
     filtered_candidates: list[CandidateUpdate] = []
@@ -1113,18 +1113,29 @@ def _extract_pending_overwrites(
         kept: list[UpdateOp] = []
         for upd in candidate.updates:
             old = get_path(state_like.config, upd.path)
+            if upd.op == "remove" and not _is_unset_for_overwrite(old):
+                pending.append(
+                    _pending_item_from_update(
+                        upd,
+                        draft=state_like,
+                        lang=lang,
+                        producer=candidate.producer.value,
+                        reason="remove",
+                    )
+                )
+                continue
             if _is_unset_for_overwrite(old) or old == upd.value:
                 kept.append(upd)
                 continue
             if _path_explicitly_requested(user_candidate, upd.path):
                 pending.append(
-                    {
-                        "path": upd.path,
-                        "field": friendly_label(upd.path, lang),
-                        "old": old,
-                        "new": upd.value,
-                        "producer": candidate.producer.value,
-                    }
+                    _pending_item_from_update(
+                        upd,
+                        draft=state_like,
+                        lang=lang,
+                        producer=candidate.producer.value,
+                        reason="overwrite",
+                    )
                 )
                 continue
             kept.append(upd)
@@ -1146,11 +1157,73 @@ def _extract_pending_overwrites(
     return filtered_candidates, pending
 
 
+def _effective_update_confidence(candidate: CandidateUpdate, update: UpdateOp) -> float:
+    try:
+        candidate_conf = float(candidate.confidence)
+    except (TypeError, ValueError):
+        candidate_conf = 0.0
+    try:
+        update_conf = float(update.confidence)
+    except (TypeError, ValueError):
+        update_conf = 0.0
+    return max(0.0, min(1.0, min(candidate_conf, update_conf)))
+
+
+def _extract_low_confidence_updates(
+    state_like: Any,
+    candidates: list[CandidateUpdate],
+    *,
+    min_confidence: float,
+    lang: str,
+) -> tuple[list[CandidateUpdate], list[dict[str, Any]]]:
+    threshold = max(0.0, min(1.0, float(min_confidence)))
+    if threshold <= 0.0:
+        return candidates, []
+    pending: list[dict[str, Any]] = []
+    filtered_candidates: list[CandidateUpdate] = []
+    for candidate in candidates:
+        if candidate.producer != Producer.LLM_SEMANTIC_FRAME:
+            filtered_candidates.append(candidate)
+            continue
+        kept: list[UpdateOp] = []
+        for update in candidate.updates:
+            effective_confidence = _effective_update_confidence(candidate, update)
+            if effective_confidence < threshold:
+                pending.append(
+                    _pending_item_from_update(
+                        update,
+                        draft=state_like,
+                        lang=lang,
+                        producer=candidate.producer.value,
+                        reason="low_confidence",
+                        confidence=effective_confidence,
+                    )
+                )
+                continue
+            kept.append(update)
+        if not kept:
+            continue
+        if len(kept) == len(candidate.updates):
+            filtered_candidates.append(candidate)
+            continue
+        filtered_candidates.append(
+            CandidateUpdate(
+                producer=candidate.producer,
+                intent=candidate.intent,
+                target_paths=sorted({u.path for u in kept}),
+                updates=kept,
+                confidence=candidate.confidence,
+                rationale=f"{candidate.rationale}_low_confidence_staged",
+            )
+        )
+    return filtered_candidates, pending
+
+
 def _candidate_from_pending_overwrite(items: list[dict[str, Any]], *, turn_id: int) -> CandidateUpdate:
     updates = [
         UpdateOp(
             path=str(item["path"]),
-            op="set",
+            op="remove" if str(item.get("op") or "").strip() == "remove" else "set",
             value=item.get("new"),
             producer=Producer.USER_EXPLICIT,
             confidence=1.0,
@@ -1249,13 +1322,18 @@ def _pending_item_from_update(
     draft: Any,
     lang: str,
     producer: str,
+    reason: str = "overwrite",
+    confidence: float | None = None,
 ) -> dict[str, Any]:
     return {
         "path": update.path,
+        "op": update.op,
         "field": friendly_label(update.path, lang),
         "old": get_path(draft.config, update.path),
         "new": update.value,
         "producer": producer,
+        "reason": reason,
+        **({"confidence": confidence} if confidence is not None else {}),
     }
 
 
@@ -1819,6 +1897,14 @@ def process_turn(
         )
         if new_pending_overwrite:
             staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, new_pending_overwrite)
+        candidates, low_confidence_pending = _extract_low_confidence_updates(
+            draft,
+            candidates,
+            min_confidence=min_confidence,
+            lang=lang,
+        )
+        if low_confidence_pending:
+            staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, low_confidence_pending)
         candidates, staged_pending_overwrite = _stage_dependent_geometry_updates_for_pending(
             draft,
             candidates,
@@ -2098,3 +2184,75 @@ def get_session_audit(session_id: str) -> list[dict]:
     if not state:
         return []
     return state.audit_trail
+
+
+def get_session_config_summary(session_id: str, *, lang: str = "zh") -> dict[str, Any]:
+    sid = str(session_id or "").strip()
+    with _SESSIONS_LOCK:
+        state = SESSIONS.get(sid)
+        if state is None:
+            return {
+                "ok": False,
+                "error": "no_session_available",
+                "session_id": sid,
+            }
+        config = deep_copy(state.config)
+        phase = state.phase.value
+        pending_overwrite = [dict(item) for item in state.pending_overwrite]
+        semantic_missing = list(state.semantic_missing_paths)
+        dialogue_summary = dict(state.dialogue_summary or {})
+        last_asked_paths = list(state.last_asked_paths)
+
+    report = validate_layer_c_completeness(config)
+    missing_paths = _dedupe_paths(list(report.missing_required_paths) + semantic_missing)
+    missing_labels = to_friendly_labels(missing_paths, lang)
+    asked_labels = to_friendly_labels(last_asked_paths, lang)
+    config_identity = {
+        "geometry_structure": get_path(config, "geometry.structure"),
+        "materials": get_path(config, "materials.selected_materials", []),
+        "source_type": get_path(config, "source.type"),
+        "particle": get_path(config, "source.particle"),
+        "source_energy": get_path(config, "source.energy"),
+        "physics_list": get_path(config, "physics.physics_list"),
+        "output_format": get_path(config, "output.format"),
+        "output_path": get_path(config, "output.path"),
+    }
+    if lang == "zh":
+        message = (
+            f"当前配置阶段：{phase_title(phase, lang)}。"
+            f"几何：{config_identity['geometry_structure'] or '未设置'}；"
+            f"材料：{', '.join(config_identity['materials']) if config_identity['materials'] else '未设置'}；"
+            f"源：{config_identity['source_type'] or '未设置'} / {config_identity['particle'] or '未设置'}；"
+            f"物理：{config_identity['physics_list'] or '未设置'}；"
+            f"输出：{config_identity['output_format'] or '未设置'}。"
+        )
+        if missing_labels:
+            message += f" 仍缺少：{', '.join(missing_labels[:4])}。"
+    else:
+        message = (
+            f"Current phase: {phase_title(phase, lang)}. "
+            f"Geometry: {config_identity['geometry_structure'] or 'not set'}; "
+            f"materials: {', '.join(config_identity['materials']) if config_identity['materials'] else 'not set'}; "
+            f"source: {config_identity['source_type'] or 'not set'} / {config_identity['particle'] or 'not set'}; "
+            f"physics: {config_identity['physics_list'] or 'not set'}; "
+            f"output: {config_identity['output_format'] or 'not set'}."
+        )
+        if missing_labels:
+            message += f" Still missing: {', '.join(missing_labels[:4])}."
+    return {
+        "ok": True,
+        "session_id": sid,
+        "action_safety_class": "read_only",
+        "phase": phase,
+        "phase_title": phase_title(phase, lang),
+        "is_complete": bool(report.ok and not missing_paths and not pending_overwrite),
+        "message": message,
+        "config_identity": config_identity,
+        "missing_fields": missing_paths,
+        "missing_fields_friendly": missing_labels,
+        "last_asked_paths": last_asked_paths,
+        "last_asked_fields_friendly": asked_labels,
+        "pending_overwrite": pending_overwrite,
+        "dialogue_summary": dialogue_summary,
+        "config": config,
+    }
