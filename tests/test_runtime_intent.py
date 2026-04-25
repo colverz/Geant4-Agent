@@ -39,8 +39,22 @@ class RuntimeIntentTest(unittest.TestCase):
         self.assertEqual(result.intent, RuntimeIntent.VIEWER_REQUESTED)
         self.assertEqual(result.action_safety_class, ActionSafetyClass.EXPENSIVE_RUNTIME)
 
-    def test_normal_chat_is_read_only(self) -> None:
+    def test_english_config_mutation_is_config_mutation(self) -> None:
+        result = classify_user_runtime_intent("Change source energy to 1 MeV", "en")
+
+        self.assertEqual(result.intent, RuntimeIntent.CONFIG_MUTATION)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.CONFIG_MUTATION)
+        self.assertTrue(result.prompt_validation["ok"])
+
+    def test_chinese_config_mutation_is_config_mutation(self) -> None:
         result = classify_user_runtime_intent("把源能量改成 1 MeV", "zh")
+
+        self.assertEqual(result.intent, RuntimeIntent.CONFIG_MUTATION)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.CONFIG_MUTATION)
+        self.assertTrue(result.prompt_validation["ok"])
+
+    def test_normal_chat_is_read_only(self) -> None:
+        result = classify_user_runtime_intent("hello, what can you do?", "en")
 
         self.assertEqual(result.intent, RuntimeIntent.NORMAL_CHAT)
         self.assertEqual(result.action_safety_class, ActionSafetyClass.READ_ONLY)

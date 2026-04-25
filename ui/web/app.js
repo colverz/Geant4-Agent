@@ -917,6 +917,12 @@ function explicitRuntimeActionMessage(intent) {
   return "";
 }
 
+function normalChatReadOnlyMessage() {
+  return state.lang === "zh"
+    ? "这看起来不像配置修改、结果追问或明确的运行操作。为了避免误写配置，我不会启动配置写入流程。你可以直接描述要修改的几何、材料、源、物理或输出。"
+    : "This does not look like a configuration change, result question, or explicit runtime action. To avoid accidental config writes, I will not start the configuration workflow. You can describe the geometry, material, source, physics, or output change directly.";
+}
+
 function updateDebugPanelVisibility() {
   const blocks = [
     ["debug-terminal-block", $("geant4-log")?.textContent],
@@ -1209,6 +1215,11 @@ async function sendStep() {
     }
     if (runtimeIntent.intent === "run_requested" || runtimeIntent.intent === "viewer_requested") {
       finalizeThinkingMessage(explicitRuntimeActionMessage(runtimeIntent.intent));
+      await refreshGeant4State();
+      return;
+    }
+    if (runtimeIntent.intent !== "config_mutation") {
+      finalizeThinkingMessage(normalChatReadOnlyMessage());
       await refreshGeant4State();
       return;
     }

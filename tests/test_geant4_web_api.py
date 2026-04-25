@@ -61,6 +61,14 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertEqual(body["intent"], "read_config")
         self.assertEqual(body["action_safety_class"], "read_only")
 
+        status, body = geant4_api.handle_geant4_post(
+            "/api/geant4/intent",
+            {"text": "Change source energy to 1 MeV", "lang": "en"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["intent"], "config_mutation")
+        self.assertEqual(body["action_safety_class"], "config_mutation")
+
     def test_run_returns_runtime_smoke_report_and_summary_reuses_it(self) -> None:
         apply_status, _ = geant4_api.handle_geant4_post("/api/geant4/apply", {"patch": _runtime_patch()})
         init_status, _ = geant4_api.handle_geant4_post("/api/geant4/initialize", {})
@@ -105,6 +113,7 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("classifyRuntimeIntent", app_js)
         self.assertIn("answerRuntimeResultQuestion", app_js)
         self.assertIn("answerConfigQuestion", app_js)
+        self.assertIn("normalChatReadOnlyMessage", app_js)
         self.assertIn("/api/geant4/summary", app_js)
         self.assertIn("/api/config/summary", app_js)
 
@@ -139,6 +148,16 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("return;", action_branch)
         self.assertNotIn("/api/geant4/run", action_branch)
         self.assertNotIn("/api/geant4/viewer/open", action_branch)
+
+    def test_frontend_only_config_mutation_reaches_step_async(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        guard_branch = app_js[
+            app_js.index('runtimeIntent.intent !== "config_mutation"') : app_js.index("const payload = {", app_js.index('runtimeIntent.intent !== "config_mutation"'))
+        ]
+
+        self.assertIn("normalChatReadOnlyMessage", guard_branch)
+        self.assertIn("return;", guard_branch)
+        self.assertNotIn("/api/step_async", guard_branch)
 
 
 if __name__ == "__main__":

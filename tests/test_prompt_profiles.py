@@ -111,6 +111,11 @@ class PromptProfilesTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("unknown_route_label", result.errors)
 
+    def test_route_validator_accepts_config_mutation(self) -> None:
+        result = validate_prompt_output(PromptTask.RESULT_QUESTION_ROUTE, "en", "config_mutation")
+
+        self.assertTrue(result.ok)
+
     def test_grounded_runtime_validator_rejects_new_numbers(self) -> None:
         result = validate_prompt_output(
             PromptTask.RUNTIME_RESULT_EXPLAIN,

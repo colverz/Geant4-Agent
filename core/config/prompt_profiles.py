@@ -210,7 +210,7 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         validator_name="route_label_known_values",
         template=(
             "判断用户是否在询问最近一次 Geant4 运行结果，或是否明确要求运行/打开 viewer。"
-            "只输出 read_summary、read_config、run_requested、viewer_requested、normal_chat 之一。\n用户：$user_text\nRoute:"
+            "只输出 read_summary、read_config、config_mutation、run_requested、viewer_requested、normal_chat 之一。\n用户：$user_text\nRoute:"
         ),
     ),
     (PromptTask.RESULT_QUESTION_ROUTE, "en"): PromptProfile(
@@ -223,7 +223,7 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         validator_name="route_label_known_values",
         template=(
             "Classify whether the user asks about the latest Geant4 runtime result or explicitly asks to run/open viewer. "
-            "Return exactly one label: read_summary, read_config, run_requested, viewer_requested, normal_chat.\nUser: $user_text\nRoute:"
+            "Return exactly one label: read_summary, read_config, config_mutation, run_requested, viewer_requested, normal_chat.\nUser: $user_text\nRoute:"
         ),
     ),
     (PromptTask.RESPONSE_NATURALIZE, "zh"): PromptProfile(
@@ -410,7 +410,7 @@ def validate_prompt_output(
             if profile.task == PromptTask.SEMANTIC_EXTRACT:
                 errors.extend(_validate_semantic_json_object(parsed))
     if profile.output_contract == PromptOutputContract.ROUTE_LABEL:
-        if text.strip() not in {"read_summary", "read_config", "run_requested", "viewer_requested", "normal_chat"}:
+        if text.strip() not in {"read_summary", "read_config", "config_mutation", "run_requested", "viewer_requested", "normal_chat"}:
             errors.append("unknown_route_label")
     if profile.output_contract in {PromptOutputContract.QUESTION_ONLY, PromptOutputContract.GROUNDED_REWRITE}:
         if _INTERNAL_FIELD_PATTERN.search(text):
