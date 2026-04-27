@@ -66,6 +66,9 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
         )
         if out.get("error"):
             errors.append(f"process_turn_error:{out['error']}")
+        llm_used = bool(out.get("llm_used"))
+        if live_llm and not llm_used:
+            errors.append(f"live_llm_not_used:fallback={out.get('fallback_reason')!r}")
 
         if "is_complete" in parser_expected and bool(out.get("is_complete")) != bool(parser_expected["is_complete"]):
             errors.append(f"is_complete:expected={parser_expected['is_complete']!r}:actual={out.get('is_complete')!r}")
@@ -79,7 +82,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
             "id": case_id,
             "errors": errors,
             "known_gaps": parser_expected.get("known_gaps", []),
-            "llm_used": bool(out.get("llm_used")),
+            "llm_used": llm_used,
             "fallback_reason": out.get("fallback_reason"),
         }
     finally:

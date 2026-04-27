@@ -234,7 +234,7 @@ The user-facing accuracy layer now has explicit prompt and action contracts:
 - `docs/eval/session_behavior_casebank.json` checks API/session behavior boundaries: read-only turns do not advance session turns or create step jobs, guarded runtime requests do not run, and config mutations are the only chat path allowed into `step_async`.
 - `tools/evaluate_guard_casebanks.py` validates casebank shape and runs the lightweight casebanks outside pytest with an audit-friendly pass/fail summary.
 - `docs/eval/simulation_scenario_casebank.json` is the first scenario-level benchmark: it checks representative simulation configurations against `SimulationSpec`, runtime payload, structured result, and smoke-report contracts without replacing LLM understanding with phrase dictionaries.
-- The same scenario casebank now carries a natural-language `prompt` plus `parser_expected` contract. `tools/evaluate_llm_scenario_parsing.py` checks prompt-to-config-to-runtime coverage in offline v2 mode by default, with live LLM evaluation opt-in through `GEANT4_LLM_SCENARIO=1` and `GEANT4_LLM_CONFIG`.
+- The same scenario casebank now carries a natural-language `prompt` plus `parser_expected` contract. `tools/evaluate_llm_scenario_parsing.py` checks prompt-to-config-to-runtime coverage in offline v2 mode by default. Live LLM evaluation is opt-in through `GEANT4_LLM_SCENARIO=1` and `GEANT4_LLM_CONFIG`, and it fails if the LLM path silently falls back to deterministic parsing.
 
 For a local manual smoke test after setting the runtime command:
 
