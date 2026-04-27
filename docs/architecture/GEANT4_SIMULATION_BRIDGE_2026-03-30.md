@@ -231,6 +231,7 @@ The user-facing accuracy layer now has explicit prompt and action contracts:
 - `docs/eval/workflow_guard_casebank.json` is the lightweight natural-language guard casebank for Chinese, English, and mixed expressions.
 - `docs/eval/runtime_result_qa_casebank.json` is the lightweight grounded-result Q&A casebank for dose-not-reported, crossings, source sampling, artifacts, configuration identity, and completion status.
 - `docs/eval/multiturn_guard_casebank.json` checks multi-turn intent/action safety sequences, including read-only follow-ups, config mutation, guarded run/viewer requests, and normal chat.
+- `docs/eval/session_behavior_casebank.json` checks API/session behavior boundaries: read-only turns do not advance session turns or create step jobs, guarded runtime requests do not run, and config mutations are the only chat path allowed into `step_async`.
 - `tools/evaluate_guard_casebanks.py` runs the lightweight casebanks outside pytest and prints an audit-friendly pass/fail summary.
 
 For a local manual smoke test after setting the runtime command:

@@ -1,0 +1,101 @@
+[
+  {
+    "id": "read_config_uses_config_summary_only",
+    "text": "What is the current configured source?",
+    "lang": "en",
+    "expected_intent": "read_config",
+    "expected_action": "config_summary",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  },
+  {
+    "id": "read_summary_uses_runtime_summary_only",
+    "text": "What was the latest simulation result?",
+    "lang": "en",
+    "expected_intent": "read_summary",
+    "expected_action": "runtime_summary",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  },
+  {
+    "id": "config_mutation_can_enter_step_async",
+    "text": "Change source energy to 1 MeV",
+    "lang": "en",
+    "expected_intent": "config_mutation",
+    "expected_action": "step_async",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": true,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": true
+  },
+  {
+    "id": "run_request_is_guarded_ui_only",
+    "text": "run 10 events now",
+    "lang": "en",
+    "expected_intent": "run_requested",
+    "expected_action": "guarded_runtime_ui",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  },
+  {
+    "id": "viewer_request_is_guarded_ui_only",
+    "text": "open the viewer",
+    "lang": "en",
+    "expected_intent": "viewer_requested",
+    "expected_action": "guarded_runtime_ui",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  },
+  {
+    "id": "normal_chat_is_read_only_chat",
+    "text": "hello there",
+    "lang": "en",
+    "expected_intent": "normal_chat",
+    "expected_action": "read_only_chat",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  },
+  {
+    "id": "zh_read_config_is_read_only",
+    "text": "当前配置还缺什么？",
+    "lang": "zh",
+    "expected_intent": "read_config",
+    "expected_action": "config_summary",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  },
+  {
+    "id": "zh_config_mutation_can_enter_step_async",
+    "text": "把源能量改成 1 MeV",
+    "lang": "zh",
+    "expected_intent": "config_mutation",
+    "expected_action": "step_async",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": true,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": true
+  },
+  {
+    "id": "mixed_en_run_under_zh_ui_is_guarded",
+    "text": "run 10 events now",
+    "lang": "zh",
+    "expected_intent": "run_requested",
+    "expected_action": "guarded_runtime_ui",
+    "expect_session_turn_delta": 0,
+    "expect_step_job": false,
+    "expect_runtime_run": false,
+    "expect_config_mutation_allowed": false
+  }
+]
