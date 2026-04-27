@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import unittest
 
 from core.orchestrator.path_ops import set_path
@@ -9,28 +11,19 @@ from planner.runtime_intent import RuntimeIntent, classify_user_runtime_intent
 from ui.web.request_router import handle_post_request
 
 
+CASEBANK_PATH = Path("docs/eval/workflow_guard_casebank.json")
+
+
 class WorkflowGuardContractTest(unittest.TestCase):
     def test_natural_language_intent_casebank_safety_classes(self) -> None:
-        cases = [
-            ("What is the current configured source?", "en", RuntimeIntent.READ_CONFIG, ActionSafetyClass.READ_ONLY),
-            ("What was the latest simulation result?", "en", RuntimeIntent.READ_SUMMARY, ActionSafetyClass.READ_ONLY),
-            ("run 10 events now", "en", RuntimeIntent.RUN_REQUESTED, ActionSafetyClass.EXPENSIVE_RUNTIME),
-            ("open the viewer", "en", RuntimeIntent.VIEWER_REQUESTED, ActionSafetyClass.EXPENSIVE_RUNTIME),
-            ("Change source energy to 1 MeV", "en", RuntimeIntent.CONFIG_MUTATION, ActionSafetyClass.CONFIG_MUTATION),
-            ("hello there", "en", RuntimeIntent.NORMAL_CHAT, ActionSafetyClass.READ_ONLY),
-            ("当前配置还缺什么？", "zh", RuntimeIntent.READ_CONFIG, ActionSafetyClass.READ_ONLY),
-            ("刚才模拟结果怎么样？", "zh", RuntimeIntent.READ_SUMMARY, ActionSafetyClass.READ_ONLY),
-            ("运行 10 个事件", "zh", RuntimeIntent.RUN_REQUESTED, ActionSafetyClass.EXPENSIVE_RUNTIME),
-            ("打开 viewer", "zh", RuntimeIntent.VIEWER_REQUESTED, ActionSafetyClass.EXPENSIVE_RUNTIME),
-            ("把源能量改成 1 MeV", "zh", RuntimeIntent.CONFIG_MUTATION, ActionSafetyClass.CONFIG_MUTATION),
-        ]
+        cases = json.loads(CASEBANK_PATH.read_text(encoding="utf-8"))
 
-        for text, lang, expected_intent, expected_safety in cases:
-            with self.subTest(text=text, lang=lang):
-                result = classify_user_runtime_intent(text, lang)
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                result = classify_user_runtime_intent(case["text"], case["lang"])
 
-                self.assertEqual(result.intent, expected_intent)
-                self.assertEqual(result.action_safety_class, expected_safety)
+                self.assertEqual(result.intent, RuntimeIntent(case["expected_intent"]))
+                self.assertEqual(result.action_safety_class, ActionSafetyClass(case["expected_safety"]))
                 self.assertTrue(result.prompt_validation["ok"])
 
     def test_config_summary_is_read_only_and_never_enters_step_workflow(self) -> None:

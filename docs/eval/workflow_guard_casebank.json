@@ -1,0 +1,86 @@
+[
+  {
+    "id": "en_read_config_current_source",
+    "text": "What is the current configured source?",
+    "lang": "en",
+    "expected_intent": "read_config",
+    "expected_safety": "read_only"
+  },
+  {
+    "id": "en_read_summary_latest_result",
+    "text": "What was the latest simulation result?",
+    "lang": "en",
+    "expected_intent": "read_summary",
+    "expected_safety": "read_only"
+  },
+  {
+    "id": "en_run_requested_events",
+    "text": "run 10 events now",
+    "lang": "en",
+    "expected_intent": "run_requested",
+    "expected_safety": "expensive_runtime"
+  },
+  {
+    "id": "en_viewer_requested",
+    "text": "open the viewer",
+    "lang": "en",
+    "expected_intent": "viewer_requested",
+    "expected_safety": "expensive_runtime"
+  },
+  {
+    "id": "en_config_mutation_source_energy",
+    "text": "Change source energy to 1 MeV",
+    "lang": "en",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation"
+  },
+  {
+    "id": "en_normal_chat",
+    "text": "hello there",
+    "lang": "en",
+    "expected_intent": "normal_chat",
+    "expected_safety": "read_only"
+  },
+  {
+    "id": "zh_read_config_missing",
+    "text": "当前配置还缺什么？",
+    "lang": "zh",
+    "expected_intent": "read_config",
+    "expected_safety": "read_only"
+  },
+  {
+    "id": "zh_read_summary_latest_result",
+    "text": "刚才模拟结果怎么样？",
+    "lang": "zh",
+    "expected_intent": "read_summary",
+    "expected_safety": "read_only"
+  },
+  {
+    "id": "zh_run_requested_events",
+    "text": "运行 10 个事件",
+    "lang": "zh",
+    "expected_intent": "run_requested",
+    "expected_safety": "expensive_runtime"
+  },
+  {
+    "id": "zh_viewer_requested",
+    "text": "打开 viewer",
+    "lang": "zh",
+    "expected_intent": "viewer_requested",
+    "expected_safety": "expensive_runtime"
+  },
+  {
+    "id": "zh_config_mutation_source_energy",
+    "text": "把源能量改成 1 MeV",
+    "lang": "zh",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation"
+  },
+  {
+    "id": "mixed_config_mutation_particle",
+    "text": "把 particle 改成 proton",
+    "lang": "zh",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation"
+  }
+]

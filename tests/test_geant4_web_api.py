@@ -98,6 +98,14 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertEqual(summary_body["runtime_smoke_report"]["configuration"]["particle"], "gamma")
         self.assertIn("runtime_result_explanation", summary_body)
 
+        qa_status, qa_body = geant4_api.handle_geant4_post(
+            "/api/geant4/summary",
+            {"lang": "en", "question": "What was the dose?"},
+        )
+        self.assertEqual(qa_status, 200)
+        self.assertEqual(qa_body["runtime_result_explanation"]["prompt_profile_id"], "runtime_result_qa_en_v1")
+        self.assertIn("does not report dose", qa_body["runtime_result_explanation"]["message"])
+
 
 class RuntimeResultFrontendStaticTest(unittest.TestCase):
     def test_frontend_exposes_runtime_result_card_and_formatter(self) -> None:
@@ -114,6 +122,7 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("answerRuntimeResultQuestion", app_js)
         self.assertIn("answerConfigQuestion", app_js)
         self.assertIn("normalChatReadOnlyMessage", app_js)
+        self.assertIn("question: questionText", app_js)
         self.assertIn("/api/geant4/summary", app_js)
         self.assertIn("/api/config/summary", app_js)
 

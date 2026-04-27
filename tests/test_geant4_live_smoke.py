@@ -74,6 +74,9 @@ class Geant4LiveSmokeTest(unittest.TestCase):
         self.assertEqual(summary_obs.status, RuntimeActionStatus.COMPLETED)
         self.assertEqual(summary_obs.payload["result_summary"]["run"]["events_completed"], 1)
         self.assertEqual(summary_obs.payload["result_summary"]["configuration"]["geometry_structure"], "single_box")
+        self.assertIn("result_summary", summary_obs.payload)
+        self.assertIn("run", summary_obs.payload["result_summary"])
+        self.assertIn("scoring", summary_obs.payload["result_summary"])
 
 
 if __name__ == "__main__":

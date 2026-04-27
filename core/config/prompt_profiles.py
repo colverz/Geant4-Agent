@@ -14,6 +14,7 @@ class PromptTask(str, Enum):
     CLARIFICATION = "clarification"
     RESPONSE_NATURALIZE = "response_naturalize"
     RUNTIME_RESULT_EXPLAIN = "runtime_result_explain"
+    RUNTIME_RESULT_QA = "runtime_result_qa"
     RESULT_QUESTION_ROUTE = "result_question_route"
 
 
@@ -200,6 +201,38 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
             "Return only the final English answer.\n\nInput JSON:\n$payload_json\n\nRewrite now."
         ),
     ),
+    (PromptTask.RUNTIME_RESULT_QA, "zh"): PromptProfile(
+        id="runtime_result_qa_zh_v1",
+        task=PromptTask.RUNTIME_RESULT_QA,
+        lang="zh",
+        version="v1",
+        output_contract=PromptOutputContract.GROUNDED_REWRITE,
+        temperature=0.2,
+        validator_name="grounded_rewrite_no_new_numbers_lang_match",
+        template=(
+            "你是 Geant4 模拟结果问答层。请只基于 report 和 base_message 回答用户问题。"
+            "不得新增任何数值、因果解释、物理结论或 report 中不存在的事实。"
+            "如果 report 不足以回答，必须明确说无法从当前结果确认。只输出最终中文回复。\n\n"
+            "用户问题：$user_question\n"
+            "Input JSON:\n$payload_json\n\nAnswer now."
+        ),
+    ),
+    (PromptTask.RUNTIME_RESULT_QA, "en"): PromptProfile(
+        id="runtime_result_qa_en_v1",
+        task=PromptTask.RUNTIME_RESULT_QA,
+        lang="en",
+        version="v1",
+        output_contract=PromptOutputContract.GROUNDED_REWRITE,
+        temperature=0.2,
+        validator_name="grounded_rewrite_no_new_numbers_lang_match",
+        template=(
+            "You are the Geant4 simulation-result Q&A layer. Answer the user question using only report and base_message. "
+            "Do not add new numbers, causal explanations, physics conclusions, or facts not present in the report. "
+            "If the report is insufficient, say that the current result cannot confirm it. Return only the final English answer.\n\n"
+            "User question: $user_question\n"
+            "Input JSON:\n$payload_json\n\nAnswer now."
+        ),
+    ),
     (PromptTask.RESULT_QUESTION_ROUTE, "zh"): PromptProfile(
         id="result_question_route_zh_v1",
         task=PromptTask.RESULT_QUESTION_ROUTE,
@@ -209,7 +242,7 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         temperature=0.0,
         validator_name="route_label_known_values",
         template=(
-            "判断用户是否在询问最近一次 Geant4 运行结果，或是否明确要求运行/打开 viewer。"
+            "判断用户是在询问配置、询问最近一次 Geant4 运行结果、修改配置、明确要求运行、打开 viewer，还是普通聊天。"
             "只输出 read_summary、read_config、config_mutation、run_requested、viewer_requested、normal_chat 之一。\n用户：$user_text\nRoute:"
         ),
     ),
@@ -222,7 +255,7 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         temperature=0.0,
         validator_name="route_label_known_values",
         template=(
-            "Classify whether the user asks about the latest Geant4 runtime result or explicitly asks to run/open viewer. "
+            "Classify whether the user asks about current config, asks about the latest Geant4 runtime result, mutates config, explicitly asks to run/open viewer, or is normal chat. "
             "Return exactly one label: read_summary, read_config, config_mutation, run_requested, viewer_requested, normal_chat.\nUser: $user_text\nRoute:"
         ),
     ),

@@ -845,12 +845,13 @@ async function classifyRuntimeIntent(text) {
   return await res.json();
 }
 
-async function answerRuntimeResultQuestion() {
+async function answerRuntimeResultQuestion(questionText = "") {
   const res = await fetch("/api/geant4/summary", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       lang: state.lang,
+      question: questionText,
       llm_result_summary: $("llm-question")?.checked === true,
       ollama_config_path: state.ollamaConfigPath,
     }),
@@ -1202,7 +1203,7 @@ async function sendStep() {
   try {
     const runtimeIntent = await classifyRuntimeIntent(text);
     if (runtimeIntent.intent === "read_summary") {
-      const answer = await answerRuntimeResultQuestion();
+      const answer = await answerRuntimeResultQuestion(text);
       finalizeThinkingMessage(answer);
       await refreshGeant4State();
       return;

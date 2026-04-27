@@ -14,7 +14,7 @@ from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
 from mcp.geant4.runtime_payload import build_runtime_payload
 from mcp.geant4.server import Geant4McpServer
 from planner.runtime_intent import classify_user_runtime_intent
-from planner.runtime_result import naturalize_runtime_result_message
+from planner.runtime_result import naturalize_runtime_result_message, naturalize_runtime_result_question_answer
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -77,6 +77,15 @@ def _report_events(summary_payload: dict[str, Any] | None, default: int = 0) -> 
 
 
 def _result_explanation(report: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    question = str(payload.get("question", "")).strip()
+    if question:
+        return naturalize_runtime_result_question_answer(
+            question,
+            report,
+            lang=str(payload.get("lang", "zh")).lower(),
+            use_llm=bool(payload.get("llm_result_summary", False)),
+            ollama_config=str(payload.get("ollama_config_path", "nlu/llm_support/configs/ollama_config.json")),
+        )
     return naturalize_runtime_result_message(
         report,
         lang=str(payload.get("lang", "zh")).lower(),

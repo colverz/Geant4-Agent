@@ -107,6 +107,83 @@ def build_runtime_result_message(report: dict[str, Any] | None, *, lang: str = "
     )
 
 
+def build_runtime_result_question_answer(
+    question: str,
+    report: dict[str, Any] | None,
+    *,
+    lang: str = "zh",
+) -> str:
+    report = _as_dict(report)
+    if not report:
+        return "当前还没有可解释的运行结果。" if lang == "zh" else "No runtime result is available yet."
+
+    q = str(question or "").lower()
+    metrics = _as_dict(report.get("key_metrics"))
+    target_edep = metrics.get("target_edep_total_mev")
+    target_hits = metrics.get("target_hit_events")
+    detector_crossings = metrics.get("detector_crossing_count")
+    plane_crossings = metrics.get("plane_crossing_count")
+    events_completed = report.get("events_completed")
+    events_requested = report.get("events_requested")
+
+    asks_dose = "dose" in q or "剂量" in q
+    asks_edep = any(token in q for token in ("edep", "deposit", "energy", "沉积", "能量"))
+    asks_hit = any(token in q for token in ("hit", "target", "source", "打到", "命中", "靶"))
+    asks_detector = any(token in q for token in ("detector", "crossing", "探测器", "穿过", "cross"))
+    asks_plane = "plane" in q or "平面" in q
+
+    if lang == "zh":
+        if asks_dose:
+            return (
+                "当前结果没有给出剂量单位的 dose，只能确认 "
+                f"target_edep_total_mev={_fmt(target_edep)}。如果需要剂量，还需要质量或剂量 scorer。"
+            )
+        if asks_edep:
+            return f"当前 target_edep_total_mev={_fmt(target_edep)}，这是结果摘要中记录的靶体总沉积能量。"
+        if asks_hit:
+            if target_hits is None:
+                return "当前结果没有提供 target_hit_events，因此无法从这次结果确认源是否命中靶体。"
+            return f"当前 target_hit_events={_fmt(target_hits)}。这只能说明靶体记录到的 hit 事件数，不能额外推断未记录的过程。"
+        if asks_plane:
+            return f"plane_crossing_count={_fmt(plane_crossings)}，表示结果摘要中记录的平面 crossing 计数。"
+        if asks_detector:
+            return (
+                f"detector_crossing_count={_fmt(detector_crossings)}，"
+                "表示结果摘要中记录的探测器 crossing 计数；它不是剂量，也不等同于完整粒子输运解释。"
+            )
+        return (
+            f"这次运行完成事件数为 {_fmt(events_completed)} / {_fmt(events_requested)}。"
+            f"关键指标包括 target_edep_total_mev={_fmt(target_edep)}、"
+            f"target_hit_events={_fmt(target_hits)}、detector_crossing_count={_fmt(detector_crossings)}、"
+            f"plane_crossing_count={_fmt(plane_crossings)}。"
+        )
+
+    if asks_dose:
+        return (
+            "The current result does not report dose. It only reports "
+            f"target_edep_total_mev={_fmt(target_edep)}. Dose would require mass or a dose scorer."
+        )
+    if asks_edep:
+        return f"The current target_edep_total_mev is {_fmt(target_edep)}, which is the target total deposited energy in the result summary."
+    if asks_hit:
+        if target_hits is None:
+            return "The current result does not provide target_hit_events, so it cannot confirm whether the source hit the target."
+        return f"The current target_hit_events={_fmt(target_hits)}. This only reports recorded target hit events; it does not infer unrecorded processes."
+    if asks_plane:
+        return f"plane_crossing_count is {_fmt(plane_crossings)}, the plane crossing count recorded in the result summary."
+    if asks_detector:
+        return (
+            f"detector_crossing_count is {_fmt(detector_crossings)}. "
+            "It is the detector crossing count recorded in the result summary, not dose or a full transport explanation."
+        )
+    return (
+        f"This run completed {_fmt(events_completed)} / {_fmt(events_requested)} events. "
+        f"Key metrics are target_edep_total_mev={_fmt(target_edep)}, "
+        f"target_hit_events={_fmt(target_hits)}, detector_crossing_count={_fmt(detector_crossings)}, "
+        f"and plane_crossing_count={_fmt(plane_crossings)}."
+    )
+
+
 def _looks_language_mismatched(text: str, lang: str) -> bool:
     compact = re.sub(r"\s+", " ", str(text or "")).strip()
     if not compact:
@@ -182,6 +259,69 @@ def naturalize_runtime_result_message(
         }
     except Exception:
         logger.warning("LLM runtime-result explanation failed; using deterministic fallback.", exc_info=True)
+        return {
+            "message": base_message,
+            "source": "deterministic",
+            "fallback_reason": "llm_failed",
+            "prompt_profile_id": prompt_build.profile_id,
+            "prompt_validation": {"ok": False, "validator_name": prompt_build.validator_name, "errors": ["llm_failed"]},
+        }
+
+
+def naturalize_runtime_result_question_answer(
+    question: str,
+    report: dict[str, Any] | None,
+    *,
+    lang: str = "zh",
+    use_llm: bool = False,
+    ollama_config: str = "nlu/llm_support/configs/ollama_config.json",
+    temperature: float = 0.2,
+) -> dict[str, Any]:
+    base_message = build_runtime_result_question_answer(question, report, lang=lang)
+    prompt_build = build_prompt(
+        PromptTask.RUNTIME_RESULT_QA,
+        lang,
+        {
+            "user_question": str(question or ""),
+            "payload": {"lang": lang, "report": report or {}, "base_message": base_message},
+        },
+    )
+    if not use_llm:
+        validation = validate_prompt_output(PromptTask.RUNTIME_RESULT_QA, lang, base_message, {"base_message": base_message})
+        return {
+            "message": base_message,
+            "source": "deterministic",
+            "fallback_reason": None,
+            "prompt_profile_id": prompt_build.profile_id,
+            "prompt_validation": validation.__dict__,
+        }
+    try:
+        resp = chat(prompt_build.prompt, config_path=ollama_config, temperature=temperature)
+        text = _clean_chat_text(resp.get("response", ""))
+        validation = validate_prompt_output(
+            PromptTask.RUNTIME_RESULT_QA,
+            lang,
+            text,
+            {"base_message": base_message},
+        )
+        if validation.ok and not _invalid_llm_result_message(text, base_message=base_message, lang=lang):
+            return {
+                "message": text,
+                "source": "llm",
+                "fallback_reason": None,
+                "prompt_profile_id": prompt_build.profile_id,
+                "prompt_validation": validation.__dict__,
+            }
+        logger.warning("LLM runtime-result Q&A was rejected by grounded validation; using deterministic fallback.")
+        return {
+            "message": base_message,
+            "source": "deterministic",
+            "fallback_reason": "invalid_llm_output",
+            "prompt_profile_id": prompt_build.profile_id,
+            "prompt_validation": validation.__dict__,
+        }
+    except Exception:
+        logger.warning("LLM runtime-result Q&A failed; using deterministic fallback.", exc_info=True)
         return {
             "message": base_message,
             "source": "deterministic",

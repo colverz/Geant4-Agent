@@ -50,7 +50,9 @@ _VIEWER_REQUEST_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 
-_ZH_CONFIG_DOMAIN_PATTERN = re.compile(r"(配置|设置|几何|材料|源|粒子|能量|物理|输出|探测器|计分|靶|束流|点源|盒|圆柱|球)")
+_ZH_CONFIG_DOMAIN_PATTERN = re.compile(
+    r"(配置|设置|几何|材料|源|粒子|能量|物理|输出|探测器|计分|靶|束流|点源|盒|圆柱|球|geometry|material|source|particle|energy|physics|output|detector|scoring)"
+)
 _ZH_CONFIG_MUTATION_PATTERN = re.compile(r"(创建|建立|设置|设为|改成|修改|更新|使用|加入|添加|删除|移除|清除|切换|配置)")
 _ZH_CONFIG_READ_PATTERN = re.compile(r"(什么|多少|如何|怎么|状态|摘要|还缺|缺少|当前|已经)")
 _ZH_RESULT_READ_PATTERN = re.compile(

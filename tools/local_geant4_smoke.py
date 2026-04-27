@@ -10,6 +10,15 @@ from mcp.geant4.adapter import InMemoryGeant4Adapter, build_geant4_adapter_from_
 from mcp.geant4.server import Geant4McpServer
 
 
+def runtime_env_help() -> str:
+    return (
+        "Configure GEANT4_RUNTIME_COMMAND_JSON, for example "
+        "'[\"runtime/geant4_local_app/build/Release/geant4_local_app.exe\"]', "
+        "or GEANT4_RUNTIME_COMMAND before running live smoke. "
+        "Pytest live smoke also requires GEANT4_LIVE_SMOKE=1."
+    )
+
+
 def _smoke_patch() -> dict:
     return {
         "geometry": {
@@ -34,13 +43,18 @@ def main() -> int:
     parser.add_argument("--events", type=int, default=1)
     parser.add_argument("--require-runtime", action="store_true", help="Fail instead of skipping when no runtime command is configured.")
     parser.add_argument("--json", action="store_true", help="Emit a compact JSON report for automation.")
+    parser.add_argument("--print-env-help", action="store_true", help="Print the required opt-in runtime environment variables and exit.")
     args = parser.parse_args()
+    if args.print_env_help:
+        print(runtime_env_help())
+        return 0
     events = max(1, int(args.events))
 
     adapter = build_geant4_adapter_from_env()
     if isinstance(adapter, InMemoryGeant4Adapter):
         message = "SKIP: GEANT4_RUNTIME_COMMAND_JSON or GEANT4_RUNTIME_COMMAND is not configured."
         print(message)
+        print(runtime_env_help())
         return 1 if args.require_runtime else 0
 
     server = Geant4McpServer(adapter=adapter)

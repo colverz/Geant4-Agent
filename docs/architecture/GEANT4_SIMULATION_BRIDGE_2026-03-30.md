@@ -212,6 +212,12 @@ User follow-up questions about the latest result are read-only: the UI answers t
 `/api/geant4/summary` and must not trigger `run_beam` or viewer launch unless the user explicitly
 uses the run/viewer controls.
 
+Specific result follow-up questions now use a separate `runtime_result_qa` prompt profile. The
+deterministic answer is built first from `runtime_smoke_report`; the LLM may only rewrite that
+answer, and validation rejects added numeric values or unsupported facts. This keeps questions such
+as "what was the dose?", "did the source hit the target?", or "what does detector crossing mean?"
+grounded in observed scorer fields rather than free-form physics speculation.
+
 The user-facing accuracy layer now has explicit prompt and action contracts:
 
 - `PromptProfile` defines task, language, output contract, temperature, and validator for each LLM-facing prompt.
@@ -222,6 +228,7 @@ The user-facing accuracy layer now has explicit prompt and action contracts:
 - `result_question_route` classifies `read_config`, `read_summary`, `config_mutation`, `run_requested`, `viewer_requested`, and `normal_chat`.
 - `ActionSafetyClass` marks read-only, config mutation, and expensive runtime operations.
 - The chat boundary is intentionally conservative: only `config_mutation` may enter `/api/step_async`; result/config questions stay read-only, and explicit run/viewer requests are surfaced as guarded actions without auto-execution from chat.
+- `docs/eval/workflow_guard_casebank.json` is the lightweight natural-language guard casebank for Chinese, English, and mixed expressions.
 
 For a local manual smoke test after setting the runtime command:
 
