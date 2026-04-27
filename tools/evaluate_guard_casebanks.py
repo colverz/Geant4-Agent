@@ -17,9 +17,141 @@ DEFAULT_RUNTIME_QA_CASEBANK = Path("docs/eval/runtime_result_qa_casebank.json")
 DEFAULT_MULTITURN_CASEBANK = Path("docs/eval/multiturn_guard_casebank.json")
 DEFAULT_SESSION_BEHAVIOR_CASEBANK = Path("docs/eval/session_behavior_casebank.json")
 
+VALID_INTENTS = {
+    "read_config",
+    "read_summary",
+    "config_mutation",
+    "run_requested",
+    "viewer_requested",
+    "normal_chat",
+}
+VALID_SAFETY = {"read_only", "config_mutation", "expensive_runtime"}
+VALID_ACTIONS = {"config_summary", "runtime_summary", "step_async", "guarded_runtime_ui", "read_only_chat"}
+VALID_LANGS = {"zh", "en"}
+
 
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _missing_keys(item: dict[str, Any], required: set[str]) -> list[str]:
+    return sorted(required - set(item.keys()))
+
+
+def _duplicate_ids(items: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for item in items:
+        item_id = str(item.get("id", ""))
+        if item_id in seen:
+            duplicates.add(item_id)
+        seen.add(item_id)
+    return sorted(duplicates)
+
+
+def validate_casebank_shapes(
+    *,
+    workflow_path: Path = DEFAULT_WORKFLOW_CASEBANK,
+    runtime_qa_path: Path = DEFAULT_RUNTIME_QA_CASEBANK,
+    multiturn_path: Path = DEFAULT_MULTITURN_CASEBANK,
+    session_behavior_path: Path = DEFAULT_SESSION_BEHAVIOR_CASEBANK,
+) -> dict[str, Any]:
+    failures: list[dict[str, Any]] = []
+
+    workflow = _load_json(workflow_path)
+    runtime_qa = _load_json(runtime_qa_path)
+    multiturn = _load_json(multiturn_path)
+    session_behavior = _load_json(session_behavior_path)
+
+    def add_failure(casebank: str, item_id: str, error: str) -> None:
+        failures.append({"casebank": casebank, "id": item_id, "error": error})
+
+    for casebank, items, required in (
+        ("workflow_guard", workflow, {"id", "text", "lang", "expected_intent", "expected_safety"}),
+        ("runtime_result_qa", runtime_qa, {"id", "question", "lang", "expected_substrings", "forbidden_substrings"}),
+        (
+            "session_behavior_guard",
+            session_behavior,
+            {
+                "id",
+                "text",
+                "lang",
+                "expected_intent",
+                "expected_action",
+                "expect_session_turn_delta",
+                "expect_step_job",
+                "expect_runtime_run",
+                "expect_config_mutation_allowed",
+            },
+        ),
+    ):
+        if not isinstance(items, list):
+            add_failure(casebank, "<root>", "not_list")
+            continue
+        for duplicate in _duplicate_ids(items):
+            add_failure(casebank, duplicate, "duplicate_id")
+        for item in items:
+            if not isinstance(item, dict):
+                add_failure(casebank, "<item>", "not_object")
+                continue
+            item_id = str(item.get("id", "<missing_id>"))
+            for missing in _missing_keys(item, required):
+                add_failure(casebank, item_id, f"missing_key:{missing}")
+            if "lang" in item and item["lang"] not in VALID_LANGS:
+                add_failure(casebank, item_id, f"invalid_lang:{item['lang']}")
+            if "expected_intent" in item and item["expected_intent"] not in VALID_INTENTS:
+                add_failure(casebank, item_id, f"invalid_intent:{item['expected_intent']}")
+            if "expected_safety" in item and item["expected_safety"] not in VALID_SAFETY:
+                add_failure(casebank, item_id, f"invalid_safety:{item['expected_safety']}")
+            if "expected_action" in item and item["expected_action"] not in VALID_ACTIONS:
+                add_failure(casebank, item_id, f"invalid_action:{item['expected_action']}")
+            if casebank == "runtime_result_qa":
+                if not isinstance(item.get("expected_substrings"), list):
+                    add_failure(casebank, item_id, "expected_substrings_not_list")
+                if not isinstance(item.get("forbidden_substrings"), list):
+                    add_failure(casebank, item_id, "forbidden_substrings_not_list")
+
+    if not isinstance(multiturn, list):
+        add_failure("multiturn_guard", "<root>", "not_list")
+    else:
+        for duplicate in _duplicate_ids(multiturn):
+            add_failure("multiturn_guard", duplicate, "duplicate_id")
+        for flow in multiturn:
+            if not isinstance(flow, dict):
+                add_failure("multiturn_guard", "<flow>", "not_object")
+                continue
+            flow_id = str(flow.get("id", "<missing_id>"))
+            for missing in _missing_keys(flow, {"id", "lang", "turns"}):
+                add_failure("multiturn_guard", flow_id, f"missing_key:{missing}")
+            if "lang" in flow and flow["lang"] not in VALID_LANGS:
+                add_failure("multiturn_guard", flow_id, f"invalid_lang:{flow['lang']}")
+            turns = flow.get("turns")
+            if not isinstance(turns, list):
+                add_failure("multiturn_guard", flow_id, "turns_not_list")
+                continue
+            for index, turn in enumerate(turns):
+                turn_id = f"{flow_id}[{index}]"
+                if not isinstance(turn, dict):
+                    add_failure("multiturn_guard", turn_id, "turn_not_object")
+                    continue
+                for missing in _missing_keys(turn, {"text", "expected_intent", "expected_safety", "expected_action"}):
+                    add_failure("multiturn_guard", turn_id, f"missing_key:{missing}")
+                if "lang" in turn and turn["lang"] not in VALID_LANGS:
+                    add_failure("multiturn_guard", turn_id, f"invalid_lang:{turn['lang']}")
+                if "expected_intent" in turn and turn["expected_intent"] not in VALID_INTENTS:
+                    add_failure("multiturn_guard", turn_id, f"invalid_intent:{turn['expected_intent']}")
+                if "expected_safety" in turn and turn["expected_safety"] not in VALID_SAFETY:
+                    add_failure("multiturn_guard", turn_id, f"invalid_safety:{turn['expected_safety']}")
+                if "expected_action" in turn and turn["expected_action"] not in VALID_ACTIONS:
+                    add_failure("multiturn_guard", turn_id, f"invalid_action:{turn['expected_action']}")
+
+    total = (
+        (len(workflow) if isinstance(workflow, list) else 0)
+        + (len(runtime_qa) if isinstance(runtime_qa, list) else 0)
+        + (len(session_behavior) if isinstance(session_behavior, list) else 0)
+        + sum(len(flow.get("turns", [])) for flow in multiturn if isinstance(flow, dict) and isinstance(flow.get("turns"), list))
+    )
+    return {"name": "casebank_schema", "total": total, "failed": len(failures), "failures": failures}
 
 
 def _default_runtime_report() -> dict[str, Any]:
@@ -228,6 +360,12 @@ def main() -> int:
     args = parser.parse_args()
 
     reports = [
+        validate_casebank_shapes(
+            workflow_path=args.workflow,
+            runtime_qa_path=args.runtime_qa,
+            multiturn_path=args.multiturn,
+            session_behavior_path=args.session_behavior,
+        ),
         evaluate_workflow_guard(args.workflow),
         evaluate_runtime_result_qa(args.runtime_qa),
         evaluate_multiturn_guard(args.multiturn),
