@@ -1,0 +1,152 @@
+[
+  {
+    "id": "gamma_copper_target_with_detector",
+    "description": "1 MeV gamma point source aimed at a copper box target with a silicon detector behind it.",
+    "events": 4,
+    "config": {
+      "geometry": {
+        "structure": "single_box",
+        "root_name": "Target",
+        "size_triplet_mm": [10.0, 20.0, 30.0]
+      },
+      "materials": {
+        "selected_materials": ["G4_Cu"],
+        "volume_material_map": {"Target": "G4_Cu"}
+      },
+      "simulation": {
+        "detector": {
+          "enabled": true,
+          "name": "Detector",
+          "material": "G4_Si",
+          "position": {"type": "vector", "value": [0.0, 0.0, 50.0]},
+          "size_triplet_mm": [12.0, 12.0, 1.0]
+        },
+        "run": {"seed": 1337}
+      },
+      "source": {
+        "type": "point",
+        "particle": "gamma",
+        "energy": 1.0,
+        "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
+        "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]}
+      },
+      "physics_list": {"name": "FTFP_BERT"},
+      "scoring": {
+        "target_edep": true,
+        "detector_crossings": true,
+        "plane_crossings": true,
+        "plane": {"name": "TargetExitPlane", "z_mm": 15.0}
+      }
+    },
+    "expected": {
+      "structure": "single_box",
+      "material": "G4_Cu",
+      "source_type": "point",
+      "particle": "gamma",
+      "energy": 1.0,
+      "physics_list": "FTFP_BERT",
+      "detector_enabled": true,
+      "scoring": ["target_edep", "detector_crossings", "plane_crossings"],
+      "result_summary_sections": ["run", "configuration", "source", "scoring"]
+    }
+  },
+  {
+    "id": "proton_water_cylinder_target",
+    "description": "150 MeV proton beam through a water cylinder target with target deposited-energy scoring.",
+    "events": 8,
+    "config": {
+      "geometry": {
+        "structure": "single_tubs",
+        "root_name": "WaterTarget",
+        "params": {"child_rmax": 40.0, "child_hz": 80.0}
+      },
+      "materials": {
+        "selected_materials": ["G4_WATER"],
+        "volume_material_map": {"WaterTarget": "G4_WATER"}
+      },
+      "source": {
+        "type": "beam",
+        "particle": "proton",
+        "energy": 150.0,
+        "position": {"type": "vector", "value": [0.0, 0.0, -120.0]},
+        "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+        "spot_radius_mm": 2.0,
+        "spot_profile": "gaussian",
+        "spot_sigma_mm": 0.5,
+        "divergence_half_angle_deg": 0.5,
+        "divergence_profile": "gaussian",
+        "divergence_sigma_deg": 0.1
+      },
+      "physics_list": {"name": "FTFP_BERT"},
+      "scoring": {
+        "target_edep": true,
+        "detector_crossings": false,
+        "plane_crossings": false
+      }
+    },
+    "expected": {
+      "structure": "single_tubs",
+      "material": "G4_WATER",
+      "source_type": "beam",
+      "particle": "proton",
+      "energy": 150.0,
+      "physics_list": "FTFP_BERT",
+      "detector_enabled": false,
+      "scoring": ["target_edep"],
+      "result_summary_sections": ["run", "configuration", "source", "scoring"]
+    }
+  },
+  {
+    "id": "collimated_gamma_detector_plane",
+    "description": "Collimated gamma beam crossing a thin silicon detector plane.",
+    "events": 6,
+    "config": {
+      "geometry": {
+        "structure": "single_box",
+        "root_name": "AirGap",
+        "size_triplet_mm": [5.0, 5.0, 5.0]
+      },
+      "materials": {
+        "selected_materials": ["G4_AIR"],
+        "volume_material_map": {"AirGap": "G4_AIR"}
+      },
+      "simulation": {
+        "detector": {
+          "enabled": true,
+          "name": "SiliconPlane",
+          "material": "G4_Si",
+          "position": {"type": "vector", "value": [0.0, 0.0, 25.0]},
+          "size_triplet_mm": [20.0, 20.0, 0.5]
+        }
+      },
+      "source": {
+        "type": "beam",
+        "particle": "gamma",
+        "energy": 0.662,
+        "position": {"type": "vector", "value": [0.0, 0.0, -50.0]},
+        "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+        "spot_radius_mm": 1.0,
+        "spot_profile": "uniform_disk",
+        "divergence_half_angle_deg": 0.0
+      },
+      "physics_list": {"name": "FTFP_BERT"},
+      "scoring": {
+        "target_edep": true,
+        "detector_crossings": true,
+        "plane_crossings": true,
+        "plane": {"name": "DetectorPlane", "z_mm": 25.0}
+      }
+    },
+    "expected": {
+      "structure": "single_box",
+      "material": "G4_AIR",
+      "source_type": "beam",
+      "particle": "gamma",
+      "energy": 0.662,
+      "physics_list": "FTFP_BERT",
+      "detector_enabled": true,
+      "scoring": ["target_edep", "detector_crossings", "plane_crossings"],
+      "result_summary_sections": ["run", "configuration", "source", "scoring"]
+    }
+  }
+]

@@ -233,6 +233,7 @@ The user-facing accuracy layer now has explicit prompt and action contracts:
 - `docs/eval/multiturn_guard_casebank.json` checks multi-turn intent/action safety sequences, including read-only follow-ups, config mutation, guarded run/viewer requests, and normal chat.
 - `docs/eval/session_behavior_casebank.json` checks API/session behavior boundaries: read-only turns do not advance session turns or create step jobs, guarded runtime requests do not run, and config mutations are the only chat path allowed into `step_async`.
 - `tools/evaluate_guard_casebanks.py` validates casebank shape and runs the lightweight casebanks outside pytest with an audit-friendly pass/fail summary.
+- `docs/eval/simulation_scenario_casebank.json` is the first scenario-level benchmark: it checks representative simulation configurations against `SimulationSpec`, runtime payload, structured result, and smoke-report contracts without replacing LLM understanding with phrase dictionaries.
 
 For a local manual smoke test after setting the runtime command:
 
