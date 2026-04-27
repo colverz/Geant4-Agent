@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -9,6 +11,9 @@ from planner.runtime_result import (
     naturalize_runtime_result_message,
     naturalize_runtime_result_question_answer,
 )
+
+
+QA_CASEBANK_PATH = Path("docs/eval/runtime_result_qa_casebank.json")
 
 
 def _report() -> dict:
@@ -29,7 +34,15 @@ def _report() -> dict:
             "detector_crossing_count": 1,
             "plane_crossing_count": 0,
         },
+        "artifact_dir": "F:/tmp/artifacts",
         "run_summary_path": "F:/tmp/run_summary.json",
+        "result_summary": {
+            "source": {
+                "primary_count": 4,
+                "sampled_position_mean_mm": [0.0, 0.0, -20.0],
+                "sampled_direction_mean": [0.0, 0.0, 1.0],
+            }
+        },
     }
 
 
@@ -132,6 +145,18 @@ class RuntimeResultExplanationTest(unittest.TestCase):
         self.assertEqual(result["source"], "deterministic")
         self.assertEqual(result["fallback_reason"], "invalid_llm_output")
         self.assertIn("target_hit_events=2", result["message"])
+
+    def test_runtime_result_question_answer_casebank(self) -> None:
+        cases = json.loads(QA_CASEBANK_PATH.read_text(encoding="utf-8"))
+
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                message = build_runtime_result_question_answer(case["question"], _report(), lang=case["lang"])
+
+                for expected in case["expected_substrings"]:
+                    self.assertIn(expected, message)
+                for forbidden in case["forbidden_substrings"]:
+                    self.assertNotIn(forbidden, message)
 
 
 if __name__ == "__main__":

@@ -229,6 +229,7 @@ The user-facing accuracy layer now has explicit prompt and action contracts:
 - `ActionSafetyClass` marks read-only, config mutation, and expensive runtime operations.
 - The chat boundary is intentionally conservative: only `config_mutation` may enter `/api/step_async`; result/config questions stay read-only, and explicit run/viewer requests are surfaced as guarded actions without auto-execution from chat.
 - `docs/eval/workflow_guard_casebank.json` is the lightweight natural-language guard casebank for Chinese, English, and mixed expressions.
+- `docs/eval/runtime_result_qa_casebank.json` is the lightweight grounded-result Q&A casebank for dose-not-reported, crossings, source sampling, artifacts, configuration identity, and completion status.
 
 For a local manual smoke test after setting the runtime command:
 

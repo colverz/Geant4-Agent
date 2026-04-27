@@ -44,6 +44,12 @@ def _completion_percent(value: Any) -> str:
     return f"{float(value) * 100:.1f}%"
 
 
+def _fmt_triplet(value: Any) -> str:
+    if isinstance(value, (list, tuple)) and len(value) == 3:
+        return f"({_fmt(value[0])}, {_fmt(value[1])}, {_fmt(value[2])})"
+    return _fmt(value)
+
+
 def build_runtime_result_message(report: dict[str, Any] | None, *, lang: str = "zh") -> str:
     report = _as_dict(report)
     if not report:
@@ -118,19 +124,29 @@ def build_runtime_result_question_answer(
         return "当前还没有可解释的运行结果。" if lang == "zh" else "No runtime result is available yet."
 
     q = str(question or "").lower()
+    config = _as_dict(report.get("configuration"))
     metrics = _as_dict(report.get("key_metrics"))
+    result_summary = _as_dict(report.get("result_summary"))
+    source_summary = _as_dict(result_summary.get("source"))
     target_edep = metrics.get("target_edep_total_mev")
     target_hits = metrics.get("target_hit_events")
     detector_crossings = metrics.get("detector_crossing_count")
     plane_crossings = metrics.get("plane_crossing_count")
     events_completed = report.get("events_completed")
     events_requested = report.get("events_requested")
+    completion_fraction = report.get("completion_fraction")
+    run_summary_path = report.get("run_summary_path") or "not provided"
+    artifact_dir = report.get("artifact_dir") or "not provided"
 
     asks_dose = "dose" in q or "剂量" in q
     asks_edep = any(token in q for token in ("edep", "deposit", "energy", "沉积", "能量"))
     asks_hit = any(token in q for token in ("hit", "target", "source", "打到", "命中", "靶"))
     asks_detector = any(token in q for token in ("detector", "crossing", "探测器", "穿过", "cross"))
     asks_plane = "plane" in q or "平面" in q
+    asks_source_sampling = any(token in q for token in ("source sampling", "sampled", "primary count", "源采样", "采样", "primary"))
+    asks_artifact = any(token in q for token in ("artifact", "file", "path", "run_summary", "结果文件", "路径", "文件"))
+    asks_config = any(token in q for token in ("config", "configuration", "geometry", "material", "particle", "physics", "配置", "几何", "材料", "粒子", "物理"))
+    asks_completion = any(token in q for token in ("complete", "completed", "finish", "finished", "success", "events", "完成", "成功", "事件"))
 
     if lang == "zh":
         if asks_dose:
@@ -140,6 +156,14 @@ def build_runtime_result_question_answer(
             )
         if asks_edep:
             return f"当前 target_edep_total_mev={_fmt(target_edep)}，这是结果摘要中记录的靶体总沉积能量。"
+        if asks_source_sampling:
+            if not source_summary:
+                return "当前结果摘要没有提供源采样统计，因此无法从这次结果确认源采样分布。"
+            return (
+                f"源采样统计：primary_count={_fmt(source_summary.get('primary_count'))}，"
+                f"sampled_position_mean_mm={_fmt_triplet(source_summary.get('sampled_position_mean_mm'))}，"
+                f"sampled_direction_mean={_fmt_triplet(source_summary.get('sampled_direction_mean'))}。"
+            )
         if asks_hit:
             if target_hits is None:
                 return "当前结果没有提供 target_hit_events，因此无法从这次结果确认源是否命中靶体。"
@@ -150,6 +174,22 @@ def build_runtime_result_question_answer(
             return (
                 f"detector_crossing_count={_fmt(detector_crossings)}，"
                 "表示结果摘要中记录的探测器 crossing 计数；它不是剂量，也不等同于完整粒子输运解释。"
+            )
+        if asks_artifact:
+            return f"结果文件路径是 {run_summary_path}，artifact_dir={artifact_dir}。"
+        if asks_config:
+            return (
+                "本次结果配置摘要："
+                f"geometry={_fmt(config.get('geometry_structure'))}，"
+                f"material={_fmt(config.get('material'))}，"
+                f"source_type={_fmt(config.get('source_type'))}，"
+                f"particle={_fmt(config.get('particle'))}，"
+                f"physics_list={_fmt(config.get('physics_list'))}。"
+            )
+        if asks_completion:
+            return (
+                f"运行完成情况：{_fmt(events_completed)} / {_fmt(events_requested)}，"
+                f"完成率 {_completion_percent(completion_fraction)}。"
             )
         return (
             f"这次运行完成事件数为 {_fmt(events_completed)} / {_fmt(events_requested)}。"
@@ -165,6 +205,14 @@ def build_runtime_result_question_answer(
         )
     if asks_edep:
         return f"The current target_edep_total_mev is {_fmt(target_edep)}, which is the target total deposited energy in the result summary."
+    if asks_source_sampling:
+        if not source_summary:
+            return "The current result summary does not provide source sampling statistics, so it cannot confirm the source sampling distribution."
+        return (
+            f"Source sampling: primary_count={_fmt(source_summary.get('primary_count'))}, "
+            f"sampled_position_mean_mm={_fmt_triplet(source_summary.get('sampled_position_mean_mm'))}, "
+            f"sampled_direction_mean={_fmt_triplet(source_summary.get('sampled_direction_mean'))}."
+        )
     if asks_hit:
         if target_hits is None:
             return "The current result does not provide target_hit_events, so it cannot confirm whether the source hit the target."
@@ -175,6 +223,22 @@ def build_runtime_result_question_answer(
         return (
             f"detector_crossing_count is {_fmt(detector_crossings)}. "
             "It is the detector crossing count recorded in the result summary, not dose or a full transport explanation."
+        )
+    if asks_artifact:
+        return f"The result file is {run_summary_path}, and artifact_dir={artifact_dir}."
+    if asks_config:
+        return (
+            "Result configuration: "
+            f"geometry={_fmt(config.get('geometry_structure'))}, "
+            f"material={_fmt(config.get('material'))}, "
+            f"source_type={_fmt(config.get('source_type'))}, "
+            f"particle={_fmt(config.get('particle'))}, "
+            f"physics_list={_fmt(config.get('physics_list'))}."
+        )
+    if asks_completion:
+        return (
+            f"Run completion: {_fmt(events_completed)} / {_fmt(events_requested)} events, "
+            f"completion {_completion_percent(completion_fraction)}."
         )
     return (
         f"This run completed {_fmt(events_completed)} / {_fmt(events_requested)} events. "

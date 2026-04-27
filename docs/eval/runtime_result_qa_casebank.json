@@ -1,0 +1,65 @@
+[
+  {
+    "id": "en_dose_not_reported",
+    "question": "What was the dose?",
+    "lang": "en",
+    "expected_substrings": ["does not report dose", "target_edep_total_mev=1.5"],
+    "forbidden_substrings": ["Gy"]
+  },
+  {
+    "id": "en_detector_crossing",
+    "question": "What does detector crossing mean?",
+    "lang": "en",
+    "expected_substrings": ["detector_crossing_count is 1", "not dose"],
+    "forbidden_substrings": ["plane_crossing_count is 0"]
+  },
+  {
+    "id": "en_plane_crossing",
+    "question": "What was the plane crossing count?",
+    "lang": "en",
+    "expected_substrings": ["plane_crossing_count is 0"],
+    "forbidden_substrings": ["detector_crossing_count"]
+  },
+  {
+    "id": "en_source_sampling",
+    "question": "What was the source sampling mean?",
+    "lang": "en",
+    "expected_substrings": ["Source sampling", "primary_count=4", "sampled_direction_mean=(0, 0, 1)"],
+    "forbidden_substrings": ["dose"]
+  },
+  {
+    "id": "en_artifact_path",
+    "question": "Where is the run_summary file?",
+    "lang": "en",
+    "expected_substrings": ["F:/tmp/run_summary.json", "artifact_dir=F:/tmp/artifacts"],
+    "forbidden_substrings": []
+  },
+  {
+    "id": "en_configuration_identity",
+    "question": "What configuration was used?",
+    "lang": "en",
+    "expected_substrings": ["geometry=single_box", "material=G4_Cu", "particle=gamma", "physics_list=FTFP_BERT"],
+    "forbidden_substrings": []
+  },
+  {
+    "id": "en_completion_status",
+    "question": "Did it finish all events?",
+    "lang": "en",
+    "expected_substrings": ["Run completion", "4 / 4", "100.0%"],
+    "forbidden_substrings": []
+  },
+  {
+    "id": "zh_dose_not_reported",
+    "question": "剂量是多少？",
+    "lang": "zh",
+    "expected_substrings": ["没有给出剂量", "target_edep_total_mev=1.5"],
+    "forbidden_substrings": ["Gy"]
+  },
+  {
+    "id": "zh_configuration_identity",
+    "question": "这次用了什么配置？",
+    "lang": "zh",
+    "expected_substrings": ["geometry=single_box", "material=G4_Cu", "particle=gamma", "physics_list=FTFP_BERT"],
+    "forbidden_substrings": []
+  }
+]
