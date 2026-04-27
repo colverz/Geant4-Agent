@@ -25,6 +25,14 @@ class RuntimeIntentClassification:
     prompt_validation: dict
 
 
+class RuntimeIntentAction(str, Enum):
+    CONFIG_SUMMARY = "config_summary"
+    RUNTIME_SUMMARY = "runtime_summary"
+    STEP_ASYNC = "step_async"
+    GUARDED_RUNTIME_UI = "guarded_runtime_ui"
+    READ_ONLY_CHAT = "read_only_chat"
+
+
 _CONFIG_DOMAIN_PATTERN = re.compile(
     r"\b(geometry|material|materials|source|particle|energy|physics|output|detector|scoring|target|beam|gamma|proton|neutron|electron|box|cylinder|sphere|config|configuration|setup)\b",
     flags=re.IGNORECASE,
@@ -77,6 +85,19 @@ def _safety_for_intent(intent: RuntimeIntent) -> ActionSafetyClass:
     return ActionSafetyClass.READ_ONLY
 
 
+def action_for_runtime_intent(intent: RuntimeIntent | str) -> RuntimeIntentAction:
+    intent_key = RuntimeIntent(intent)
+    if intent_key == RuntimeIntent.READ_CONFIG:
+        return RuntimeIntentAction.CONFIG_SUMMARY
+    if intent_key == RuntimeIntent.READ_SUMMARY:
+        return RuntimeIntentAction.RUNTIME_SUMMARY
+    if intent_key == RuntimeIntent.CONFIG_MUTATION:
+        return RuntimeIntentAction.STEP_ASYNC
+    if intent_key in {RuntimeIntent.RUN_REQUESTED, RuntimeIntent.VIEWER_REQUESTED}:
+        return RuntimeIntentAction.GUARDED_RUNTIME_UI
+    return RuntimeIntentAction.READ_ONLY_CHAT
+
+
 def _classify_rule(text: str, lang: str) -> RuntimeIntent:
     raw = str(text or "").strip().lower()
     if not raw:
@@ -93,8 +114,12 @@ def _classify_rule(text: str, lang: str) -> RuntimeIntent:
             return RuntimeIntent.READ_CONFIG
         if _ZH_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CONFIG_MUTATION_PATTERN.search(raw):
             return RuntimeIntent.CONFIG_MUTATION
-        return RuntimeIntent.NORMAL_CHAT
+        # Chinese UI can still receive English or mixed-language technical commands.
+        return _classify_english_rule(raw)
+    return _classify_english_rule(raw)
 
+
+def _classify_english_rule(raw: str) -> RuntimeIntent:
     if _VIEWER_REQUEST_PATTERN.search(raw):
         return RuntimeIntent.VIEWER_REQUESTED
     if _RUN_REQUEST_PATTERN.search(raw):

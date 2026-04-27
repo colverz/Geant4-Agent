@@ -1,0 +1,86 @@
+[
+  {
+    "id": "zh_config_then_read_then_run_guard",
+    "lang": "zh",
+    "turns": [
+      {
+        "text": "把源能量改成 1 MeV",
+        "expected_intent": "config_mutation",
+        "expected_safety": "config_mutation",
+        "expected_action": "step_async"
+      },
+      {
+        "text": "当前配置还缺什么？",
+        "expected_intent": "read_config",
+        "expected_safety": "read_only",
+        "expected_action": "config_summary"
+      },
+      {
+        "text": "刚才模拟结果怎么样？",
+        "expected_intent": "read_summary",
+        "expected_safety": "read_only",
+        "expected_action": "runtime_summary"
+      },
+      {
+        "text": "运行 10 个事件",
+        "expected_intent": "run_requested",
+        "expected_safety": "expensive_runtime",
+        "expected_action": "guarded_runtime_ui"
+      }
+    ]
+  },
+  {
+    "id": "en_config_question_mutation_viewer_guard",
+    "lang": "en",
+    "turns": [
+      {
+        "text": "What is the current configured source?",
+        "expected_intent": "read_config",
+        "expected_safety": "read_only",
+        "expected_action": "config_summary"
+      },
+      {
+        "text": "Change source energy to 1 MeV",
+        "expected_intent": "config_mutation",
+        "expected_safety": "config_mutation",
+        "expected_action": "step_async"
+      },
+      {
+        "text": "open the viewer",
+        "expected_intent": "viewer_requested",
+        "expected_safety": "expensive_runtime",
+        "expected_action": "guarded_runtime_ui"
+      },
+      {
+        "text": "hello there",
+        "expected_intent": "normal_chat",
+        "expected_safety": "read_only",
+        "expected_action": "read_only_chat"
+      }
+    ]
+  },
+  {
+    "id": "mixed_language_guard_flow",
+    "lang": "zh",
+    "turns": [
+      {
+        "text": "把 particle 改成 proton",
+        "expected_intent": "config_mutation",
+        "expected_safety": "config_mutation",
+        "expected_action": "step_async"
+      },
+      {
+        "text": "run 10 events now",
+        "expected_intent": "run_requested",
+        "expected_safety": "expensive_runtime",
+        "expected_action": "guarded_runtime_ui"
+      },
+      {
+        "text": "What was the latest simulation result?",
+        "expected_intent": "read_summary",
+        "expected_safety": "read_only",
+        "expected_action": "runtime_summary"
+      }
+    ]
+  }
+]

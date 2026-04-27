@@ -7,11 +7,12 @@ import unittest
 from core.orchestrator.path_ops import set_path
 from core.orchestrator.session_manager import get_or_create_session, reset_session
 from core.runtime.types import ActionSafetyClass
-from planner.runtime_intent import RuntimeIntent, classify_user_runtime_intent
+from planner.runtime_intent import RuntimeIntent, action_for_runtime_intent, classify_user_runtime_intent
 from ui.web.request_router import handle_post_request
 
 
 CASEBANK_PATH = Path("docs/eval/workflow_guard_casebank.json")
+MULTITURN_CASEBANK_PATH = Path("docs/eval/multiturn_guard_casebank.json")
 
 
 class WorkflowGuardContractTest(unittest.TestCase):
@@ -64,3 +65,16 @@ class WorkflowGuardContractTest(unittest.TestCase):
 
         self.assertEqual(status, 404)
         self.assertEqual(body["error"], "no_session_available")
+
+    def test_multiturn_guard_casebank_maps_to_allowed_actions(self) -> None:
+        flows = json.loads(MULTITURN_CASEBANK_PATH.read_text(encoding="utf-8"))
+
+        for flow in flows:
+            lang = str(flow.get("lang", "en"))
+            for index, turn in enumerate(flow.get("turns", [])):
+                with self.subTest(flow=flow["id"], turn=index):
+                    result = classify_user_runtime_intent(turn["text"], turn.get("lang", lang))
+
+                    self.assertEqual(result.intent, RuntimeIntent(turn["expected_intent"]))
+                    self.assertEqual(result.action_safety_class, ActionSafetyClass(turn["expected_safety"]))
+                    self.assertEqual(action_for_runtime_intent(result.intent).value, turn["expected_action"])

@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from core.runtime.types import ActionSafetyClass
-from planner.runtime_intent import RuntimeIntent, classify_user_runtime_intent
+from planner.runtime_intent import RuntimeIntent, RuntimeIntentAction, action_for_runtime_intent, classify_user_runtime_intent
 
 
 class RuntimeIntentTest(unittest.TestCase):
@@ -58,6 +58,14 @@ class RuntimeIntentTest(unittest.TestCase):
 
         self.assertEqual(result.intent, RuntimeIntent.NORMAL_CHAT)
         self.assertEqual(result.action_safety_class, ActionSafetyClass.READ_ONLY)
+
+    def test_intent_to_allowed_action_contract(self) -> None:
+        self.assertEqual(action_for_runtime_intent(RuntimeIntent.READ_CONFIG), RuntimeIntentAction.CONFIG_SUMMARY)
+        self.assertEqual(action_for_runtime_intent(RuntimeIntent.READ_SUMMARY), RuntimeIntentAction.RUNTIME_SUMMARY)
+        self.assertEqual(action_for_runtime_intent(RuntimeIntent.CONFIG_MUTATION), RuntimeIntentAction.STEP_ASYNC)
+        self.assertEqual(action_for_runtime_intent(RuntimeIntent.RUN_REQUESTED), RuntimeIntentAction.GUARDED_RUNTIME_UI)
+        self.assertEqual(action_for_runtime_intent(RuntimeIntent.VIEWER_REQUESTED), RuntimeIntentAction.GUARDED_RUNTIME_UI)
+        self.assertEqual(action_for_runtime_intent(RuntimeIntent.NORMAL_CHAT), RuntimeIntentAction.READ_ONLY_CHAT)
 
 
 if __name__ == "__main__":

@@ -5,12 +5,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from planner.runtime_intent import classify_user_runtime_intent
+from planner.runtime_intent import action_for_runtime_intent, classify_user_runtime_intent
 from planner.runtime_result import build_runtime_result_question_answer
 
 
 DEFAULT_WORKFLOW_CASEBANK = Path("docs/eval/workflow_guard_casebank.json")
 DEFAULT_RUNTIME_QA_CASEBANK = Path("docs/eval/runtime_result_qa_casebank.json")
+DEFAULT_MULTITURN_CASEBANK = Path("docs/eval/multiturn_guard_casebank.json")
 
 
 def _load_json(path: Path) -> Any:
@@ -86,16 +87,43 @@ def evaluate_runtime_result_qa(path: Path, report: dict[str, Any] | None = None)
     return {"name": "runtime_result_qa", "total": len(cases), "failed": len(failures), "failures": failures}
 
 
+def evaluate_multiturn_guard(path: Path) -> dict[str, Any]:
+    flows = _load_json(path)
+    failures: list[dict[str, Any]] = []
+    total = 0
+    for flow in flows:
+        lang = str(flow.get("lang", "en"))
+        for index, turn in enumerate(flow.get("turns", [])):
+            total += 1
+            result = classify_user_runtime_intent(turn["text"], turn.get("lang", lang))
+            action = action_for_runtime_intent(result.intent).value
+            errors: dict[str, Any] = {}
+            if result.intent.value != turn["expected_intent"]:
+                errors["intent"] = {"expected": turn["expected_intent"], "actual": result.intent.value}
+            if result.action_safety_class.value != turn["expected_safety"]:
+                errors["safety"] = {
+                    "expected": turn["expected_safety"],
+                    "actual": result.action_safety_class.value,
+                }
+            if action != turn["expected_action"]:
+                errors["action"] = {"expected": turn["expected_action"], "actual": action}
+            if errors:
+                failures.append({"id": flow["id"], "turn_index": index, "text": turn["text"], "errors": errors})
+    return {"name": "multiturn_guard", "total": total, "failed": len(failures), "failures": failures}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate lightweight user-safety and grounded-result casebanks.")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW_CASEBANK)
     parser.add_argument("--runtime-qa", type=Path, default=DEFAULT_RUNTIME_QA_CASEBANK)
+    parser.add_argument("--multiturn", type=Path, default=DEFAULT_MULTITURN_CASEBANK)
     parser.add_argument("--json", action="store_true", help="Emit JSON only.")
     args = parser.parse_args()
 
     reports = [
         evaluate_workflow_guard(args.workflow),
         evaluate_runtime_result_qa(args.runtime_qa),
+        evaluate_multiturn_guard(args.multiturn),
     ]
     failed = sum(item["failed"] for item in reports)
     output = {"ok": failed == 0, "failed": failed, "reports": reports}
