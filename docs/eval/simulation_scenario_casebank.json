@@ -2,6 +2,7 @@
   {
     "id": "gamma_copper_target_with_detector",
     "description": "1 MeV gamma point source aimed at a copper box target with a silicon detector behind it.",
+    "prompt": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json.",
     "events": 4,
     "config": {
       "geometry": {
@@ -48,11 +49,26 @@
       "detector_enabled": true,
       "scoring": ["target_edep", "detector_crossings", "plane_crossings"],
       "result_summary_sections": ["run", "configuration", "source", "scoring"]
+    },
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_Cu",
+        "source_type": "point",
+        "particle": "gamma",
+        "energy": 1.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -20.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0}
+      },
+      "known_gaps": ["detector and scoring are validated through typed config, not natural-language parser contract yet"]
     }
   },
   {
     "id": "proton_water_cylinder_target",
     "description": "150 MeV proton beam through a water cylinder target with target deposited-energy scoring.",
+    "prompt": "water cylinder radius 40 mm half length 80 mm; proton beam 150 MeV from (0,0,-120) mm along +z; physics FTFP_BERT; output json.",
     "events": 8,
     "config": {
       "geometry": {
@@ -94,11 +110,28 @@
       "detector_enabled": false,
       "scoring": ["target_edep"],
       "result_summary_sections": ["run", "configuration", "source", "scoring"]
+    },
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_tubs",
+        "material": "G4_WATER",
+        "source_type": "beam",
+        "particle": "proton",
+        "energy": 150.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -120.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "radius": 40.0,
+        "half_length": 80.0
+      },
+      "known_gaps": ["beam spot, divergence, and scoring are validated through typed config, not natural-language parser contract yet"]
     }
   },
   {
     "id": "collimated_gamma_detector_plane",
     "description": "Collimated gamma beam crossing a thin silicon detector plane.",
+    "prompt": "5 mm x 5 mm x 5 mm air box; gamma beam 0.662 MeV from (0,0,-50) mm along +z; physics FTFP_BERT; output json.",
     "events": 6,
     "config": {
       "geometry": {
@@ -147,6 +180,23 @@
       "detector_enabled": true,
       "scoring": ["target_edep", "detector_crossings", "plane_crossings"],
       "result_summary_sections": ["run", "configuration", "source", "scoring"]
+    },
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_AIR",
+        "source_type": "beam",
+        "particle": "gamma",
+        "energy": 0.662,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -50.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 5.0,
+        "size_y": 5.0,
+        "size_z": 5.0
+      },
+      "known_gaps": ["detector plane and scorer intent are validated through typed config, not natural-language parser contract yet"]
     }
   }
 ]
