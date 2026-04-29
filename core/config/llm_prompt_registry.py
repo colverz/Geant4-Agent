@@ -84,6 +84,7 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         "- Never output placeholder strings like 'null', 'none', or 'unknown'; use JSON null when the value is absent.\n"
         "Domain rules:\n"
         "- If the user gives dimensions like 1 m x 1 m x 1 m, convert them to size_triplet_mm.\n"
+        "- If the user gives dimensions like 10 by 20 by 30 millimeters, convert them to size_triplet_mm [10,20,30]. Do not leave 'by' phrasing in normalized_text.\n"
         "- For cylinders, use radius_mm and half_length_mm (Geant4 half-length semantics), not full height.\n"
         "- For orb, use radius_mm only.\n"
         "- For cons, use radius1_mm, radius2_mm, half_length_mm.\n"
@@ -102,10 +103,27 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         "- If the user asks for a best-fit physics list without naming one, set physics.recommendation_intent instead of inventing a list.\n"
         "- Prefer official Geant4 analysis file types (csv, hdf5, root, xml); use json only for the project-local export mode.\n"
         "- Internally canonicalize any input language into English clauses.\n"
-        "- Keep normalized_text concise and in English canonical clauses.\n"
+        "- Keep normalized_text concise as semicolon-separated English key:value clauses, never narrative 'set ... to ...' phrases.\n"
+        "- For every non-null slot, include the matching slot path in target_slots.\n"
+        "- normalized_text must use source.kind/source.particle/source.energy_mev/source.position_mm/source.direction_vec for sources.\n"
+        "- For point source or \u70b9\u6e90, set source.kind=point. For beam or \u675f\u6d41, set source.kind=beam.\n"
+        "- For gamma or \u4f3d\u9a6c, set source.particle=gamma. For proton or \u8d28\u5b50, set source.particle=proton.\n"
+        "- Normalize common materials when explicit: copper/\u94dc -> G4_Cu; water/\u6c34 -> G4_WATER; air/\u7a7a\u6c14 -> G4_AIR; silicon/\u7845 -> G4_Si; lead/\u94c5 -> G4_Pb.\n"
         "- Use candidates only for tightly bounded shorthand or relative phrases; never invent final values beyond the candidate schema.\n"
         "- If shorthand is ambiguous, leave slots null and either omit candidates or set only the uncertain kind_candidate.\n"
         "Examples:\n"
+        '- User: "Set up a copper target box that is 10 by 20 by 30 millimeters. Put a 1 MeV gamma point source at z equals minus 20 mm, shooting in the positive z direction."\n'
+        '  JSON normalized_text = "geometry.kind:box; geometry.size_triplet_mm:[10,20,30]; materials.primary:G4_Cu; source.kind:point; source.particle:gamma; source.energy_mev:1; source.position_mm:[0,0,-20]; source.direction_vec:[0,0,1]"\n'
+        '  JSON target_slots includes ["geometry.kind","geometry.size_triplet_mm","materials.primary","source.kind","source.particle","source.energy_mev","source.position_mm","source.direction_vec"]\n'
+        '- User: "\\u8bf7\\u914d\\u7f6e\\u4e00\\u4e2a10 mm x 20 mm x 30 mm\\u7684\\u94dc\\u76d2\\u9776\\uff0c1 MeV\\u4f3d\\u9a6c\\u70b9\\u6e90\\u653e\\u5728(0,0,-20) mm\\uff0c\\u6cbf+z\\u65b9\\u5411\\u5165\\u5c04\\u3002"\n'
+        '  JSON slots.geometry = {"kind":"box","size_triplet_mm":[10,20,30]}\n'
+        '  JSON slots.materials = {"primary":"G4_Cu"}\n'
+        '  JSON slots.source = {"kind":"point","particle":"gamma","energy_mev":1,"position_mm":[0,0,-20],"direction_vec":[0,0,1]}\n'
+        '- User: "\\u6211\\u60f3\\u6a21\\u62df150 MeV\\u8d28\\u5b50\\u675f\\uff0c\\u4ece(0,0,-120) mm\\u6cbf+z\\u65b9\\u5411\\u6253\\u8fdb\\u6c34\\u5706\\u67f1\\u9776\\uff0c\\u534a\\u5f8440 mm\\uff0c\\u534a\\u957f80 mm\\u3002"\n'
+        '  JSON normalized_text = "geometry.kind:cylinder; geometry.radius_mm:40; geometry.half_length_mm:80; materials.primary:G4_WATER; source.kind:beam; source.particle:proton; source.energy_mev:150; source.position_mm:[0,0,-120]; source.direction_vec:[0,0,1]"\n'
+        '  JSON slots.geometry = {"kind":"cylinder","radius_mm":40,"half_length_mm":80}\n'
+        '  JSON slots.materials = {"primary":"G4_WATER"}\n'
+        '  JSON slots.source = {"kind":"beam","particle":"proton","energy_mev":150,"position_mm":[0,0,-120],"direction_vec":[0,0,1]}\n'
         '- User: "Output json."\n'
         '  JSON intent = "SET"; JSON slots.output = {"format":"json"}; all other slot groups stay null\n'
         '- User: "change material to G4_Al"\n'

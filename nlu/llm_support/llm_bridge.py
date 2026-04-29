@@ -186,6 +186,20 @@ def build_normalization_prompt(user_text: str, context_summary: str = "") -> str
             "Session context (persistent facts from previous turns; keep unless user explicitly changes them):\n"
             f"{context_summary}\n"
         )
+    examples = (
+        "Examples of valid normalized_text:\n"
+        "- User: Set up a copper target box that is 10 by 20 by 30 millimeters.\n"
+        "  normalized_text: geometry_intent:single_box; structure:single_box; module_x:10 mm; module_y:20 mm; module_z:30 mm; material:G4_Cu\n"
+        "- User: gamma point source 1 MeV at (0,0,-20) mm along +z.\n"
+        "  normalized_text: source_type:point; particle:gamma; energy:1 MeV; position:(0,0,-20) mm; direction:+z\n"
+        "- User: water cylinder radius 40 mm half length 80 mm; proton beam 150 MeV from (0,0,-120) mm along +z.\n"
+        "  normalized_text: geometry_intent:single_tubs; structure:single_tubs; child_rmax:40 mm; child_hz:80 mm; material:G4_WATER; source_type:beam; particle:proton; energy:150 MeV; position:(0,0,-120) mm; direction:+z\n"
+        "- User: \u8bf7\u914d\u7f6e\u4e00\u4e2a10 mm x 20 mm x 30 mm\u7684\u94dc\u76d2\u9776\uff0c1 MeV\u4f3d\u9a6c\u70b9\u6e90\u653e\u5728(0,0,-20) mm\uff0c\u6cbf+z\u65b9\u5411\u5165\u5c04\u3002\n"
+        "  normalized_text: geometry_intent:single_box; structure:single_box; module_x:10 mm; module_y:20 mm; module_z:30 mm; material:G4_Cu; source_type:point; particle:gamma; energy:1 MeV; position:(0,0,-20) mm; direction:+z\n"
+        "Invalid normalized_text examples:\n"
+        "- set geometry to copper box with size 10 by 20 by 30 millimeters\n"
+        "- set source energy to 1 MeV; set source position to (0,0,-20) mm\n"
+    )
 
     return (
         "Rewrite the user request into controlled English for downstream BERT parsing.\n"
@@ -196,14 +210,20 @@ def build_normalization_prompt(user_text: str, context_summary: str = "") -> str
         "Normalization rules:\n"
         "- Preserve all numeric values and units exactly (do not convert or round).\n"
         "- normalized_text must be semicolon-separated key:value clauses (no narrative sentence).\n"
+        "- normalized_text MUST NOT contain phrases like 'set ... to ...'. Use only key:value clauses.\n"
         f"- geometry_intent must be one of: {intents}.\n"
         "- If user text does not explicitly mention geometry shape/layout, geometry_intent must be unresolved.\n"
         "- Use only these canonical keys in normalized_text (plus geometry_intent):\n"
         f"  {', '.join(canonical_keys)}\n"
         "- Do NOT output alias keys such as:\n"
         f"  {', '.join(banned_aliases)}\n"
-        "- For 3D size, always emit module_x/module_y/module_z instead of any packed form.\n"
+        "- For 3D size, always emit module_x/module_y/module_z instead of any packed form. Convert '10 by 20 by 30 millimeters' into module_x:10 mm; module_y:20 mm; module_z:30 mm.\n"
+        "- For a box/cuboid target, emit geometry_intent:single_box and structure:single_box.\n"
+        "- For a cylinder/tube target, emit geometry_intent:single_tubs and structure:single_tubs.\n"
         "- For source vectors, always emit position and direction.\n"
+        "- For point source / \u70b9\u6e90, emit source_type:point. For beam / \u675f\u6d41, emit source_type:beam.\n"
+        "- For gamma / \u4f3d\u9a6c, emit particle:gamma. For proton / \u8d28\u5b50, emit particle:proton.\n"
+        "- Normalize common materials to Geant4 names when explicit: copper/\u94dc -> G4_Cu; water/\u6c34 -> G4_WATER; air/\u7a7a\u6c14 -> G4_AIR; silicon/\u7845 -> G4_Si; lead/\u94c5 -> G4_Pb.\n"
         "- If geometry is ambiguous, use:\n"
         "  geometry_intent: unresolved; structure: unknown; ...\n"
         "- If current turn omits fields but context already contains stable values, keep those values.\n"
@@ -211,6 +231,7 @@ def build_normalization_prompt(user_text: str, context_summary: str = "") -> str
         "- Keep text concise and field-like (semicolon-separated clauses), no narrative sentences.\n"
         "- Include only information present in user text; do not hallucinate values.\n"
         "- No explanation or markdown.\n"
+        + examples
         + ctx_block
         + f"User text: {user_text}\n"
         + "JSON:"

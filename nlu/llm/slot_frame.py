@@ -854,6 +854,7 @@ def _source_direction_from_phrase(text: str) -> list[float] | None:
         r"(?:toward|towards)\s*(\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\))",
         r"(?:toward|towards)\s*([+-][xyz])",
         r"along\s*(?:the\s*)?([+-][xyz])(?:\s+direction)?",
+        r"\u6cbf\s*([+-][xyz])\s*(?:\u65b9\u5411)?",
     ]
     for pattern in patterns:
         m = re.search(pattern, text, flags=re.IGNORECASE)
@@ -1280,7 +1281,7 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
         "torus_major_radius_mm": r"(?:torus[_\s-]*)?(?:major radius|rtor)\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
         "torus_minor_radius_mm": r"(?:torus[_\s-]*)?(?:tube radius|minor radius|rmax)\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
         "ellipsoid_ax_mm": r"(?:ellipsoid[_\s-]*)?ax\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
-        "ellipsoid_by_mm": r"(?:ellipsoid[_\s-]*)?by\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
+        "ellipsoid_by_mm": r"ellipsoid[_\s-]*by\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
         "ellipsoid_cz_mm": r"(?:ellipsoid[_\s-]*)?cz\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
         "elltube_ax_mm": r"(?:elltube|elliptical tube|ellipse tube|elliptic tube)[_\s-]*ax\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
         "elltube_by_mm": r"(?:elltube|elliptical tube|ellipse tube|elliptic tube)[_\s-]*by\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
@@ -1293,6 +1294,11 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
         if not m:
             continue
         setattr(frame.geometry, field_name, _to_mm(float(m.group(1)), m.group(2)))
+
+    if frame.geometry.kind == "ellipsoid" and frame.geometry.ellipsoid_by_mm is None:
+        m = re.search(r"\bby\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)", low)
+        if m:
+            frame.geometry.ellipsoid_by_mm = _to_mm(float(m.group(1)), m.group(2))
 
     for field_name, pattern in {
         "para_alpha_deg": r"para[_\s-]*alpha\s*[:=]?\s*([-+]?\d*\.?\d+)",
@@ -1372,6 +1378,9 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
 
 def _user_text_supports_source_direction(user_text: str) -> bool:
     text = user_text or ""
+    low = text.lower()
+    if "source.direction_vec" in low or "source.direction" in low:
+        return True
     if _source_direction_from_phrase(text) is not None:
         return True
     if _source_relative_to_center_phrase(text) is not None:
@@ -1390,7 +1399,7 @@ def _strip_unsupported_source_direction(frame: SlotFrame, user_text: str) -> lis
         return cleared
     if frame.source.direction_vec is None:
         return cleared
-    if _user_text_supports_source_direction(user_text):
+    if _user_text_supports_source_direction(user_text) or _user_text_supports_source_direction(frame.normalized_text):
         return cleared
     frame.source.direction_vec = None
     cleared.append("source.direction_vec")

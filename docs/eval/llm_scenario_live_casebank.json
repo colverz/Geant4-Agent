@@ -1,0 +1,110 @@
+[
+  {
+    "id": "en_conversational_copper_gamma_point",
+    "description": "Conversational English box target with a negative-z point source position.",
+    "prompt": "Set up a copper target box that is 10 by 20 by 30 millimeters. Put a 1 MeV gamma point source at z equals minus 20 mm, shooting in the positive z direction. Use FTFP_BERT and JSON output.",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_Cu",
+        "source_type": "point",
+        "particle": "gamma",
+        "energy": 1.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -20.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 10.0,
+        "size_y": 20.0,
+        "size_z": 30.0
+      },
+      "known_gaps": ["detector/scoring not asserted in this live parsing case"]
+    }
+  },
+  {
+    "id": "zh_copper_gamma_point",
+    "description": "Chinese copper box target with gamma point source.",
+    "prompt": "请配置一个10 mm x 20 mm x 30 mm的铜盒靶，1 MeV伽马点源放在(0,0,-20) mm，沿+z方向入射，物理过程用FTFP_BERT，输出json。",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_Cu",
+        "source_type": "point",
+        "particle": "gamma",
+        "energy": 1.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -20.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 10.0,
+        "size_y": 20.0,
+        "size_z": 30.0
+      },
+      "known_gaps": []
+    }
+  },
+  {
+    "id": "zh_proton_water_cylinder",
+    "description": "Chinese proton beam through a water cylinder target.",
+    "prompt": "请模拟150 MeV质子束，从(0,0,-120) mm沿+z方向打进水圆柱靶，半径40 mm，半长80 mm，物理列表FTFP_BERT，输出json。",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_tubs",
+        "material": "G4_WATER",
+        "source_type": "beam",
+        "particle": "proton",
+        "energy": 150.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -120.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "radius": 40.0,
+        "half_length": 80.0
+      },
+      "known_gaps": ["beam spot and divergence not asserted in this live parsing case"]
+    }
+  },
+  {
+    "id": "mixed_gamma_air_box",
+    "description": "Mixed Chinese/English air box with gamma beam.",
+    "prompt": "做一个5mm x 5mm x 5mm air box，然后 gamma beam 0.662 MeV from (0,0,-50) mm along +z，physics FTFP_BERT，json输出。",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_AIR",
+        "source_type": "beam",
+        "particle": "gamma",
+        "energy": 0.662,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -50.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 5.0,
+        "size_y": 5.0,
+        "size_z": 5.0
+      },
+      "known_gaps": []
+    }
+  },
+  {
+    "id": "en_order_swapped_proton_water",
+    "description": "English order-swapped source-first proton beam setup.",
+    "prompt": "Use FTFP_BERT. Output JSON. The source is a proton beam along +z from (0,0,-120) mm with 150 MeV energy. The target is a water cylinder, radius 40 mm and half length 80 mm.",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_tubs",
+        "material": "G4_WATER",
+        "source_type": "beam",
+        "particle": "proton",
+        "energy": 150.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -120.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "radius": 40.0,
+        "half_length": 80.0
+      },
+      "known_gaps": ["beam spot and divergence not asserted in this live parsing case"]
+    }
+  }
+]

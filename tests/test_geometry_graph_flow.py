@@ -280,6 +280,50 @@ class GeometryGraphFlowTest(unittest.TestCase):
         )
         self.assertEqual(result.structure, "boolean")
 
+    def test_graph_search_does_not_treat_negative_coordinate_minus_as_boolean(self) -> None:
+        result = search_candidate_graphs(
+            "geometry.kind:box; geometry.size_triplet_mm:[10,20,30]; source.position_mm:[0,0,-20]; source.direction_vec:[0,0,1]",
+            {"module_x": 10.0, "module_y": 20.0, "module_z": 30.0},
+            min_confidence=0.6,
+            seed=7,
+            top_k=3,
+            apply_autofix=True,
+        )
+        self.assertNotEqual(result.structure, "boolean")
+
+    def test_runtime_semantic_does_not_fallback_to_boolean_for_minus_coordinate(self) -> None:
+        candidate, debug = extract_candidates_from_normalized_text(
+            "geometry.kind:box; geometry.size_triplet_mm:[10,20,30]; materials.primary:G4_Cu; source.position_mm:[0,0,-20]; source.direction_vec:[0,0,1]",
+            raw_text="Put a 1 MeV gamma point source at z equals minus 20 mm near a 10 by 20 by 30 millimeters copper target box.",
+            turn_id=1,
+            min_confidence=0.6,
+            context_summary="",
+            config_path="dummy.json",
+            apply_autofix=True,
+        )
+        mapped = {update.path: update.value for update in candidate.updates}
+
+        self.assertNotEqual(mapped.get("geometry.structure"), "boolean")
+        self.assertNotEqual(debug.get("graph_choice", {}).get("structure"), "boolean")
+
+    def test_graph_search_still_treats_box_minus_box_as_boolean(self) -> None:
+        result = search_candidate_graphs(
+            "10 by 20 by 30 mm box minus 5 by 6 by 7 mm box",
+            {
+                "bool_a_x": 10.0,
+                "bool_a_y": 20.0,
+                "bool_a_z": 30.0,
+                "bool_b_x": 5.0,
+                "bool_b_y": 6.0,
+                "bool_b_z": 7.0,
+            },
+            min_confidence=0.6,
+            seed=7,
+            top_k=3,
+            apply_autofix=True,
+        )
+        self.assertEqual(result.structure, "boolean")
+
     def test_graph_search_prefers_nest_when_parent_and_child_signatures_exist(self) -> None:
         result = search_candidate_graphs(
             "outer box 80 mm x 80 mm x 80 mm, inner lead cylinder radius 15 mm, half length 25 mm, clearance 1 mm",

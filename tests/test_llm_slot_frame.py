@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from core.config.llm_prompt_registry import STRICT_SLOT_PROMPT_PROFILE
+from core.config.llm_prompt_registry import STRICT_SLOT_PROMPT_PROFILE, build_strict_slot_prompt
 from core.slots.slot_mapper import slot_frame_to_candidates
 from nlu.llm.slot_frame import build_llm_slot_frame, parse_slot_payload
 
@@ -49,6 +49,82 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertEqual(frame.source.position_mm, [0.0, 0.0, -100.0])
         self.assertEqual(frame.source.direction_vec, [0.0, 0.0, 1.0])
         self.assertEqual(frame.output.format, "root")
+
+    def test_backfill_does_not_treat_dimension_by_as_ellipsoid_by(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 1.0,
+            "normalized_text": "set geometry to copper box with size 10 by 20 by 30 millimeters",
+            "target_slots": ["geometry.kind", "geometry.size_triplet_mm"],
+            "slots": {
+                "geometry": {"kind": "box", "size_triplet_mm": [10, 20, 30]},
+            },
+        }
+        frame, meta = parse_slot_payload(payload)
+
+        self.assertIsNotNone(frame)
+        assert frame is not None
+        self.assertEqual(meta.get("schema_errors"), [])
+        self.assertEqual(frame.geometry.kind, "box")
+        self.assertEqual(frame.geometry.size_triplet_mm, [10.0, 20.0, 30.0])
+        self.assertIsNone(frame.geometry.ellipsoid_by_mm)
+
+    def test_chinese_along_axis_direction_is_supported_by_source_guard(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 1.0,
+            "normalized_text": (
+                "geometry.kind:cylinder; geometry.radius_mm:40; geometry.half_length_mm:80; "
+                "materials.primary:G4_WATER; source.kind:beam; source.particle:proton; "
+                "source.energy_mev:150; source.position_mm:[0,0,-120]; source.direction_vec:[0,0,1]"
+            ),
+            "target_slots": [
+                "geometry.kind",
+                "geometry.radius_mm",
+                "geometry.half_length_mm",
+                "materials.primary",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+                "source.direction_vec",
+            ],
+            "slots": {
+                "geometry": {"kind": "cylinder", "radius_mm": 40, "half_length_mm": 80},
+                "materials": {"primary": "G4_WATER"},
+                "source": {
+                    "kind": "beam",
+                    "particle": "proton",
+                    "energy_mev": 150,
+                    "position_mm": [0, 0, -120],
+                    "direction_vec": [0, 0, 1],
+                },
+            },
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(payload)}):
+            result = build_llm_slot_frame(
+                "我想模拟150 MeV质子束，从(0,0,-120) mm沿+z方向打进水圆柱靶，半径40 mm，半长80 mm。",
+                context_summary="",
+                config_path="",
+            )
+
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.source.kind, "beam")
+        self.assertEqual(result.frame.source.particle, "proton")
+        self.assertEqual(result.frame.source.energy_mev, 150.0)
+        self.assertEqual(result.frame.source.position_mm, [0.0, 0.0, -120.0])
+        self.assertEqual(result.frame.source.direction_vec, [0.0, 0.0, 1.0])
+        self.assertEqual(result.stage_trace.get("unsupported_llm_fields"), [])
+
+    def test_strict_slot_prompt_requires_canonical_normalized_text(self) -> None:
+        prompt = build_strict_slot_prompt("10 by 20 by 30 millimeters copper box", "")
+
+        self.assertIn("Do not leave 'by' phrasing in normalized_text", prompt)
+        self.assertIn("source.kind=point", prompt)
+        self.assertIn("source.kind:beam", prompt)
+        self.assertIn("materials.primary:G4_WATER", prompt)
+        self.assertIn("JSON target_slots includes", prompt)
 
     def test_build_llm_slot_frame_prefers_explicit_material_from_user_text(self) -> None:
         payload = {

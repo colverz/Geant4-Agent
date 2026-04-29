@@ -100,6 +100,25 @@ AMBIGUITY_CUES = ("ambiguous", "undecided", "unresolved", "not fixed")
 GRAPH_SUMMARIES = {"ring", "grid", "nest", "stack", "shell", "boolean"}
 
 
+def _minus_cue_is_boolean_operator(text: str) -> bool:
+    low = text.lower()
+    return bool(
+        re.search(r"\b(?:box|cube|cuboid|cylinder|sphere|solid|target)\b.{0,80}\bminus\b.{0,80}\b(?:box|cube|cuboid|cylinder|sphere|solid|target)\b", low)
+    )
+
+
+def _contains_keyword_cue(text: str, keyword: str) -> bool:
+    t = text.lower()
+    needle = keyword.lower()
+    if needle == "minus":
+        return _minus_cue_is_boolean_operator(t)
+    if " " in needle:
+        return needle in t
+    if any(ord(ch) > 127 for ch in needle):
+        return needle in t
+    return bool(re.search(rf"(?<![a-z0-9_]){re.escape(needle)}(?![a-z0-9_])", t))
+
+
 @dataclass(frozen=True)
 class CandidateGraph:
     structure: str
@@ -133,19 +152,9 @@ def _softmax(values: Dict[str, float]) -> Dict[str, float]:
 
 
 def _cue_score(text: str, structure: str) -> float:
-    t = text.lower()
     score = 0.0
     for kw in KEYWORD_CUES.get(structure, ()):
-        needle = kw.lower()
-        if " " in needle:
-            if needle in t:
-                score += 0.32
-            continue
-        if any(ord(ch) > 127 for ch in needle):
-            if needle in t:
-                score += 0.32
-            continue
-        if re.search(rf"(?<![a-z0-9_]){re.escape(needle)}(?![a-z0-9_])", t):
+        if _contains_keyword_cue(text, kw):
             score += 0.32
     return score
 
@@ -205,7 +214,7 @@ def _graph_lock_hint(text: str, params: Dict[str, float]) -> str:
     has_grid = has_module_triplet and all(key in params for key in ("nx", "ny", "pitch_x", "pitch_y"))
     has_ring = has_module_triplet and "radius" in params and ("n" in params or any(token in low for token in ("ring", "annulus", "circular", "pet", "环", "圆环")))
     has_nest = has_parent_triplet and (has_child_triplet or has_tubs_child)
-    has_boolean = has_bool_triplet and any(token in low for token in KEYWORD_CUES.get("boolean", ()))
+    has_boolean = has_bool_triplet and any(_contains_keyword_cue(low, token) for token in KEYWORD_CUES.get("boolean", ()))
 
     if has_boolean:
         return "boolean"
@@ -284,9 +293,9 @@ def _score_candidate(
     boolean_op_term = 0.0
     if candidate.structure in BOOLEAN_OP_CUES:
         boolean_low = text.lower()
-        matched = any(cue in boolean_low for cue in BOOLEAN_OP_CUES[candidate.structure])
+        matched = any(_contains_keyword_cue(boolean_low, cue) for cue in BOOLEAN_OP_CUES[candidate.structure])
         any_boolean_op = any(
-            cue in boolean_low
+            _contains_keyword_cue(boolean_low, cue)
             for cues in BOOLEAN_OP_CUES.values()
             for cue in cues
         )

@@ -5,6 +5,7 @@ from unittest import mock
 
 from core.orchestrator.types import Intent
 from nlu.llm.normalizer import infer_user_turn_controls, normalize_user_turn
+from nlu.llm_support.llm_bridge import build_normalization_prompt
 
 
 class NormalizerIntentTest(unittest.TestCase):
@@ -43,6 +44,17 @@ class NormalizerIntentTest(unittest.TestCase):
         mocked_chat.assert_not_called()
         self.assertEqual(out["normalized_text"], "set source energy 1 MeV")
         self.assertEqual(out["intent"], Intent.SET)
+
+    def test_normalization_prompt_requires_field_like_geometry_and_source(self) -> None:
+        prompt = build_normalization_prompt(
+            "Set up a copper target box that is 10 by 20 by 30 millimeters.",
+            context_summary="",
+        )
+
+        self.assertIn("module_x:10 mm; module_y:20 mm; module_z:30 mm", prompt)
+        self.assertIn("source_type:point; particle:gamma", prompt)
+        self.assertIn("MUST NOT contain phrases like 'set ... to ...'", prompt)
+        self.assertIn("copper/", prompt)
 
 
 if __name__ == "__main__":

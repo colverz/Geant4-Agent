@@ -213,14 +213,16 @@ def _committed_geometry_params(
 
 def _fallback_dialogue_skeleton(text: str) -> str:
     low = text.lower()
+    minus_is_boolean = bool(
+        re.search(r"\b(?:box|cube|cuboid|cylinder|sphere|solid|target)\b.{0,80}\bminus\b.{0,80}\b(?:box|cube|cuboid|cylinder|sphere|solid|target)\b", low)
+    )
     if any(token in low for token in ("intersection", "intersect", "相交", "交集")):
         return "boolean_intersection_boxes"
-    if any(
+    if minus_is_boolean or any(
         token in low
         for token in (
             "subtraction",
             "subtract",
-            "minus",
             "difference",
             "hole",
             "cut out",
