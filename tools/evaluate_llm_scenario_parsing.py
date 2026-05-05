@@ -15,6 +15,15 @@ def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _slice_cases(cases: Any, max_cases: int | None) -> list[dict[str, Any]]:
+    if not isinstance(cases, list):
+        return []
+    normalized = [case for case in cases if isinstance(case, dict)]
+    if max_cases is None or max_cases <= 0:
+        return normalized
+    return normalized[:max_cases]
+
+
 def _float_equal(left: Any, right: Any, *, tolerance: float = 1e-6) -> bool:
     try:
         return abs(float(left) - float(right)) <= tolerance
@@ -94,26 +103,40 @@ def evaluate_llm_scenario_parsing(
     *,
     live_llm: bool = False,
     llm_config_path: str = "",
+    min_accuracy: float = 1.0,
+    max_cases: int | None = None,
 ) -> dict[str, Any]:
-    cases = _load_json(path)
+    cases = _slice_cases(_load_json(path), max_cases)
     if live_llm and not llm_config_path:
         return {
             "name": "llm_scenario_parsing",
             "mode": "live_llm",
             "total": len(cases),
+            "passed": 0,
             "failed": 1,
+            "accuracy": 0.0,
+            "min_accuracy": min_accuracy,
+            "meets_threshold": False,
             "failures": [{"id": "<setup>", "errors": ["missing_llm_config_path"]}],
             "known_gap_count": 0,
         }
 
     results = [_process_case(case, live_llm=live_llm, llm_config_path=llm_config_path) for case in cases]
     failures = [{"id": result["id"], "errors": result["errors"]} for result in results if result["errors"]]
+    total = len(results)
+    failed = len(failures)
+    passed = total - failed
+    accuracy = (passed / total) if total else 0.0
     known_gap_count = sum(len(result.get("known_gaps") or []) for result in results)
     return {
         "name": "llm_scenario_parsing",
         "mode": "live_llm" if live_llm else "offline_v2",
-        "total": len(results),
-        "failed": len(failures),
+        "total": total,
+        "passed": passed,
+        "failed": failed,
+        "accuracy": accuracy,
+        "min_accuracy": min_accuracy,
+        "meets_threshold": failed == 0 and accuracy >= min_accuracy,
         "failures": failures,
         "known_gap_count": known_gap_count,
         "results": results,
@@ -126,21 +149,39 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--live-llm", action="store_true", help="Opt in to the configured live LLM path.")
     parser.add_argument("--llm-config", default=os.environ.get("GEANT4_LLM_CONFIG", ""))
+    parser.add_argument("--min-accuracy", type=float, default=1.0)
+    parser.add_argument("--max-cases", type=int, default=0, help="Limit evaluated cases for low-cost live smoke runs.")
     args = parser.parse_args()
 
     env_live = os.environ.get("GEANT4_LLM_SCENARIO", "").strip().lower() in {"1", "true", "yes", "on"}
     live_llm = bool(args.live_llm or env_live)
-    report = evaluate_llm_scenario_parsing(args.casebank, live_llm=live_llm, llm_config_path=str(args.llm_config or ""))
-    output = {"ok": report["failed"] == 0, "failed": report["failed"], "reports": [report]}
+    report = evaluate_llm_scenario_parsing(
+        args.casebank,
+        live_llm=live_llm,
+        llm_config_path=str(args.llm_config or ""),
+        min_accuracy=args.min_accuracy,
+        max_cases=args.max_cases or None,
+    )
+    output = {
+        "ok": bool(report["meets_threshold"]),
+        "failed": report["failed"],
+        "accuracy": report["accuracy"],
+        "min_accuracy": report["min_accuracy"],
+        "reports": [report],
+    }
     if args.json:
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
-        print(f"{report['name']}[{report['mode']}]: {report['total'] - report['failed']} / {report['total']} passed")
+        print(
+            f"{report['name']}[{report['mode']}]: "
+            f"{report['passed']} / {report['total']} passed "
+            f"(accuracy={report['accuracy']:.3f}, min={report['min_accuracy']:.3f})"
+        )
         if report.get("known_gap_count"):
             print(f"  known gaps documented: {report['known_gap_count']}")
         for failure in report["failures"]:
             print(f"  FAIL {failure['id']}: {failure}")
-    return 0 if report["failed"] == 0 else 1
+    return 0 if report["meets_threshold"] else 1
 
 
 if __name__ == "__main__":
