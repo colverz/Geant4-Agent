@@ -8,6 +8,8 @@ from core.slots.slot_frame import SlotFrame
 
 
 _SOURCE_KINDS = {"point", "beam", "plane", "isotropic"}
+_SOURCE_SPOT_PROFILES = {"uniform_disk", "gaussian"}
+_SOURCE_DIVERGENCE_PROFILES = {"uniform_cone", "gaussian"}
 @dataclass
 class SlotValidationResult:
     ok: bool
@@ -100,6 +102,23 @@ def validate_slot_frame(frame: SlotFrame) -> SlotValidationResult:
         errors.append("source.position_mm_invalid")
     if frame.source.direction_vec is not None and not _valid_vec3(frame.source.direction_vec):
         errors.append("source.direction_vec_invalid")
+    for attr in ("spot_radius_mm", "spot_sigma_mm", "divergence_half_angle_deg", "divergence_sigma_deg"):
+        value = getattr(frame.source, attr)
+        if value is not None and float(value) < 0:
+            errors.append(f"source.{attr}_negative")
+    if frame.source.spot_profile is not None and frame.source.spot_profile not in _SOURCE_SPOT_PROFILES:
+        errors.append(f"source.spot_profile_invalid:{frame.source.spot_profile}")
+    if frame.source.divergence_profile is not None and frame.source.divergence_profile not in _SOURCE_DIVERGENCE_PROFILES:
+        errors.append(f"source.divergence_profile_invalid:{frame.source.divergence_profile}")
+    if frame.detector.position_mm is not None and not _valid_vec3(frame.detector.position_mm):
+        errors.append("detector.position_mm_invalid")
+    if frame.detector.size_triplet_mm is not None:
+        if not _valid_vec3(frame.detector.size_triplet_mm):
+            errors.append("detector.size_triplet_mm_invalid")
+        elif any(float(x) <= 0 for x in frame.detector.size_triplet_mm):
+            errors.append("detector.size_triplet_mm_nonpositive")
+    if frame.scoring.plane_z_mm is not None and not isinstance(frame.scoring.plane_z_mm, (int, float)):
+        errors.append("scoring.plane_z_mm_invalid")
 
     if frame.output.format is not None and frame.output.format not in accepted_output_formats():
         errors.append(f"output.format_invalid:{frame.output.format}")

@@ -157,6 +157,43 @@ def _clean_scalar(value: Any) -> str | None:
     return text
 
 
+def _coerce_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text or text in _NULL_LITERALS:
+        return None
+    if text in {"true", "yes", "y", "on", "1", "enable", "enabled", "\u662f", "\u542f\u7528", "\u5f00\u542f"}:
+        return True
+    if text in {"false", "no", "n", "off", "0", "disable", "disabled", "\u5426", "\u7981\u7528", "\u5173\u95ed"}:
+        return False
+    return None
+
+
+def _canonical_spot_profile(value: Any) -> str | None:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "uniform": "uniform_disk",
+        "uniform_disk": "uniform_disk",
+        "disk": "uniform_disk",
+        "gaussian": "gaussian",
+    }
+    return aliases.get(text)
+
+
+def _canonical_divergence_profile(value: Any) -> str | None:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "uniform": "uniform_cone",
+        "uniform_cone": "uniform_cone",
+        "cone": "uniform_cone",
+        "gaussian": "gaussian",
+    }
+    return aliases.get(text)
+
+
 def _coerce_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -514,6 +551,38 @@ def _present_slot_paths(frame: SlotFrame) -> set[str]:
         paths.add("source.position_mm")
     if frame.source.direction_vec:
         paths.add("source.direction_vec")
+    if frame.source.spot_radius_mm is not None:
+        paths.add("source.spot_radius_mm")
+    if frame.source.spot_profile:
+        paths.add("source.spot_profile")
+    if frame.source.spot_sigma_mm is not None:
+        paths.add("source.spot_sigma_mm")
+    if frame.source.divergence_half_angle_deg is not None:
+        paths.add("source.divergence_half_angle_deg")
+    if frame.source.divergence_profile:
+        paths.add("source.divergence_profile")
+    if frame.source.divergence_sigma_deg is not None:
+        paths.add("source.divergence_sigma_deg")
+    if frame.detector.enabled is not None:
+        paths.add("detector.enabled")
+    if frame.detector.name:
+        paths.add("detector.name")
+    if frame.detector.material:
+        paths.add("detector.material")
+    if frame.detector.position_mm:
+        paths.add("detector.position_mm")
+    if frame.detector.size_triplet_mm:
+        paths.add("detector.size_triplet_mm")
+    if frame.scoring.target_edep is not None:
+        paths.add("scoring.target_edep")
+    if frame.scoring.detector_crossings is not None:
+        paths.add("scoring.detector_crossings")
+    if frame.scoring.plane_crossings is not None:
+        paths.add("scoring.plane_crossings")
+    if frame.scoring.plane_name:
+        paths.add("scoring.plane_name")
+    if frame.scoring.plane_z_mm is not None:
+        paths.add("scoring.plane_z_mm")
     if frame.physics.explicit_list:
         paths.add("physics.explicit_list")
     if frame.physics.recommendation_intent:
@@ -586,6 +655,24 @@ def _clear_target_slot(frame: SlotFrame, target: str) -> None:
         return
     if target == "source.direction_vec":
         frame.source.direction_vec = None
+        return
+    if target == "source.spot_radius_mm":
+        frame.source.spot_radius_mm = None
+        return
+    if target == "source.spot_profile":
+        frame.source.spot_profile = None
+        return
+    if target == "source.spot_sigma_mm":
+        frame.source.spot_sigma_mm = None
+        return
+    if target == "source.divergence_half_angle_deg":
+        frame.source.divergence_half_angle_deg = None
+        return
+    if target == "source.divergence_profile":
+        frame.source.divergence_profile = None
+        return
+    if target == "source.divergence_sigma_deg":
+        frame.source.divergence_sigma_deg = None
         return
     if target == "physics.explicit_list":
         frame.physics.explicit_list = None
@@ -693,6 +780,18 @@ def _normalize_inferred_slots(frame: SlotFrame) -> None:
             frame.geometry.kind = "cuttubs"
         elif frame.geometry.radius_mm is not None or frame.geometry.half_length_mm is not None:
             frame.geometry.kind = "cylinder"
+    if frame.source.kind is None and any(
+        value is not None
+        for value in (
+            frame.source.spot_radius_mm,
+            frame.source.spot_profile,
+            frame.source.spot_sigma_mm,
+            frame.source.divergence_half_angle_deg,
+            frame.source.divergence_profile,
+            frame.source.divergence_sigma_deg,
+        )
+    ):
+        frame.source.kind = "beam"
 
 
 def _geometry_box_from_phrase(text: str) -> list[float] | None:
@@ -1159,6 +1258,98 @@ def _apply_clause(frame: SlotFrame, key: str, raw_value: str) -> None:
         if vec is not None:
             frame.source.direction_vec = vec
         return
+    if k in {"source.spot_radius", "source.spot_radius_mm", "source.beam_spot_radius_mm"}:
+        value = _coerce_length_mm(v)
+        if value is not None:
+            frame.source.spot_radius_mm = value
+        return
+    if k in {"source.spot_profile", "source.beam_spot_profile"}:
+        profile = _canonical_spot_profile(v)
+        if profile:
+            frame.source.spot_profile = profile
+        return
+    if k in {"source.spot_sigma", "source.spot_sigma_mm", "source.beam_spot_sigma_mm"}:
+        value = _coerce_length_mm(v)
+        if value is not None:
+            frame.source.spot_sigma_mm = value
+        return
+    if k in {"source.divergence", "source.divergence_half_angle", "source.divergence_half_angle_deg", "source.divergence_deg"}:
+        value = _coerce_float(v)
+        if value is not None:
+            frame.source.divergence_half_angle_deg = value
+        return
+    if k in {"source.divergence_profile", "source.beam_divergence_profile"}:
+        profile = _canonical_divergence_profile(v)
+        if profile:
+            frame.source.divergence_profile = profile
+        return
+    if k in {"source.divergence_sigma", "source.divergence_sigma_deg", "source.beam_divergence_sigma_deg"}:
+        value = _coerce_float(v)
+        if value is not None:
+            frame.source.divergence_sigma_deg = value
+        return
+    if k in {"detector.enabled", "detector.enable"}:
+        value = _coerce_bool(v)
+        if value is not None:
+            frame.detector.enabled = value
+        return
+    if k in {"detector.name", "detector.volume_name"}:
+        name = _clean_scalar(v)
+        if name:
+            frame.detector.name = name
+            if frame.detector.enabled is None:
+                frame.detector.enabled = True
+        return
+    if k in {"detector.material"}:
+        material = _canonical_material(v)
+        if material:
+            frame.detector.material = material
+            if frame.detector.enabled is None:
+                frame.detector.enabled = True
+        return
+    if k in {"detector.position", "detector.position_mm"}:
+        vec = _coerce_vec3(v, metric=True)
+        if vec is not None:
+            frame.detector.position_mm = vec
+            if frame.detector.enabled is None:
+                frame.detector.enabled = True
+        return
+    if k in {"detector.size", "detector.size_triplet", "detector.size_triplet_mm"}:
+        size = _coerce_triplet_mm(v)
+        if size is not None:
+            frame.detector.size_triplet_mm = size
+            if frame.detector.enabled is None:
+                frame.detector.enabled = True
+        return
+    if k in {"scoring.target_edep", "scoring.target_energy_deposition"}:
+        value = _coerce_bool(v)
+        if value is not None:
+            frame.scoring.target_edep = value
+        return
+    if k in {"scoring.detector_crossings", "scoring.detector_crossing"}:
+        value = _coerce_bool(v)
+        if value is not None:
+            frame.scoring.detector_crossings = value
+        return
+    if k in {"scoring.plane_crossings", "scoring.plane_crossing"}:
+        value = _coerce_bool(v)
+        if value is not None:
+            frame.scoring.plane_crossings = value
+        return
+    if k in {"scoring.plane_name", "scoring.plane.name"}:
+        name = _clean_scalar(v)
+        if name:
+            frame.scoring.plane_name = name
+            if frame.scoring.plane_crossings is None:
+                frame.scoring.plane_crossings = True
+        return
+    if k in {"scoring.plane_z", "scoring.plane_z_mm", "scoring.plane.z_mm"}:
+        value = _coerce_length_mm(v)
+        if value is not None:
+            frame.scoring.plane_z_mm = value
+            if frame.scoring.plane_crossings is None:
+                frame.scoring.plane_crossings = True
+        return
     if k in {"physics.explicit_list", "physics.list", "physics.physics_list"}:
         explicit = _clean_scalar(v)
         if explicit:
@@ -1258,14 +1449,15 @@ def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
         "y2_mm": r"y2\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
         "z_mm": r"(?:z|depth)\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
     }
-    for field_name, pattern in trd_patterns.items():
-        if getattr(frame.geometry, field_name) is not None:
-            continue
-        m = re.search(pattern, low)
-        if not m:
-            continue
-        setattr(frame.geometry, field_name, _to_mm(float(m.group(1)), m.group(2)))
-        frame.geometry.kind = frame.geometry.kind or "trd"
+    if frame.geometry.kind in {None, "trd"} and not frame.geometry.size_triplet_mm:
+        for field_name, pattern in trd_patterns.items():
+            if getattr(frame.geometry, field_name) is not None:
+                continue
+            m = re.search(pattern, low)
+            if not m:
+                continue
+            setattr(frame.geometry, field_name, _to_mm(float(m.group(1)), m.group(2)))
+            frame.geometry.kind = frame.geometry.kind or "trd"
 
     named_patterns = {
         "trap_x1_mm": r"trap[_\s-]*x1\s*[:=]?\s*([-+]?\d*\.?\d+)\s*(mm|cm|m)",
@@ -1498,8 +1690,46 @@ def _coerce_slot_payload(payload: dict[str, Any]) -> tuple[SlotFrame, dict[str, 
         frame.source.energy_mev = _coerce_float(source.get("energy_mev"))
         frame.source.position_mm = _coerce_vec3(source.get("position_mm"), metric=True)
         frame.source.direction_vec = _coerce_vec3(source.get("direction_vec"), metric=False)
+        frame.source.spot_radius_mm = _coerce_length_mm(source.get("spot_radius_mm"))
+        frame.source.spot_profile = _canonical_spot_profile(source.get("spot_profile"))
+        frame.source.spot_sigma_mm = _coerce_length_mm(source.get("spot_sigma_mm"))
+        frame.source.divergence_half_angle_deg = _coerce_float(source.get("divergence_half_angle_deg"))
+        frame.source.divergence_profile = _canonical_divergence_profile(source.get("divergence_profile"))
+        frame.source.divergence_sigma_deg = _coerce_float(source.get("divergence_sigma_deg"))
     elif "source" in slots:
         errors.append("source_not_object")
+
+    detector = slots.get("detector", {})
+    if isinstance(detector, dict):
+        frame.detector.enabled = _coerce_bool(detector.get("enabled"))
+        frame.detector.name = _clean_scalar(detector.get("name"))
+        frame.detector.material = _canonical_material(detector.get("material"))
+        frame.detector.position_mm = _coerce_vec3(detector.get("position_mm"), metric=True)
+        frame.detector.size_triplet_mm = _coerce_triplet_mm(detector.get("size_triplet_mm"))
+        if (
+            frame.detector.enabled is None
+            and (
+                frame.detector.name
+                or frame.detector.material
+                or frame.detector.position_mm
+                or frame.detector.size_triplet_mm
+            )
+        ):
+            frame.detector.enabled = True
+    elif "detector" in slots:
+        errors.append("detector_not_object")
+
+    scoring = slots.get("scoring", {})
+    if isinstance(scoring, dict):
+        frame.scoring.target_edep = _coerce_bool(scoring.get("target_edep"))
+        frame.scoring.detector_crossings = _coerce_bool(scoring.get("detector_crossings"))
+        frame.scoring.plane_crossings = _coerce_bool(scoring.get("plane_crossings"))
+        frame.scoring.plane_name = _clean_scalar(scoring.get("plane_name"))
+        frame.scoring.plane_z_mm = _coerce_length_mm(scoring.get("plane_z_mm"))
+        if frame.scoring.plane_crossings is None and (frame.scoring.plane_name or frame.scoring.plane_z_mm is not None):
+            frame.scoring.plane_crossings = True
+    elif "scoring" in slots:
+        errors.append("scoring_not_object")
 
     physics = slots.get("physics", {})
     if isinstance(physics, dict):

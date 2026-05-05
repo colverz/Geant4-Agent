@@ -59,7 +59,7 @@ _CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 _INTERNAL_FIELD_PATTERN = re.compile(r"\b[a-z]+(?:\.[a-z_]+)+\b")
 _NUMBER_PATTERN = re.compile(r"[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?", flags=re.IGNORECASE)
 _SLOT_TOP_LEVEL_KEYS = {"intent", "confidence", "normalized_text", "target_slots", "slots", "candidates"}
-_SLOT_SLOT_SECTIONS = {"geometry", "materials", "source", "physics", "output"}
+_SLOT_SLOT_SECTIONS = {"geometry", "materials", "source", "detector", "scoring", "physics", "output"}
 _SLOT_FIELDS = {
     "geometry": {
         "kind",
@@ -101,7 +101,21 @@ _SLOT_FIELDS = {
         "tilt_y_deg",
     },
     "materials": {"primary"},
-    "source": {"kind", "particle", "energy_mev", "position_mm", "direction_vec"},
+    "source": {
+        "kind",
+        "particle",
+        "energy_mev",
+        "position_mm",
+        "direction_vec",
+        "spot_radius_mm",
+        "spot_profile",
+        "spot_sigma_mm",
+        "divergence_half_angle_deg",
+        "divergence_profile",
+        "divergence_sigma_deg",
+    },
+    "detector": {"enabled", "name", "material", "position_mm", "size_triplet_mm"},
+    "scoring": {"target_edep", "detector_crossings", "plane_crossings", "plane_name", "plane_z_mm"},
     "physics": {"explicit_list", "recommendation_intent"},
     "output": {"format", "path"},
 }

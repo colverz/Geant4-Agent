@@ -58,6 +58,30 @@ class SourceSlots:
     energy_mev: float | None = None
     position_mm: list[float] | None = None
     direction_vec: list[float] | None = None
+    spot_radius_mm: float | None = None
+    spot_profile: str | None = None
+    spot_sigma_mm: float | None = None
+    divergence_half_angle_deg: float | None = None
+    divergence_profile: str | None = None
+    divergence_sigma_deg: float | None = None
+
+
+@dataclass
+class DetectorSlots:
+    enabled: bool | None = None
+    name: str | None = None
+    material: str | None = None
+    position_mm: list[float] | None = None
+    size_triplet_mm: list[float] | None = None
+
+
+@dataclass
+class ScoringSlots:
+    target_edep: bool | None = None
+    detector_crossings: bool | None = None
+    plane_crossings: bool | None = None
+    plane_name: str | None = None
+    plane_z_mm: float | None = None
 
 
 @dataclass
@@ -81,6 +105,8 @@ class SlotFrame:
     geometry: GeometrySlots = field(default_factory=GeometrySlots)
     materials: MaterialsSlots = field(default_factory=MaterialsSlots)
     source: SourceSlots = field(default_factory=SourceSlots)
+    detector: DetectorSlots = field(default_factory=DetectorSlots)
+    scoring: ScoringSlots = field(default_factory=ScoringSlots)
     physics: PhysicsSlots = field(default_factory=PhysicsSlots)
     output: OutputSlots = field(default_factory=OutputSlots)
     notes: list[str] = field(default_factory=list)
@@ -131,6 +157,22 @@ class SlotFrame:
                 self.source.energy_mev is not None,
                 self.source.position_mm,
                 self.source.direction_vec,
+                self.source.spot_radius_mm is not None,
+                self.source.spot_profile,
+                self.source.spot_sigma_mm is not None,
+                self.source.divergence_half_angle_deg is not None,
+                self.source.divergence_profile,
+                self.source.divergence_sigma_deg is not None,
+                self.detector.enabled is not None,
+                self.detector.name,
+                self.detector.material,
+                self.detector.position_mm,
+                self.detector.size_triplet_mm,
+                self.scoring.target_edep is not None,
+                self.scoring.detector_crossings is not None,
+                self.scoring.plane_crossings is not None,
+                self.scoring.plane_name,
+                self.scoring.plane_z_mm is not None,
                 self.physics.explicit_list,
                 self.physics.recommendation_intent,
                 self.output.format,

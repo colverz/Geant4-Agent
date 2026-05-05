@@ -1,8 +1,8 @@
 [
   {
-    "id": "en_conversational_copper_gamma_point",
-    "description": "Conversational English box target with a negative-z point source position.",
-    "prompt": "Set up a copper target box that is 10 by 20 by 30 millimeters. Put a 1 MeV gamma point source at z equals minus 20 mm, shooting in the positive z direction. Use FTFP_BERT and JSON output.",
+    "id": "en_detector_scoring_copper_gamma_point",
+    "description": "Conversational English box target with detector and scoring requests.",
+    "prompt": "Set up a copper target box that is 10 by 20 by 30 millimeters. Put a 1 MeV gamma point source at z equals minus 20 mm, shooting in the positive z direction. Add a silicon detector named Detector at (0,0,50) mm with size 12 x 12 x 1 mm. Score target energy deposition, detector crossings, and a TargetExitPlane at z=15 mm. Use FTFP_BERT and JSON output.",
     "parser_expected": {
       "is_complete": true,
       "runtime": {
@@ -16,15 +16,31 @@
         "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
         "size_x": 10.0,
         "size_y": 20.0,
-        "size_z": 30.0
+        "size_z": 30.0,
+        "detector_enabled": true,
+        "detector": {
+          "enabled": true,
+          "volume_name": "Detector",
+          "material": "G4_Si",
+          "position_mm": [0.0, 0.0, 50.0],
+          "size_x_mm": 12.0,
+          "size_y_mm": 12.0,
+          "size_z_mm": 1.0
+        },
+        "scoring": {
+          "target_edep": true,
+          "detector_crossings": true,
+          "plane_crossings": true,
+          "plane": {"name": "TargetExitPlane", "z_mm": 15.0}
+        }
       },
-      "known_gaps": ["detector/scoring not asserted in this live parsing case"]
+      "known_gaps": []
     }
   },
   {
     "id": "zh_copper_gamma_point",
     "description": "Chinese copper box target with gamma point source.",
-    "prompt": "请配置一个10 mm x 20 mm x 30 mm的铜盒靶，1 MeV伽马点源放在(0,0,-20) mm，沿+z方向入射，物理过程用FTFP_BERT，输出json。",
+    "prompt": "\u8bf7\u914d\u7f6e\u4e00\u4e2a10 mm x 20 mm x 30 mm\u7684\u94dc\u76d2\u9776\uff0c1 MeV\u4f3d\u9a6c\u70b9\u6e90\u653e\u5728(0,0,-20) mm\uff0c\u6cbf+z\u65b9\u5411\u5165\u5c04\uff0c\u7269\u7406\u8fc7\u7a0b\u7528FTFP_BERT\uff0c\u8f93\u51fajson\u3002",
     "parser_expected": {
       "is_complete": true,
       "runtime": {
@@ -44,9 +60,9 @@
     }
   },
   {
-    "id": "zh_proton_water_cylinder",
-    "description": "Chinese proton beam through a water cylinder target.",
-    "prompt": "请模拟150 MeV质子束，从(0,0,-120) mm沿+z方向打进水圆柱靶，半径40 mm，半长80 mm，物理列表FTFP_BERT，输出json。",
+    "id": "zh_proton_water_cylinder_beam_model",
+    "description": "Chinese proton beam through a water cylinder target with beam spot and divergence.",
+    "prompt": "\u8bf7\u6a21\u62df150 MeV\u8d28\u5b50\u675f\uff0c\u4ece(0,0,-120) mm\u6cbf+z\u65b9\u5411\u6253\u8fdb\u6c34\u5706\u67f1\u9776\uff0c\u534a\u5f8440 mm\uff0c\u534a\u957f80 mm\u3002\u675f\u6591\u7528\u9ad8\u65af\u5206\u5e03\uff0c\u534a\u5f842 mm\uff0csigma 0.5 mm\uff1b\u53d1\u6563\u4e5f\u7528\u9ad8\u65af\uff0c\u534a\u89d20.5 deg\uff0csigma 0.1 deg\u3002\u53ea\u8bb0\u5f55\u9776\u80fd\u91cf\u6c89\u79ef\uff0c\u4e0d\u8bb0\u5f55\u63a2\u6d4b\u5668\u7a7f\u8d8a\u548c\u5e73\u9762\u7a7f\u8d8a\uff0c\u7269\u7406\u5217\u8868FTFP_BERT\uff0c\u8f93\u51fajson\u3002",
     "parser_expected": {
       "is_complete": true,
       "runtime": {
@@ -59,15 +75,26 @@
         "position": {"x": 0.0, "y": 0.0, "z": -120.0},
         "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
         "radius": 40.0,
-        "half_length": 80.0
+        "half_length": 80.0,
+        "source_spot_radius_mm": 2.0,
+        "source_spot_profile": "gaussian",
+        "source_spot_sigma_mm": 0.5,
+        "source_divergence_half_angle_deg": 0.5,
+        "source_divergence_profile": "gaussian",
+        "source_divergence_sigma_deg": 0.1,
+        "scoring": {
+          "target_edep": true,
+          "detector_crossings": false,
+          "plane_crossings": false
+        }
       },
-      "known_gaps": ["beam spot and divergence not asserted in this live parsing case"]
+      "known_gaps": []
     }
   },
   {
-    "id": "mixed_gamma_air_box",
-    "description": "Mixed Chinese/English air box with gamma beam.",
-    "prompt": "做一个5mm x 5mm x 5mm air box，然后 gamma beam 0.662 MeV from (0,0,-50) mm along +z，physics FTFP_BERT，json输出。",
+    "id": "mixed_gamma_air_box_detector_plane",
+    "description": "Mixed Chinese/English air box with gamma beam and detector plane scoring.",
+    "prompt": "\u505a\u4e00\u4e2a5mm x 5mm x 5mm air box\uff0c\u7136\u540e gamma beam 0.662 MeV from (0,0,-50) mm along +z\u3002Add a silicon detector named SiliconPlane at (0,0,25) mm, size 20 x 20 x 0.5 mm. Score target edep, detector crossings and plane crossings at z=25 mm named DetectorPlane. physics FTFP_BERT\uff0cjson\u8f93\u51fa\u3002",
     "parser_expected": {
       "is_complete": true,
       "runtime": {
@@ -81,7 +108,23 @@
         "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
         "size_x": 5.0,
         "size_y": 5.0,
-        "size_z": 5.0
+        "size_z": 5.0,
+        "detector_enabled": true,
+        "detector": {
+          "enabled": true,
+          "volume_name": "SiliconPlane",
+          "material": "G4_Si",
+          "position_mm": [0.0, 0.0, 25.0],
+          "size_x_mm": 20.0,
+          "size_y_mm": 20.0,
+          "size_z_mm": 0.5
+        },
+        "scoring": {
+          "target_edep": true,
+          "detector_crossings": true,
+          "plane_crossings": true,
+          "plane": {"name": "DetectorPlane", "z_mm": 25.0}
+        }
       },
       "known_gaps": []
     }
@@ -104,7 +147,7 @@
         "radius": 40.0,
         "half_length": 80.0
       },
-      "known_gaps": ["beam spot and divergence not asserted in this live parsing case"]
+      "known_gaps": []
     }
   }
 ]

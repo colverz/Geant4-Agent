@@ -1,8 +1,10 @@
 from core.contracts.slots import (
+    DetectorSlots,
     GeometrySlots,
     MaterialsSlots,
     OutputSlots,
     PhysicsSlots,
+    ScoringSlots,
     SlotFrame,
     SourceSlots,
 )
@@ -12,6 +14,8 @@ __all__ = [
     "MaterialsSlots",
     "OutputSlots",
     "PhysicsSlots",
+    "DetectorSlots",
+    "ScoringSlots",
     "SlotFrame",
     "SourceSlots",
 ]

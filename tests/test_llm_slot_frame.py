@@ -5,7 +5,9 @@ import unittest
 from unittest.mock import patch
 
 from core.config.llm_prompt_registry import STRICT_SLOT_PROMPT_PROFILE, build_strict_slot_prompt
+from core.orchestrator.session_manager import process_turn, reset_session
 from core.slots.slot_mapper import slot_frame_to_candidates
+from mcp.geant4.runtime_payload import build_runtime_payload
 from nlu.llm.slot_frame import build_llm_slot_frame, parse_slot_payload
 
 
@@ -125,6 +127,253 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertIn("source.kind:beam", prompt)
         self.assertIn("materials.primary:G4_WATER", prompt)
         self.assertIn("JSON target_slots includes", prompt)
+        self.assertIn("detector.enabled", prompt)
+        self.assertIn("scoring.target_edep", prompt)
+        self.assertIn("source.spot_radius_mm", prompt)
+
+    def test_slot_payload_maps_detector_scoring_and_beam_model_to_runtime_payload(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.96,
+            "normalized_text": (
+                "geometry.kind:box; geometry.size_triplet_mm:[10,20,30]; materials.primary:G4_Cu; "
+                "source.kind:beam; source.particle:gamma; source.energy_mev:1; "
+                "source.position_mm:[0,0,-20]; source.direction_vec:[0,0,1]; "
+                "source.spot_radius_mm:2; source.spot_profile:gaussian; source.spot_sigma_mm:0.5; "
+                "source.divergence_half_angle_deg:0.5; source.divergence_profile:gaussian; source.divergence_sigma_deg:0.1; "
+                "detector.enabled:true; detector.name:Detector; detector.material:G4_Si; "
+                "detector.position_mm:[0,0,50]; detector.size_triplet_mm:[12,12,1]; "
+                "scoring.target_edep:true; scoring.detector_crossings:true; scoring.plane_crossings:true; "
+                "scoring.plane_name:TargetExitPlane; scoring.plane_z_mm:15"
+            ),
+            "target_slots": [
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "materials.primary",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+                "source.direction_vec",
+                "source.spot_radius_mm",
+                "source.spot_profile",
+                "source.spot_sigma_mm",
+                "source.divergence_half_angle_deg",
+                "source.divergence_profile",
+                "source.divergence_sigma_deg",
+                "detector.enabled",
+                "detector.name",
+                "detector.material",
+                "detector.position_mm",
+                "detector.size_triplet_mm",
+                "scoring.target_edep",
+                "scoring.detector_crossings",
+                "scoring.plane_crossings",
+                "scoring.plane_name",
+                "scoring.plane_z_mm",
+            ],
+            "slots": {
+                "geometry": {"kind": "box", "size_triplet_mm": [10, 20, 30]},
+                "materials": {"primary": "G4_Cu"},
+                "source": {
+                    "kind": "beam",
+                    "particle": "gamma",
+                    "energy_mev": 1,
+                    "position_mm": [0, 0, -20],
+                    "direction_vec": [0, 0, 1],
+                    "spot_radius_mm": 2,
+                    "spot_profile": "gaussian",
+                    "spot_sigma_mm": 0.5,
+                    "divergence_half_angle_deg": 0.5,
+                    "divergence_profile": "gaussian",
+                    "divergence_sigma_deg": 0.1,
+                },
+                "detector": {
+                    "enabled": True,
+                    "name": "Detector",
+                    "material": "G4_Si",
+                    "position_mm": [0, 0, 50],
+                    "size_triplet_mm": [12, 12, 1],
+                },
+                "scoring": {
+                    "target_edep": True,
+                    "detector_crossings": True,
+                    "plane_crossings": True,
+                    "plane_name": "TargetExitPlane",
+                    "plane_z_mm": 15,
+                },
+            },
+        }
+        frame, meta = parse_slot_payload(payload)
+
+        self.assertIsNotNone(frame)
+        assert frame is not None
+        self.assertEqual(meta.get("schema_errors"), [])
+        candidate, _ = slot_frame_to_candidates(frame, turn_id=1, geometry_mode="v2", source_mode="v2")
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        config: dict[str, object] = {}
+        for update in candidate.updates:
+            from core.orchestrator.path_ops import set_path
+
+            set_path(config, update.path, update.value)
+        runtime = build_runtime_payload(config)
+
+        self.assertTrue(runtime["detector_enabled"])
+        self.assertEqual(runtime["detector"]["material"], "G4_Si")
+        self.assertEqual(runtime["detector"]["position_mm"], [0.0, 0.0, 50.0])
+        self.assertEqual(runtime["detector"]["size_x_mm"], 12.0)
+        self.assertEqual(runtime["scoring"]["plane"]["name"], "TargetExitPlane")
+        self.assertEqual(runtime["scoring"]["plane"]["z_mm"], 15.0)
+        self.assertTrue(runtime["scoring"]["target_edep"])
+        self.assertTrue(runtime["scoring"]["detector_crossings"])
+        self.assertTrue(runtime["scoring"]["plane_crossings"])
+        self.assertEqual(runtime["source"]["spot_radius_mm"], 2.0)
+        self.assertEqual(runtime["source"]["spot_profile"], "gaussian")
+        self.assertEqual(runtime["source"]["spot_sigma_mm"], 0.5)
+        self.assertEqual(runtime["source"]["divergence_half_angle_deg"], 0.5)
+        self.assertEqual(runtime["source"]["divergence_profile"], "gaussian")
+        self.assertEqual(runtime["source"]["divergence_sigma_deg"], 0.1)
+
+    def test_scoring_plane_z_does_not_backfill_geometry_z_for_box(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.95,
+            "normalized_text": (
+                "geometry.kind:box; geometry.size_triplet_mm:[10,20,30]; "
+                "scoring.plane_crossings:true; scoring.plane_name:TargetExitPlane; scoring.plane_z_mm:15"
+            ),
+            "target_slots": [
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "scoring.plane_crossings",
+                "scoring.plane_name",
+                "scoring.plane_z_mm",
+            ],
+            "slots": {
+                "geometry": {"kind": "box", "size_triplet_mm": [10, 20, 30]},
+                "scoring": {
+                    "plane_crossings": True,
+                    "plane_name": "TargetExitPlane",
+                    "plane_z_mm": 15,
+                },
+            },
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(payload)}):
+            result = build_llm_slot_frame(
+                "10 by 20 by 30 millimeters box; score a TargetExitPlane at z=15 mm.",
+                context_summary="",
+                config_path="",
+            )
+
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.geometry.kind, "box")
+        self.assertEqual(result.frame.geometry.size_triplet_mm, [10.0, 20.0, 30.0])
+        self.assertIsNone(result.frame.geometry.z_mm)
+        self.assertEqual(result.frame.scoring.plane_z_mm, 15.0)
+
+    def test_slot_geometry_survives_detector_box_semantic_graph_false_positive(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.96,
+            "normalized_text": (
+                "geometry.kind:box; geometry.size_triplet_mm:[10,20,30]; materials.primary:G4_Cu; "
+                "source.kind:point; source.particle:gamma; source.energy_mev:1; "
+                "source.position_mm:[0,0,-20]; source.direction_vec:[0,0,1]; "
+                "detector.enabled:true; detector.name:Detector; detector.material:G4_Si; "
+                "detector.position_mm:[0,0,50]; detector.size_triplet_mm:[12,12,1]; "
+                "scoring.target_edep:true; scoring.detector_crossings:true; scoring.plane_crossings:true; "
+                "scoring.plane_name:TargetExitPlane; scoring.plane_z_mm:15; "
+                "physics.explicit_list:FTFP_BERT; output.format:json"
+            ),
+            "target_slots": [
+                "geometry.kind",
+                "geometry.size_triplet_mm",
+                "materials.primary",
+                "source.kind",
+                "source.particle",
+                "source.energy_mev",
+                "source.position_mm",
+                "source.direction_vec",
+                "detector.enabled",
+                "detector.name",
+                "detector.material",
+                "detector.position_mm",
+                "detector.size_triplet_mm",
+                "scoring.target_edep",
+                "scoring.detector_crossings",
+                "scoring.plane_crossings",
+                "scoring.plane_name",
+                "scoring.plane_z_mm",
+                "physics.explicit_list",
+                "output.format",
+            ],
+            "slots": {
+                "geometry": {"kind": "box", "size_triplet_mm": [10, 20, 30]},
+                "materials": {"primary": "G4_Cu"},
+                "source": {
+                    "kind": "point",
+                    "particle": "gamma",
+                    "energy_mev": 1,
+                    "position_mm": [0, 0, -20],
+                    "direction_vec": [0, 0, 1],
+                },
+                "detector": {
+                    "enabled": True,
+                    "name": "Detector",
+                    "material": "G4_Si",
+                    "position_mm": [0, 0, 50],
+                    "size_triplet_mm": [12, 12, 1],
+                },
+                "scoring": {
+                    "target_edep": True,
+                    "detector_crossings": True,
+                    "plane_crossings": True,
+                    "plane_name": "TargetExitPlane",
+                    "plane_z_mm": 15,
+                },
+                "physics": {"explicit_list": "FTFP_BERT"},
+                "output": {"format": "json"},
+            },
+        }
+        session_id = "test-slot-detector-box-graph-false-positive"
+        reset_session(session_id)
+        try:
+            with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(payload)}):
+                out = process_turn(
+                    {
+                        "session_id": session_id,
+                        "text": (
+                            "Set up a copper target box that is 10 by 20 by 30 millimeters. "
+                            "Put a 1 MeV gamma point source at z equals minus 20 mm, shooting in the positive z direction. "
+                            "Add a silicon detector named Detector at (0,0,50) mm with size 12 x 12 x 1 mm. "
+                            "Score target energy deposition, detector crossings, and a TargetExitPlane at z=15 mm. "
+                            "Use FTFP_BERT and JSON output."
+                        ),
+                        "llm_router": True,
+                        "llm_question": False,
+                        "normalize_input": True,
+                        "geometry_pipeline": "v2",
+                        "source_pipeline": "v2",
+                        "enable_compare": False,
+                        "autofix": True,
+                    },
+                    ollama_config_path="",
+                    lang="en",
+                )
+        finally:
+            reset_session(session_id)
+
+        runtime = build_runtime_payload(out["config"])
+        self.assertTrue(out["is_complete"])
+        self.assertEqual(runtime["structure"], "single_box")
+        self.assertEqual(runtime["size_x"], 10.0)
+        self.assertEqual(runtime["size_y"], 20.0)
+        self.assertEqual(runtime["size_z"], 30.0)
+        self.assertTrue(runtime["detector_enabled"])
+        self.assertEqual(runtime["detector"]["volume_name"], "Detector")
+        self.assertEqual(runtime["scoring"]["plane"]["name"], "TargetExitPlane")
 
     def test_build_llm_slot_frame_prefers_explicit_material_from_user_text(self) -> None:
         payload = {

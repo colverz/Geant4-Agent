@@ -19,6 +19,38 @@ def _normalize_positive_float(value: Any) -> float | None:
     return number if number > 0 else None
 
 
+def _normalize_nonnegative_float(value: Any) -> float | None:
+    if isinstance(value, dict) and "value" in value:
+        value = value.get("value")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _normalize_source_profile(value: Any) -> str | None:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "uniform": "uniform_disk",
+        "uniform_disk": "uniform_disk",
+        "disk": "uniform_disk",
+        "gaussian": "gaussian",
+    }
+    return aliases.get(text)
+
+
+def _normalize_divergence_profile(value: Any) -> str | None:
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "uniform": "uniform_cone",
+        "uniform_cone": "uniform_cone",
+        "cone": "uniform_cone",
+        "gaussian": "gaussian",
+    }
+    return aliases.get(text)
+
+
 def _normalize_vector3(value: Any) -> list[float] | None:
     if isinstance(value, dict):
         raw = value.get("value")
@@ -131,6 +163,66 @@ _SOURCE_CATALOG: tuple[SourceCatalogEntry, ...] = (
                 runtime_keys=("direction",),
                 normalizer=_normalize_vector3,
                 description="Required direction vector for beam sources.",
+            ),
+            SourceFieldDefinition(
+                name="spot_radius_mm",
+                slot_fields=("spot_radius_mm",),
+                semantic_keys=(),
+                config_keys=("spot_radius_mm",),
+                required=False,
+                runtime_keys=("spot_radius_mm",),
+                normalizer=_normalize_nonnegative_float,
+                description="Beam spot radius in mm.",
+            ),
+            SourceFieldDefinition(
+                name="spot_profile",
+                slot_fields=("spot_profile",),
+                semantic_keys=(),
+                config_keys=("spot_profile",),
+                required=False,
+                runtime_keys=("spot_profile",),
+                normalizer=_normalize_source_profile,
+                description="Beam spot profile.",
+            ),
+            SourceFieldDefinition(
+                name="spot_sigma_mm",
+                slot_fields=("spot_sigma_mm",),
+                semantic_keys=(),
+                config_keys=("spot_sigma_mm",),
+                required=False,
+                runtime_keys=("spot_sigma_mm",),
+                normalizer=_normalize_nonnegative_float,
+                description="Gaussian beam spot sigma in mm.",
+            ),
+            SourceFieldDefinition(
+                name="divergence_half_angle_deg",
+                slot_fields=("divergence_half_angle_deg",),
+                semantic_keys=(),
+                config_keys=("divergence_half_angle_deg",),
+                required=False,
+                runtime_keys=("divergence_half_angle_deg",),
+                normalizer=_normalize_nonnegative_float,
+                description="Beam divergence half-angle in degrees.",
+            ),
+            SourceFieldDefinition(
+                name="divergence_profile",
+                slot_fields=("divergence_profile",),
+                semantic_keys=(),
+                config_keys=("divergence_profile",),
+                required=False,
+                runtime_keys=("divergence_profile",),
+                normalizer=_normalize_divergence_profile,
+                description="Beam divergence profile.",
+            ),
+            SourceFieldDefinition(
+                name="divergence_sigma_deg",
+                slot_fields=("divergence_sigma_deg",),
+                semantic_keys=(),
+                config_keys=("divergence_sigma_deg",),
+                required=False,
+                runtime_keys=("divergence_sigma_deg",),
+                normalizer=_normalize_nonnegative_float,
+                description="Gaussian divergence sigma in degrees.",
             ),
         ),
         required_fields=("particle", "energy_mev", "position_mm", "direction_vec"),

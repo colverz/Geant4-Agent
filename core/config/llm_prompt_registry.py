@@ -64,7 +64,9 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         '  "slots": {\n'
         '    "geometry": {"kind": "box|cylinder|sphere|orb|cons|trd|polycone|polyhedra|cuttubs|trap|para|torus|ellipsoid|elltube|null", "size_triplet_mm": [1000,1000,1000], "radius_mm": null, "half_length_mm": null, "radius1_mm": null, "radius2_mm": null, "x1_mm": null, "x2_mm": null, "y1_mm": null, "y2_mm": null, "z_mm": null, "z_planes_mm": [null,null,null], "radii_mm": [null,null,null], "polyhedra_sides": null, "trap_x1_mm": null, "trap_x2_mm": null, "trap_x3_mm": null, "trap_x4_mm": null, "trap_y1_mm": null, "trap_y2_mm": null, "trap_z_mm": null, "para_x_mm": null, "para_y_mm": null, "para_z_mm": null, "para_alpha_deg": null, "para_theta_deg": null, "para_phi_deg": null, "torus_major_radius_mm": null, "torus_minor_radius_mm": null, "ellipsoid_ax_mm": null, "ellipsoid_by_mm": null, "ellipsoid_cz_mm": null, "elltube_ax_mm": null, "elltube_by_mm": null, "elltube_hz_mm": null, "tilt_x_deg": null, "tilt_y_deg": null},\n'
         '    "materials": {"primary": "G4_Cu|null"},\n'
-        '    "source": {"kind": "point|beam|plane|isotropic|null", "particle": "gamma|e-|proton|neutron|null", "energy_mev": 1.0, "position_mm": [0,0,-100], "direction_vec": [0,0,1]},\n'
+        '    "source": {"kind": "point|beam|plane|isotropic|null", "particle": "gamma|e-|proton|neutron|null", "energy_mev": 1.0, "position_mm": [0,0,-100], "direction_vec": [0,0,1], "spot_radius_mm": null, "spot_profile": "uniform_disk|gaussian|null", "spot_sigma_mm": null, "divergence_half_angle_deg": null, "divergence_profile": "uniform_cone|gaussian|null", "divergence_sigma_deg": null},\n'
+        '    "detector": {"enabled": true, "name": "Detector|null", "material": "G4_Si|null", "position_mm": [0,0,50], "size_triplet_mm": [12,12,1]},\n'
+        '    "scoring": {"target_edep": true, "detector_crossings": true, "plane_crossings": true, "plane_name": "TargetExitPlane|null", "plane_z_mm": 15},\n'
         '    "physics": {"explicit_list": "FTFP_BERT|null", "recommendation_intent": "gamma_attenuation|null"},\n'
         '    "output": {"format": "csv|hdf5|root|xml|json|null", "path": null}\n'
         '  },\n'
@@ -106,6 +108,9 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         "- Keep normalized_text concise as semicolon-separated English key:value clauses, never narrative 'set ... to ...' phrases.\n"
         "- For every non-null slot, include the matching slot path in target_slots.\n"
         "- normalized_text must use source.kind/source.particle/source.energy_mev/source.position_mm/source.direction_vec for sources.\n"
+        "- For beam spread, use source.spot_radius_mm/source.spot_profile/source.spot_sigma_mm/source.divergence_half_angle_deg/source.divergence_profile/source.divergence_sigma_deg only when explicitly stated.\n"
+        "- For detector volumes, use detector.enabled/detector.name/detector.material/detector.position_mm/detector.size_triplet_mm only when explicitly stated.\n"
+        "- For scoring requests, use scoring.target_edep/scoring.detector_crossings/scoring.plane_crossings/scoring.plane_name/scoring.plane_z_mm only when explicitly stated.\n"
         "- For point source or \u70b9\u6e90, set source.kind=point. For beam or \u675f\u6d41, set source.kind=beam.\n"
         "- For gamma or \u4f3d\u9a6c, set source.particle=gamma. For proton or \u8d28\u5b50, set source.particle=proton.\n"
         "- Normalize common materials when explicit: copper/\u94dc -> G4_Cu; water/\u6c34 -> G4_WATER; air/\u7a7a\u6c14 -> G4_AIR; silicon/\u7845 -> G4_Si; lead/\u94c5 -> G4_Pb.\n"
@@ -124,6 +129,13 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         '  JSON slots.geometry = {"kind":"cylinder","radius_mm":40,"half_length_mm":80}\n'
         '  JSON slots.materials = {"primary":"G4_WATER"}\n'
         '  JSON slots.source = {"kind":"beam","particle":"proton","energy_mev":150,"position_mm":[0,0,-120],"direction_vec":[0,0,1]}\n'
+        '- User: "Add a silicon detector named Detector at (0,0,50) mm with size 12 x 12 x 1 mm, score target edep, detector crossings, and a TargetExitPlane at z=15 mm."\n'
+        '  JSON normalized_text = "detector.enabled:true; detector.name:Detector; detector.material:G4_Si; detector.position_mm:[0,0,50]; detector.size_triplet_mm:[12,12,1]; scoring.target_edep:true; scoring.detector_crossings:true; scoring.plane_crossings:true; scoring.plane_name:TargetExitPlane; scoring.plane_z_mm:15"\n'
+        '  JSON slots.detector = {"enabled":true,"name":"Detector","material":"G4_Si","position_mm":[0,0,50],"size_triplet_mm":[12,12,1]}\n'
+        '  JSON slots.scoring = {"target_edep":true,"detector_crossings":true,"plane_crossings":true,"plane_name":"TargetExitPlane","plane_z_mm":15}\n'
+        '- User: "Use a Gaussian proton beam spot radius 2 mm, spot sigma 0.5 mm, divergence half angle 0.5 deg and divergence sigma 0.1 deg."\n'
+        '  JSON normalized_text = "source.spot_radius_mm:2; source.spot_profile:gaussian; source.spot_sigma_mm:0.5; source.divergence_half_angle_deg:0.5; source.divergence_profile:gaussian; source.divergence_sigma_deg:0.1"\n'
+        '  JSON slots.source includes {"spot_radius_mm":2,"spot_profile":"gaussian","spot_sigma_mm":0.5,"divergence_half_angle_deg":0.5,"divergence_profile":"gaussian","divergence_sigma_deg":0.1}\n'
         '- User: "Output json."\n'
         '  JSON intent = "SET"; JSON slots.output = {"format":"json"}; all other slot groups stay null\n'
         '- User: "change material to G4_Al"\n'
