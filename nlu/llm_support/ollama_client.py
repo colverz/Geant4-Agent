@@ -28,10 +28,14 @@ def load_config(path: str | Path) -> OllamaConfig:
     provider = str(payload.get("provider", "ollama")).strip().lower()
     if not provider:
         provider = "ollama"
+    model = str(payload.get("model", "llama3"))
+    model_override = os.getenv("GEANT4_LLM_MODEL_OVERRIDE", "").strip()
+    if model_override:
+        model = model_override
     return OllamaConfig(
         provider=provider,
         base_url=str(payload.get("base_url", "http://localhost:11434")),
-        model=str(payload.get("model", "llama3")),
+        model=model,
         timeout_s=int(payload.get("timeout_s", 60)),
         headers=dict(payload.get("headers", {"Content-Type": "application/json"})),
         api_key=str(payload.get("api_key", "")).strip() or None,

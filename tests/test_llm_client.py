@@ -33,6 +33,15 @@ class LlmClientTest(unittest.TestCase):
         self.assertEqual(cfg.base_url, "http://x")
         self.assertEqual(cfg.model, "m")
 
+    def test_load_config_allows_model_override_without_rewriting_local_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "cfg.json"
+            p.write_text(json.dumps({"base_url": "http://x", "model": "deepseek-chat"}), encoding="utf-8")
+            with mock.patch.dict("os.environ", {"GEANT4_LLM_MODEL_OVERRIDE": "deepseek-v4-flash"}):
+                cfg = ollama_client.load_config(p)
+
+        self.assertEqual(cfg.model, "deepseek-v4-flash")
+
     def test_chat_ollama_payload_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "cfg.json"

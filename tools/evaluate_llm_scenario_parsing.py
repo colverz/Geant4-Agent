@@ -47,6 +47,38 @@ def _compare_expected(expected: Any, actual: Any, path: str, errors: list[str]) 
         errors.append(f"{path}:expected={expected!r}:actual={actual!r}")
 
 
+def _runtime_payload_ready(runtime_payload: dict[str, Any]) -> bool:
+    required = ["structure", "material", "source_type", "particle", "energy", "physics_list"]
+    return all(runtime_payload.get(key) not in {None, ""} for key in required)
+
+
+def _trajectory_from_output(out: dict[str, Any], runtime_payload: dict[str, Any]) -> dict[str, Any]:
+    slot_debug = out.get("slot_debug") if isinstance(out.get("slot_debug"), dict) else {}
+    return {
+        "llm_used": bool(out.get("llm_used")),
+        "fallback_reason": out.get("fallback_reason"),
+        "is_complete": bool(out.get("is_complete")),
+        "runtime_payload_ready": _runtime_payload_ready(runtime_payload),
+        "dialogue_action": out.get("dialogue_action"),
+        "pipelines": out.get("pipelines"),
+        "slot_prompt_profile_id": slot_debug.get("prompt_profile_id"),
+        "semantic_prompt_profile_id": (out.get("internal_trace") or {}).get("prompt_profile_id")
+        if isinstance(out.get("internal_trace"), dict)
+        else None,
+    }
+
+
+def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], errors: list[str]) -> None:
+    if expected.get("must_use_llm") is True and not trajectory["llm_used"]:
+        errors.append(f"agent.llm_used:expected=True:actual={trajectory['llm_used']!r}")
+    if expected.get("forbid_fallback") is True and trajectory.get("fallback_reason"):
+        errors.append(f"agent.fallback_reason:expected=None:actual={trajectory.get('fallback_reason')!r}")
+    if expected.get("must_be_complete") is True and not trajectory["is_complete"]:
+        errors.append(f"agent.is_complete:expected=True:actual={trajectory['is_complete']!r}")
+    if expected.get("must_have_runtime_payload") is True and not trajectory["runtime_payload_ready"]:
+        errors.append("agent.runtime_payload_ready:expected=True:actual=False")
+
+
 def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str) -> dict[str, Any]:
     case_id = str(case.get("id") or "unknown")
     prompt = str(case.get("prompt") or "").strip()
@@ -83,9 +115,13 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
             errors.append(f"is_complete:expected={parser_expected['is_complete']!r}:actual={out.get('is_complete')!r}")
 
         runtime_payload = build_runtime_payload(out.get("config", {}))
+        trajectory = _trajectory_from_output(out, runtime_payload)
         expected_runtime = parser_expected.get("runtime")
         if isinstance(expected_runtime, dict):
             _compare_expected(expected_runtime, runtime_payload, "runtime", errors)
+        agent_expected = case.get("agent_expected")
+        if isinstance(agent_expected, dict):
+            _check_agent_expected(agent_expected, trajectory, errors)
 
         return {
             "id": case_id,
@@ -93,6 +129,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
             "known_gaps": parser_expected.get("known_gaps", []),
             "llm_used": llm_used,
             "fallback_reason": out.get("fallback_reason"),
+            "trajectory": trajectory,
         }
     finally:
         reset_session(session_id)
@@ -105,6 +142,7 @@ def evaluate_llm_scenario_parsing(
     llm_config_path: str = "",
     min_accuracy: float = 1.0,
     max_cases: int | None = None,
+    model_override: str = "",
 ) -> dict[str, Any]:
     cases = _slice_cases(_load_json(path), max_cases)
     if live_llm and not llm_config_path:
@@ -121,7 +159,17 @@ def evaluate_llm_scenario_parsing(
             "known_gap_count": 0,
         }
 
-    results = [_process_case(case, live_llm=live_llm, llm_config_path=llm_config_path) for case in cases]
+    previous_model_override = os.environ.get("GEANT4_LLM_MODEL_OVERRIDE")
+    if model_override:
+        os.environ["GEANT4_LLM_MODEL_OVERRIDE"] = model_override
+    try:
+        results = [_process_case(case, live_llm=live_llm, llm_config_path=llm_config_path) for case in cases]
+    finally:
+        if model_override:
+            if previous_model_override is None:
+                os.environ.pop("GEANT4_LLM_MODEL_OVERRIDE", None)
+            else:
+                os.environ["GEANT4_LLM_MODEL_OVERRIDE"] = previous_model_override
     failures = [{"id": result["id"], "errors": result["errors"]} for result in results if result["errors"]]
     total = len(results)
     failed = len(failures)
@@ -137,6 +185,7 @@ def evaluate_llm_scenario_parsing(
         "accuracy": accuracy,
         "min_accuracy": min_accuracy,
         "meets_threshold": failed == 0 and accuracy >= min_accuracy,
+        "model_override": model_override or os.environ.get("GEANT4_LLM_MODEL_OVERRIDE", ""),
         "failures": failures,
         "known_gap_count": known_gap_count,
         "results": results,
@@ -151,6 +200,7 @@ def main() -> int:
     parser.add_argument("--llm-config", default=os.environ.get("GEANT4_LLM_CONFIG", ""))
     parser.add_argument("--min-accuracy", type=float, default=1.0)
     parser.add_argument("--max-cases", type=int, default=0, help="Limit evaluated cases for low-cost live smoke runs.")
+    parser.add_argument("--model-override", default=os.environ.get("GEANT4_LLM_MODEL_OVERRIDE", ""))
     args = parser.parse_args()
 
     env_live = os.environ.get("GEANT4_LLM_SCENARIO", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -161,6 +211,7 @@ def main() -> int:
         llm_config_path=str(args.llm_config or ""),
         min_accuracy=args.min_accuracy,
         max_cases=args.max_cases or None,
+        model_override=str(args.model_override or ""),
     )
     output = {
         "ok": bool(report["meets_threshold"]),

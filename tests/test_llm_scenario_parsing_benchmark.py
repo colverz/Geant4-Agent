@@ -23,6 +23,8 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertGreaterEqual(report["known_gap_count"], 1)
         for result in report["results"]:
             self.assertFalse(result["errors"])
+            self.assertIn("trajectory", result)
+            self.assertIn("runtime_payload_ready", result["trajectory"])
 
     def test_live_llm_mode_requires_explicit_config_path(self) -> None:
         report = evaluate_llm_scenario_parsing(live_llm=True, llm_config_path="")
@@ -87,6 +89,39 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertEqual(report["passed"], 0)
         self.assertEqual(report["accuracy"], 0.0)
         self.assertFalse(report["meets_threshold"])
+
+    def test_agent_expected_checks_trajectory_not_only_field_mapping(self) -> None:
+        casebank = [
+            {
+                "id": "agent_trajectory_probe",
+                "prompt": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json.",
+                "parser_expected": {},
+                "agent_expected": {
+                    "must_use_llm": True,
+                    "forbid_fallback": True,
+                    "must_be_complete": True,
+                    "must_have_runtime_payload": True,
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "casebank.json"
+            path.write_text(json.dumps(casebank), encoding="utf-8")
+            report = evaluate_llm_scenario_parsing(path)
+
+        self.assertEqual(report["failed"], 1)
+        errors = report["failures"][0]["errors"]
+        self.assertTrue(any(error.startswith("agent.llm_used") for error in errors))
+
+    def test_model_override_is_reported_and_restored(self) -> None:
+        previous = os.environ.get("GEANT4_LLM_MODEL_OVERRIDE")
+        with patch.dict(os.environ, {}, clear=False):
+            if previous is None:
+                os.environ.pop("GEANT4_LLM_MODEL_OVERRIDE", None)
+            report = evaluate_llm_scenario_parsing(max_cases=1, model_override="deepseek-v4-flash")
+
+        self.assertEqual(report["model_override"], "deepseek-v4-flash")
+        self.assertEqual(os.environ.get("GEANT4_LLM_MODEL_OVERRIDE"), previous)
 
     @unittest.skipUnless(
         os.environ.get("GEANT4_LLM_SCENARIO", "").strip().lower() in {"1", "true", "yes", "on"}
