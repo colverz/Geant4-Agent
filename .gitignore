@@ -96,6 +96,9 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
+!.env.*.example
 .envrc
 .venv/
 env/
@@ -189,6 +192,12 @@ nlu/training/bert_lab/data/eval/
 nlu/training/bert_lab/configs/_tmp.json
 nlu/training/bert_lab/configs/*.local.json
 nlu/llm_support/configs/*.local.json
+
+# Local secret/config files
+*.local.json
+*.local.yaml
+*.local.yml
+secrets/
 
 # Legacy compatibility copies / old local artifacts
 nlu/bert_lab/archive/
