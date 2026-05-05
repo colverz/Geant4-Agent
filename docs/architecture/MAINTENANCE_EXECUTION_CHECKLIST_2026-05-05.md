@@ -22,6 +22,10 @@ This checklist is the short operational version of
   `tests/` Python paths no longer import `nlu.bert_lab` directly. Archived
   tools now import source-of-truth modules directly and default to
   `nlu/training/bert_lab` / `nlu/llm_support` paths.
+- UI/runtime entrypoints are documented in `README.md` and
+  `docs/architecture/PROJECT_LAYOUT_2026-03-25.md`: `start_ui.ps1`,
+  `ui.launch.browser_shell`, `ui.run_ui_server`, `mcp/geant4/`, and
+  `runtime/geant4_local_app/`.
 
 ## Hard Rules
 
@@ -67,9 +71,8 @@ recommender prompts before touching strict slot/semantic JSON extraction prompts
 
 Current follow-up target:
 
-Move from BERT import audit to directory cleanup decisions. Start with
-documentation and entrypoint clarity; do not delete compatibility shims until a
-full import audit remains clean.
+Move from entrypoint clarity to directory cleanup decisions. Do not delete
+compatibility shims until a full import audit remains clean.
 
 ## Required Checks Before Commit
 

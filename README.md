@@ -6,7 +6,7 @@ A Geant4-oriented geometry assembly prototype: DSL + feasibility checker, plus a
 
 This repo is now easier to read if you treat it as three groups rather than one flat tree:
 
-- Runtime path: `core/`, `nlu/`, `planner/`, `ui/web/`, `ui/desktop/`
+- Runtime path: `core/`, `nlu/`, `planner/`, `mcp/`, `runtime/`, `ui/web/`, `ui/launch/`
 - Deterministic builders and knowledge: `builder/geometry/`, `knowledge/`
 - Historical assets and generated deliverables: `docs/archive/`, `legacy/`, `docs/reports/`
 
@@ -16,11 +16,30 @@ Main directories:
 - `nlu/`: runtime NLU, LLM adapters, BERT extractor, and separated training assets
 - `builder/geometry/`: DSL + feasibility checker + geometry synthesis
 - `planner/`: clarification planning and question rendering
+- `mcp/`: Geant4 runtime adapter boundary and runtime payload conversion
+- `runtime/`: local Geant4 runtime app and runtime-side assets
 - `knowledge/`: materials, particles, physics lists, schemas, and validation tools
 - `ui/web/`: local multi-turn web UI payload and HTTP renderer
-- `ui/desktop/`: Chromium desktop shell migration target
+- `ui/launch/`: supported local UI launch/runtime entry points
+- `ui/desktop/`: compatibility shell for older launch/import paths
 - `docs/`: active docs, release docs, reports, and archives
 - `legacy/`: frozen legacy programs and reports
+
+## Canonical Entrypoints
+
+Use these paths for current development:
+
+- Local UI: `.\start_ui.ps1`
+- Browser shell without PowerShell wrapper: `python -m ui.launch.browser_shell`
+- HTTP bridge only: `python -m ui.run_ui_server --host 127.0.0.1 --port 8099`
+- Geant4 runtime bridge code: `mcp/geant4/` and `runtime/geant4_local_app/`
+- Tests: `pytest -q`
+
+Compatibility-only paths:
+
+- `ui/desktop/` forwards to the browser UI path and should not receive new UI behavior.
+- `legacy/` is reference/archive space and should not receive new product behavior.
+- `nlu/bert_lab/` is a compatibility shim path; runtime/training work belongs in `nlu/bert/` or `nlu/training/bert_lab/`.
 
 ## Architecture Overview
 
@@ -28,7 +47,7 @@ Main directories:
 - **NLU core** (`nlu/`): Runtime semantic extraction, LLM-assisted parsing, structure extraction, and separated BERT training assets.
 - **Planner layer** (`planner/`): LLM-driven question planning and schema-constrained outputs.
 - **Knowledge layer** (`knowledge/`): JSON schema, validated lists, and validation.
-- **UI layer** (`ui/web/`, `ui/desktop/`): Local multi-turn interface and desktop-shell migration path.
+- **UI layer** (`ui/web/`, `ui/launch/`): Local multi-turn interface and launch/runtime bridge.
 - **Core** (`core/`): Shared contracts, orchestration, dialogue state, and validation.
 
 See: `docs/architecture/ARCHITECTURE.md` and `docs/PROJECT_CONCLUSION_2026-03-23.md`.
@@ -75,25 +94,23 @@ python knowledge\tools\fetch_geant4_materials.py
 ## Local Web UI
 
 ```powershell
-python ui/web/server.py
+.\start_ui.ps1
 ```
 
 Then open:
-- http://127.0.0.1:8088
+- http://127.0.0.1:8099
 
-## Chromium Desktop Shell
-
-Stage-1 desktop shell files now live under `ui/desktop/`.
-
-The intended startup model is:
+Alternative commands:
 
 ```powershell
-cd ui/desktop
-npm install
-npm start
+python -m ui.launch.browser_shell
+python -m ui.run_ui_server --host 127.0.0.1 --port 8099
 ```
 
-This shell reuses the current `ui/web/` frontend and starts the Python runtime locally through `python -m ui.launch.runtime_bridge`.
+## Desktop Compatibility Shell
+
+`ui/desktop/` is retained only for older launch scripts/import paths. New UI
+work should target `ui/web/` and `ui/launch/`.
 
 ## Archived Tooling
 
@@ -117,7 +134,7 @@ To use API-key based providers, set `api_key` or `api_key_env` in the config.
 
 ## Current Limitations
 
-- **No full Geant4 runtime config**: schema exists, but no full generator of G4 macro or C++ config.
+- **Live Geant4 is opt-in**: ordinary tests and UI flows use the guarded in-memory adapter unless a local runtime command is configured.
 - **Physics lists are reference-only**: fetched from official reference list, not a complete superset.
 - **Output formats use the official Geant4 analysis file types** (`csv`, `hdf5`, `root`, `xml`) plus a project-local `json` extension.
 - **RAG not implemented**: `knowledge/rag/` is a placeholder; no retrieval index yet.
@@ -134,7 +151,7 @@ To use API-key based providers, set `api_key` or `api_key_env` in the config.
 
 现在更适合按三类理解这个仓库：
 
-- 运行主链路：`core/`、`nlu/`、`planner/`、`ui/web/`、`ui/desktop/`
+- 运行主链路：`core/`、`nlu/`、`planner/`、`mcp/`、`runtime/`、`ui/web/`、`ui/launch/`
 - 确定性构建与知识：`builder/geometry/`、`knowledge/`
 - 历史归档与生成物：`docs/archive/`、`legacy/`、`docs/reports/`
 
@@ -144,11 +161,30 @@ To use API-key based providers, set `api_key` or `api_key_env` in the config.
 - `nlu/`：运行时语义解析、LLM 适配层、BERT 提取器，以及拆分后的训练资产
 - `builder/geometry/`：DSL、可行性检查、几何合成
 - `planner/`：追问规划和问题渲染
+- `mcp/`：Geant4 runtime adapter 边界与 runtime payload 转换
+- `runtime/`：本地 Geant4 runtime app 与运行侧资产
 - `knowledge/`：材料、粒子、物理列表、schema 与校验工具
 - `ui/web/`：本地多轮 Web UI 载荷与 HTTP 渲染层
-- `ui/desktop/`：Chromium 桌面壳迁移目标
+- `ui/launch/`：当前支持的本地 UI 启动和 runtime bridge 入口
+- `ui/desktop/`：旧启动/导入路径兼容壳
 - `docs/`：当前文档、发布材料、回归报告、归档材料
 - `legacy/`：冻结的旧程序和历史报告
+
+## 当前主入口
+
+当前开发优先使用这些入口：
+
+- 本地 UI：`.\start_ui.ps1`
+- 不经过 PowerShell wrapper 的浏览器壳：`python -m ui.launch.browser_shell`
+- 只启动 HTTP bridge：`python -m ui.run_ui_server --host 127.0.0.1 --port 8099`
+- Geant4 runtime bridge 代码：`mcp/geant4/` 与 `runtime/geant4_local_app/`
+- 测试：`pytest -q`
+
+兼容路径：
+
+- `ui/desktop/` 只保留给旧启动脚本/导入路径，不应添加新的 UI 行为。
+- `legacy/` 是参考和归档空间，不应添加新的产品行为。
+- `nlu/bert_lab/` 是兼容 shim；运行时/训练工作应进入 `nlu/bert/` 或 `nlu/training/bert_lab/`。
 
 ## 架构概览
 
@@ -156,7 +192,7 @@ To use API-key based providers, set `api_key` or `api_key_env` in the config.
 - **语义核心**（`nlu/`）：运行时语义抽取、LLM 辅助解析、结构识别，以及拆分后的 BERT 训练资产。
 - **规划层**（`planner/`）：LLM 驱动的追问与 schema 约束输出。
 - **知识层**（`knowledge/`）：JSON schema、可溯源列表与校验。
-- **UI 层**（`ui/web/`、`ui/desktop/`）：本地多轮对话界面与桌面壳迁移入口。
+- **UI 层**（`ui/web/`、`ui/launch/`）：本地多轮对话界面与启动/runtime bridge。
 - **Core**（`core/`）：共享契约、编排、对话状态与校验。
 
 详见：`docs/architecture/ARCHITECTURE.md` 与 `docs/PROJECT_CONCLUSION_2026-03-23.md`
@@ -207,25 +243,23 @@ python knowledge\tools\fetch_geant4_materials.py
 ## 本地 Web 界面
 
 ```powershell
-python ui/web/server.py
+.\start_ui.ps1
 ```
 
 然后访问：
-- http://127.0.0.1:8088
+- http://127.0.0.1:8099
 
-## Chromium 桌面壳
-
-第一阶段桌面壳文件已经放到 `ui/desktop/`。
-
-目标启动方式：
+也可以直接运行：
 
 ```powershell
-cd ui/desktop
-npm install
-npm start
+python -m ui.launch.browser_shell
+python -m ui.run_ui_server --host 127.0.0.1 --port 8099
 ```
 
-这一阶段会复用当前 `ui/web/` 前端，并通过 `python -m ui.launch.runtime_bridge` 在本地拉起 Python 运行时。
+## 桌面兼容壳
+
+`ui/desktop/` 仅作为旧启动脚本/导入路径兼容层保留。新的 UI 工作应进入
+`ui/web/` 与 `ui/launch/`。
 
 ## LLM 提供方配置（Ollama / OpenAI 兼容）
 
@@ -243,7 +277,7 @@ npm start
 
 ## 当前限制
 
-- **尚无完整 Geant4 运行配置**：只有 schema，没有完整的 G4 宏或 C++ 生成器。
+- **真实 Geant4 为 opt-in**：普通测试和 UI 流程默认使用受保护的 in-memory adapter；只有配置本地 runtime command 后才启动真实 Geant4。
 - **物理过程列表仅覆盖 reference**：非完整集合。
 - **输出格式已接入 Geant4 官方分析文件类型**（`csv`、`hdf5`、`root`、`xml`），并保留项目本地 `json` 扩展。
 - **RAG 尚未实现**：`knowledge/rag/` 为占位。
