@@ -3,11 +3,13 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from core.orchestrator.session_manager import (
-    _augment_geometry_targets,
+from core.orchestrator.confirmation_policy import (
     _candidate_from_pending_overwrite,
     _extract_low_confidence_updates,
     _extract_pending_overwrites,
+)
+from core.orchestrator.session_manager import (
+    _augment_geometry_targets,
     get_or_create_session,
     process_turn,
     reset_session,
