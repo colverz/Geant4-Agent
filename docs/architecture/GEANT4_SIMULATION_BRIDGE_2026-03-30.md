@@ -170,6 +170,12 @@ Optional environment variables:
 Without a configured command, `Geant4McpServer` remains in-memory so ordinary UI and unit-test flows
 do not accidentally launch Geant4.
 
+The web Geant4 API uses the same adapter factory. The presence of
+`mcp/geant4/local_wrapper.py` is not enough to enable real execution; the user or
+test environment must provide one of the runtime command variables above.
+Viewer launch follows the same rule and returns a guarded failure instead of
+starting any process when the local-process adapter is not explicitly configured.
+
 The MCP runtime boundary now includes result-oriented tools:
 
 - `validate_config`

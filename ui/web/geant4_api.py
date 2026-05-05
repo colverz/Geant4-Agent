@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
@@ -10,7 +9,7 @@ from typing import Any
 
 from core.runtime.types import ActionSafetyClass, ToolCallRequest
 from core.simulation import build_runtime_smoke_report
-from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
+from mcp.geant4.adapter import LocalProcessGeant4Adapter, build_geant4_adapter_from_env
 from mcp.geant4.runtime_payload import build_runtime_payload
 from mcp.geant4.server import Geant4McpServer
 from planner.runtime_intent import classify_user_runtime_intent
@@ -18,27 +17,13 @@ from planner.runtime_result import naturalize_runtime_result_message, naturalize
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-LOCAL_WRAPPER = ROOT / "mcp" / "geant4" / "local_wrapper.py"
-LOCAL_PROBE = ROOT / "legacy" / "tooling" / "geant4_minimal_probe" / "build" / "Release" / "geant4_minimal_probe.exe"
-GEANT4_ROOT = Path(r"F:\Geant4")
 
 _GEANT4_SERVER: Geant4McpServer | None = None
 _LAST_VIEWER_PID: int | None = None
 
 
 def _build_server() -> Geant4McpServer:
-    if LOCAL_WRAPPER.exists():
-        adapter = LocalProcessGeant4Adapter(
-            [sys.executable, str(LOCAL_WRAPPER)],
-            geant4_root=str(GEANT4_ROOT),
-            working_dir=str(ROOT),
-        )
-        snapshot = adapter.snapshot()
-        snapshot.metadata["wrapper_path"] = str(LOCAL_WRAPPER)
-        snapshot.metadata["probe_path"] = str(LOCAL_PROBE)
-        snapshot.metadata["wrapper_mode"] = "local_process"
-        return Geant4McpServer(adapter=adapter)
-    return Geant4McpServer(adapter=InMemoryGeant4Adapter())
+    return Geant4McpServer(adapter=build_geant4_adapter_from_env())
 
 
 def get_geant4_server() -> Geant4McpServer:
@@ -101,15 +86,25 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
     if path == "/api/geant4/viewer/open":
         patch = dict(payload.get("patch", {}))
         viewer_events = max(1, int(payload.get("events", 12)))
-        runtime_payload = build_runtime_payload(patch)
         adapter = server._adapter  # type: ignore[attr-defined]
         if not isinstance(adapter, LocalProcessGeant4Adapter):
             return 400, {
                 "status": "failed",
                 "message": "Live viewer requires the local process adapter.",
+                "errors": ["local_process_required", "missing_runtime_command"],
                 "runtime_phase": adapter.snapshot().runtime_phase.value,
                 "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
             }
+        if not adapter.snapshot().connected:
+            return 400, {
+                "status": "failed",
+                "message": "Live viewer requires GEANT4_RUNTIME_COMMAND_JSON or GEANT4_RUNTIME_COMMAND.",
+                "errors": ["missing_runtime_command"],
+                "runtime_phase": adapter.snapshot().runtime_phase.value,
+                "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
+            }
+
+        runtime_payload = build_runtime_payload(patch)
 
         with tempfile.NamedTemporaryFile(
             mode="w",

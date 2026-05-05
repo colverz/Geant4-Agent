@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
+import sys
 import unittest
+from unittest import mock
 
-from mcp.geant4.adapter import InMemoryGeant4Adapter
+from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
 from mcp.geant4.server import Geant4McpServer
 import ui.web.geant4_api as geant4_api
 
@@ -23,6 +27,50 @@ class Geant4WebApiTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         geant4_api._GEANT4_SERVER = self._previous_server
+
+    def test_default_web_server_uses_in_memory_without_runtime_env(self) -> None:
+        geant4_api._GEANT4_SERVER = None
+        with mock.patch.dict(
+            os.environ,
+            {"GEANT4_RUNTIME_COMMAND_JSON": "", "GEANT4_RUNTIME_COMMAND": ""},
+        ):
+            server = geant4_api._build_server()
+            geant4_api._GEANT4_SERVER = server
+            state = geant4_api.geant4_state_payload()
+
+        adapter = server._adapter  # type: ignore[attr-defined]
+        self.assertIsInstance(adapter, InMemoryGeant4Adapter)
+        self.assertIn("metadata", state)
+        self.assertEqual(state["metadata"]["adapter"], "in_memory")
+
+    def test_web_server_uses_local_process_when_runtime_env_is_configured(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, "-c", "print('ok')"]),
+                "GEANT4_ROOT": "F:\\Geant4Test",
+                "GEANT4_WORKING_DIR": "F:\\geant4agent",
+            },
+        ):
+            server = geant4_api._build_server()
+
+        adapter = server._adapter  # type: ignore[attr-defined]
+        self.assertIsInstance(adapter, LocalProcessGeant4Adapter)
+        snapshot = adapter.snapshot()
+        self.assertEqual(snapshot.metadata["adapter"], "local_process")
+        self.assertEqual(snapshot.metadata["geant4_root"], "F:\\Geant4Test")
+
+    def test_viewer_open_without_runtime_env_returns_guarded_failure(self) -> None:
+        status, body = geant4_api.handle_geant4_post(
+            "/api/geant4/viewer/open",
+            {"patch": _runtime_patch(), "events": 2},
+        )
+
+        self.assertEqual(status, 400)
+        self.assertEqual(body["status"], "failed")
+        self.assertEqual(body["action_safety_class"], "expensive_runtime")
+        self.assertIn("local_process_required", body["errors"])
+        self.assertIn("missing_runtime_command", body["errors"])
 
     def test_summary_requires_completed_run(self) -> None:
         status, body = geant4_api.handle_geant4_post("/api/geant4/summary", {})

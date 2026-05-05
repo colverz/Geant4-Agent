@@ -160,6 +160,10 @@ class Geant4McpAdapterTest(unittest.TestCase):
         adapter = build_geant4_adapter_from_env({})
         self.assertIsInstance(adapter, InMemoryGeant4Adapter)
 
+    def test_default_adapter_rejects_malformed_runtime_command_json(self) -> None:
+        with self.assertRaises(ValueError):
+            build_geant4_adapter_from_env({"GEANT4_RUNTIME_COMMAND_JSON": "[not-json"})
+
     def test_default_adapter_can_be_configured_from_runtime_env(self) -> None:
         adapter = build_geant4_adapter_from_env(
             {
