@@ -72,6 +72,55 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertIn("local_process_required", body["errors"])
         self.assertIn("missing_runtime_command", body["errors"])
 
+    def test_validate_config_is_read_only_and_reports_missing_fields(self) -> None:
+        status, body = geant4_api.handle_geant4_post(
+            "/api/geant4/validate",
+            {
+                "events": 5,
+                "config": {"geometry": {"structure": "single_box", "params": {"module_x": 10.0}}},
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["status"], "completed")
+        self.assertEqual(body["action_safety_class"], "read_only")
+        self.assertFalse(body["payload"]["ok"])
+        self.assertIn("source.type", body["payload"]["missing_paths"])
+        self.assertIn("physics.physics_list", body["payload"]["missing_paths"])
+        state = geant4_api.geant4_state_payload()
+        self.assertEqual(state["runtime_phase"], "idle")
+        self.assertFalse(state["geometry_ready"])
+
+    def test_validate_config_returns_runtime_payload_preview_for_complete_config(self) -> None:
+        status, body = geant4_api.handle_geant4_post(
+            "/api/geant4/validate",
+            {
+                "events": 7,
+                "config": {
+                    "geometry": {
+                        "structure": "single_box",
+                        "params": {"module_x": 10.0, "module_y": 20.0, "module_z": 30.0},
+                    },
+                    "source": {
+                        "type": "point",
+                        "particle": "gamma",
+                        "energy": 1.0,
+                        "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
+                        "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+                    },
+                    "physics_list": {"name": "FTFP_BERT"},
+                },
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["action_safety_class"], "read_only")
+        self.assertTrue(body["payload"]["ok"])
+        preview = body["payload"]["runtime_payload_preview"]
+        self.assertEqual(preview["structure"], "single_box")
+        self.assertEqual(preview["source_type"], "point")
+        self.assertEqual(preview["run"]["events"], 7)
+
     def test_summary_requires_completed_run(self) -> None:
         status, body = geant4_api.handle_geant4_post("/api/geant4/summary", {})
 

@@ -18,6 +18,7 @@ POST_PATHS = {
     "/api/audit",
     "/api/config/summary",
     "/api/geant4/apply",
+    "/api/geant4/validate",
     "/api/geant4/initialize",
     "/api/geant4/run",
     "/api/geant4/intent",

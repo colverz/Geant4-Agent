@@ -201,6 +201,8 @@ This report is the stable top-level contract for quick checks and demos:
 
 The web-facing Geant4 API exposes the same contract:
 
+- `/api/geant4/validate` exposes the non-mutating runtime preflight and returns missing
+  runtime fields or a runtime payload preview
 - `/api/geant4/run` preserves the raw MCP observation and adds `runtime_smoke_report`
 - `/api/geant4/summary` returns the latest cached `runtime_smoke_report`
 

@@ -177,6 +177,17 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
         obs = server.call_tool(
             ToolCallRequest(tool_name="apply_config_patch", arguments={"patch": payload.get("patch", {})})
         )
+    elif path == "/api/geant4/validate":
+        obs = server.call_tool(
+            ToolCallRequest(
+                tool_name="validate_config",
+                arguments={
+                    "config": payload.get("config"),
+                    "patch": payload.get("patch"),
+                    "events": int(payload.get("events", 1) or 1),
+                },
+            )
+        )
     elif path == "/api/geant4/initialize":
         obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
     elif path == "/api/geant4/run":
@@ -210,6 +221,8 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
 
     body = _observation_body(obs)
     if path == "/api/geant4/log":
+        body["action_safety_class"] = ActionSafetyClass.READ_ONLY.value
+    elif path == "/api/geant4/validate":
         body["action_safety_class"] = ActionSafetyClass.READ_ONLY.value
     elif path == "/api/geant4/apply":
         body["action_safety_class"] = ActionSafetyClass.CONFIG_MUTATION.value

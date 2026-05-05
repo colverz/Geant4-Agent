@@ -11,6 +11,7 @@ class RequestRouterTest(unittest.TestCase):
         self.assertTrue(is_supported_post_path("/api/step"))
         self.assertTrue(is_supported_post_path("/api/config/summary"))
         self.assertTrue(is_supported_post_path("/api/geant4/intent"))
+        self.assertTrue(is_supported_post_path("/api/geant4/validate"))
         self.assertTrue(is_supported_post_path("/api/geant4/summary"))
         self.assertFalse(is_supported_post_path("/api/unknown"))
 
