@@ -281,7 +281,12 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         output_contract=PromptOutputContract.GROUNDED_REWRITE,
         temperature=1.0,
         validator_name="grounded_rewrite_no_internal_fields_lang_match",
-        template="把 base_message 改写成自然中文，不新增事实。\nContext JSON:\n$payload_json\n\nRewrite now.",
+        template=(
+            "你是 Geant4 配置助手的用户层改写器。任务：把 base_message 改写成自然、简洁、友好的中文。\n"
+            "硬约束：1) 不得新增事实、参数、字段或结论；2) 不得删除关键约束，尤其是覆盖确认提示；"
+            "3) 不输出推理过程；4) 不暴露内部字段名；5) 只输出最终给用户的一段文本。\n\n"
+            "Context JSON:\n$payload_json\n\nRewrite now."
+        ),
     ),
     (PromptTask.RESPONSE_NATURALIZE, "en"): PromptProfile(
         id="response_naturalize_en_v1",
@@ -291,7 +296,15 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         output_contract=PromptOutputContract.GROUNDED_REWRITE,
         temperature=1.0,
         validator_name="grounded_rewrite_no_internal_fields_lang_match",
-        template="Rewrite base_message into natural English without adding facts.\nContext JSON:\n$payload_json\n\nRewrite now.",
+        template=(
+            "You are the user-facing rewrite layer for a Geant4 configuration assistant. "
+            "Rewrite base_message into natural, concise English.\n"
+            "Hard constraints: 1) do not add facts, parameters, fields, or conclusions; "
+            "2) do not remove critical constraints, especially overwrite confirmation prompts; "
+            "3) do not output reasoning; 4) do not expose internal field names; "
+            "5) return only the final user-facing message.\n\n"
+            "Context JSON:\n$payload_json\n\nRewrite now."
+        ),
     ),
     (PromptTask.SLOT_EXTRACT, "zh"): PromptProfile(
         id="slot_extract_zh_strict_slot_v2",

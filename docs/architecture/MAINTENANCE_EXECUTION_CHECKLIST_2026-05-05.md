@@ -11,6 +11,11 @@ This checklist is the short operational version of
 - `tools/install_git_hooks.ps1` can install hooks, but this Windows Git setup may
   report a `sh.exe` signal pipe error. If that happens, run the secret scanner
   manually before commit and push.
+- Phase 1 orchestrator extraction is complete:
+  `confirmation_policy.py`, `slot_memory.py`, `graph_override_policy.py`, and
+  `candidate_pipeline.py` now own their respective policies/helpers.
+- Phase 2 prompt consolidation has started with response naturalization moving
+  onto `PromptProfile`.
 
 ## Hard Rules
 
@@ -33,23 +38,24 @@ This checklist is the short operational version of
 
 ## Cleanup Priority
 
-1. Extract confirmation and overwrite policy from `core/orchestrator/session_manager.py`.
-2. Extract slot memory merge helpers from `session_manager.py`.
-3. Extract graph override protection from `session_manager.py`.
-4. Move low-risk prompt strings into `PromptProfile`.
-5. Clarify or retire compatibility paths after import audit.
+1. Continue moving low-risk prompt strings into `PromptProfile`.
+2. Audit `nlu/bert_lab` imports before touching BERT compatibility shims.
+3. Clarify or retire compatibility paths after import audit.
+4. Revisit `session_manager.py` only for clearly bounded extraction, not broad
+   opportunistic cleanup.
 
-## First Refactor Target
+## Completed Refactor Targets
 
-Create `core/orchestrator/confirmation_policy.py` and move only behavior-preserving
-logic related to:
+- `core/orchestrator/confirmation_policy.py`
+- `core/orchestrator/slot_memory.py`
+- `core/orchestrator/graph_override_policy.py`
+- `core/orchestrator/candidate_pipeline.py`
 
-- implicit overwrite detection
-- pending overwrite extraction
-- delete confirmation
-- low-confidence confirmation boundaries
+## Current Refactor Target
 
-Do not change user-facing behavior in this step.
+Continue Phase 2 by migrating low-risk prompt producers to `PromptProfile`.
+Prefer response naturalization, runtime/result explanation, clarification, and
+recommender prompts before touching strict slot/semantic JSON extraction prompts.
 
 ## Required Checks Before Commit
 
