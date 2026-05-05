@@ -534,6 +534,7 @@ function uiWord(key) {
     pending: "pending",
     last_action: "Last Action",
     status: "Status",
+    adapter: "Adapter",
   };
   return (state.lang === "zh" ? zh : en)[key] || key;
 }
@@ -567,8 +568,10 @@ function buildCompletionBuckets(cfg = {}) {
 }
 
 function buildRuntimeOverview(runtimePayload = {}) {
+  const metadata = runtimePayload.metadata || {};
   return [
     { label: uiWord("status"), value: runtimePayload.status || uiWord("offline") },
+    { label: uiWord("adapter"), value: metadata.adapter || "unknown" },
     { label: t("phase_label"), value: runtimePayload.runtime_phase || "idle" },
     { label: t("geometry"), value: runtimePayload.geometry_ready ? uiWord("ready") : uiWord("pending") },
     { label: t("source_type"), value: runtimePayload.source_ready ? uiWord("ready") : uiWord("pending") },
@@ -1061,11 +1064,45 @@ async function refreshGeant4Summary() {
   renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
 }
 
+function runtimePreflightMessage(data = {}) {
+  const payload = data.payload || {};
+  if (payload.ok) {
+    const preview = payload.runtime_payload_preview || {};
+    const structure = preview.structure || preview.geometry?.structure || "unknown geometry";
+    const particle = preview.particle || preview.source?.particle || "unknown particle";
+    return `Runtime preflight passed: ${structure}, ${particle}.`;
+  }
+  const missing = Array.isArray(payload.missing_paths) ? payload.missing_paths : [];
+  const errors = Array.isArray(data.errors) ? data.errors : [];
+  const details = missing.length ? missing.join(", ") : errors.join(", ") || "unknown reason";
+  return `Runtime preflight failed: ${details}.`;
+}
+
+async function validateGeant4Config(events = 1, options = {}) {
+  const body = { events };
+  if (Object.prototype.hasOwnProperty.call(options, "patch")) body.patch = options.patch;
+  if (Object.prototype.hasOwnProperty.call(options, "config")) body.config = options.config;
+  const res = await fetch("/api/geant4/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  const ok = res.ok && data.payload?.ok === true;
+  if (!ok) {
+    addMessage("assistant", `${t("geant4_prefix")}: ${runtimePreflightMessage(data)}`, "system");
+  }
+  return { ok, data };
+}
+
 async function syncGeant4Config() {
+  const patch = currentConfigPatch();
+  const preflight = await validateGeant4Config(1, { patch });
+  if (!preflight.ok) return;
   const res = await fetch("/api/geant4/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch: currentConfigPatch() }),
+    body: JSON.stringify({ patch }),
   });
   const data = await res.json();
   await refreshGeant4State();
@@ -1073,6 +1110,8 @@ async function syncGeant4Config() {
 }
 
 async function initializeGeant4() {
+  const preflight = await validateGeant4Config(1);
+  if (!preflight.ok) return;
   const res = await fetch("/api/geant4/initialize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1084,10 +1123,13 @@ async function initializeGeant4() {
 }
 
 async function openGeant4Viewer() {
+  const patch = currentConfigPatch();
+  const preflight = await validateGeant4Config(12, { patch });
+  if (!preflight.ok) return;
   const res = await fetch("/api/geant4/viewer/open", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch: currentConfigPatch(), events: 12 }),
+    body: JSON.stringify({ patch, events: 12 }),
   });
   const data = await res.json();
   await refreshGeant4State();
@@ -1106,6 +1148,8 @@ async function openGeant4Viewer() {
 }
 
 async function runGeant4(events) {
+  const preflight = await validateGeant4Config(events);
+  if (!preflight.ok) return;
   const res = await fetch("/api/geant4/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

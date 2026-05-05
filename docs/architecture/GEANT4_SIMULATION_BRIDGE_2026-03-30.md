@@ -206,6 +206,10 @@ The web-facing Geant4 API exposes the same contract:
 - `/api/geant4/run` preserves the raw MCP observation and adds `runtime_smoke_report`
 - `/api/geant4/summary` returns the latest cached `runtime_smoke_report`
 
+The web UI runtime controls call `/api/geant4/validate` before sync, initialize, run,
+and viewer launch. A failed preflight is shown as a user-facing missing-field message
+and must not call `/api/geant4/run`, `/api/geant4/viewer/open`, or `/api/step_async`.
+
 UI and agent-facing result displays should prefer `runtime_smoke_report` over parsing
 `simulation_result` directly.
 

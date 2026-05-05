@@ -222,6 +222,10 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("question: questionText", app_js)
         self.assertIn("/api/geant4/summary", app_js)
         self.assertIn("/api/config/summary", app_js)
+        self.assertIn("validateGeant4Config", app_js)
+        self.assertIn("runtimePreflightMessage", app_js)
+        self.assertIn("/api/geant4/validate", app_js)
+        self.assertIn("metadata.adapter", app_js)
 
     def test_frontend_runtime_result_question_uses_summary_not_run(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
@@ -264,6 +268,46 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("normalChatReadOnlyMessage", guard_branch)
         self.assertIn("return;", guard_branch)
         self.assertNotIn("/api/step_async", guard_branch)
+
+    def test_frontend_sync_config_preflights_before_apply(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        branch = app_js[
+            app_js.index("async function syncGeant4Config") : app_js.index("async function initializeGeant4")
+        ]
+
+        self.assertIn("validateGeant4Config", branch)
+        self.assertIn("return;", branch)
+        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/apply"'))
+
+    def test_frontend_initialize_preflights_before_initialize(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        branch = app_js[
+            app_js.index("async function initializeGeant4") : app_js.index("async function openGeant4Viewer")
+        ]
+
+        self.assertIn("validateGeant4Config", branch)
+        self.assertIn("return;", branch)
+        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/initialize"'))
+
+    def test_frontend_viewer_preflights_before_viewer(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        branch = app_js[
+            app_js.index("async function openGeant4Viewer") : app_js.index("async function runGeant4")
+        ]
+
+        self.assertIn("validateGeant4Config", branch)
+        self.assertIn("return;", branch)
+        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/viewer/open"'))
+
+    def test_frontend_run_preflights_before_run(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        branch = app_js[
+            app_js.index("async function runGeant4") : app_js.index("async function loadRuntimeConfigs")
+        ]
+
+        self.assertIn("validateGeant4Config", branch)
+        self.assertIn("return;", branch)
+        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/run"'))
 
 
 if __name__ == "__main__":
