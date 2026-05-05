@@ -11,6 +11,7 @@ from typing import Any
 class PromptTask(str, Enum):
     SLOT_EXTRACT = "slot_extract"
     SEMANTIC_EXTRACT = "semantic_extract"
+    INTERPRET_USER_TURN = "interpret_user_turn"
     CLARIFICATION = "clarification"
     RESPONSE_NATURALIZE = "response_naturalize"
     RUNTIME_RESULT_EXPLAIN = "runtime_result_explain"
@@ -243,6 +244,7 @@ _NORMALIZE_GEOMETRY_INTENTS = (
     "coaxial_shells|single_box|single_tubs|single_sphere|single_cons|single_trd|"
     "single_polycone|single_cuttubs|boolean|unresolved"
 )
+_INTERPRETER_TOP_LEVEL_KEYS = {"turn_summary", "geometry_candidate", "source_candidate"}
 
 
 def _lang_key(lang: str) -> str:
@@ -463,6 +465,26 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         validator_name="normalization_json_contract",
         template="__NORMALIZE_USER_TURN_PROMPT__",
     ),
+    (PromptTask.INTERPRET_USER_TURN, "zh"): PromptProfile(
+        id="interpret_user_turn_zh_v1",
+        task=PromptTask.INTERPRET_USER_TURN,
+        lang="zh",
+        version="v1",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="interpreter_json_contract",
+        template="__INTERPRET_USER_TURN_PROMPT__",
+    ),
+    (PromptTask.INTERPRET_USER_TURN, "en"): PromptProfile(
+        id="interpret_user_turn_en_v1",
+        task=PromptTask.INTERPRET_USER_TURN,
+        lang="en",
+        version="v1",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="interpreter_json_contract",
+        template="__INTERPRET_USER_TURN_PROMPT__",
+    ),
     (PromptTask.SLOT_EXTRACT, "zh"): PromptProfile(
         id="slot_extract_zh_strict_slot_v2",
         task=PromptTask.SLOT_EXTRACT,
@@ -574,6 +596,143 @@ def build_normalization_user_turn_prompt(user_text: str, context_summary: str = 
     )
 
 
+def build_interpret_user_turn_prompt(user_text: str, context_summary: str = "", *, lang: str = "en") -> str:
+    schema = (
+        "{\n"
+        '  "turn_summary": {\n'
+        '    "intent": "set|modify|confirm|reject|question|other",\n'
+        '    "focus": "geometry|source|physics|output|mixed",\n'
+        '    "scope": "full_request|partial_update|clarification",\n'
+        '    "user_goal": "brief summary of the user goal",\n'
+        '    "explicit_domains": ["geometry"],\n'
+        '    "uncertain_domains": ["source"]\n'
+        "  },\n"
+        '  "geometry_candidate": {\n'
+        '    "kind_candidate": "box|cylinder|sphere|orb|cons|trd|slab|plate|null",\n'
+        '    "material_candidate": "G4_Cu|null",\n'
+        '    "dimension_hints": {\n'
+        '      "size_triplet_mm": [null,null,null],\n'
+        '      "side_length_mm": null,\n'
+        '      "radius_mm": null,\n'
+        '      "diameter_mm": null,\n'
+        '      "half_length_mm": null,\n'
+        '      "full_length_mm": null,\n'
+        '      "thickness_mm": null\n'
+        "    },\n"
+        '    "placement_relation": null,\n'
+        '    "confidence": 0.0,\n'
+        '    "ambiguities": ["what is unclear"],\n'
+        '    "evidence_spans": [{"text":"10 mm x 20 mm x 30 mm","role":"dimensions"}]\n'
+        "  },\n"
+        '  "source_candidate": {\n'
+        '    "source_type_candidate": "point|beam|plane|isotropic|null",\n'
+        '    "particle_candidate": "gamma|e-|proton|neutron|null",\n'
+        '    "energy_candidate_mev": null,\n'
+        '    "position_mode": "absolute|relative_to_target_center|relative_to_target_face|null",\n'
+        '    "position_hint": {"position_mm": [null,null,null], "offset_mm": null, "axis": "+x|-x|+y|-y|+z|-z|null"},\n'
+        '    "direction_mode": "explicit_vector|toward_target_center|toward_target_face|toward_target_face_normal|normal_to_target_face|unknown|null",\n'
+        '    "direction_hint": {"direction_vec": [null,null,null], "axis": "+x|-x|+y|-y|+z|-z|null"},\n'
+        '    "confidence": 0.0,\n'
+        '    "ambiguities": ["what is unclear"],\n'
+        '    "evidence_spans": [{"text":"at (0,0,-20) mm","role":"position"}]\n'
+        "  }\n"
+        "}\n"
+    )
+    if _lang_key(lang) == "zh":
+        return (
+            "请解释这轮 Geant4 配置请求真正表达的意思。\n"
+            "你的任务是把用户的话整理成受控候选含义，而不是直接写最终配置路径。\n"
+            "只返回 JSON，结构如下：\n"
+            f"{schema}"
+            "硬规则：\n"
+            "- 不要输出最终 config path。\n"
+            "- 不要脑补缺失值。\n"
+            "- 如果用户没说清楚，就把对应字段留空，并把不确定点写进 ambiguities。\n"
+            "- 严格遵守上面的 schema，不要新增字段。\n"
+            "- 候选解释要忠实、克制，不要自作聪明。\n"
+            "- evidence_spans 要尽量指向原句中的明确证据。\n"
+            "- 如果这一轮只改一个领域，就不要把无关领域写进 focus。\n"
+            "- geometry 和 source 这里只是候选解释，最终是否可执行由后续层决定。\n"
+            "- geometry_candidate 只绑定“靶、几何体、目标物体”这一类描述。\n"
+            "- source_candidate 只绑定“源、束流、入射粒子”这一类描述。\n"
+            "- 如果同一句里既有靶又有源，不要把源的属性解释成几何，也不要把几何尺寸解释成 source。\n"
+            "- “距靶前表面外 5 mm”、“在靶前方”、“朝靶心”、“朝靶面法线方向”这类表达默认属于 source 的位置或方向，不是 geometry 的尺寸。\n"
+            "- “10 mm 见方靶”或“10 mm 立方体”更倾向于 box 的 side_length_mm，不是 slab 厚度。\n"
+            "- 如果“铜靶”、“铅板”、“钨盒靶”这种“材料 + 靶/板/靶体/目标物体”的说法一起出现，默认把材料理解成 geometry_candidate.material_candidate，不要把材料归到 source。\n"
+            "- “靶”、“靶体”、“盒靶”、“靶材”这类词默认描述 geometry 对象，而不是 source。\n"
+            "示例：\n"
+            '- 用户: "10 mm x 20 mm x 30 mm 铜盒靶"\n'
+            '  geometry_candidate.kind_candidate = "box"\n'
+            "  geometry_candidate.dimension_hints.size_triplet_mm = [10,20,30]\n"
+            '  geometry_candidate.material_candidate = "G4_Cu"\n'
+            '- 用户: "10 mm 见方铜靶"\n'
+            '  geometry_candidate.kind_candidate = "box"\n'
+            "  geometry_candidate.dimension_hints.side_length_mm = 10\n"
+            '  geometry_candidate.material_candidate = "G4_Cu"\n'
+            '- 用户: "铜靶"\n'
+            '  geometry_candidate.material_candidate = "G4_Cu"\n'
+            "  geometry_candidate.kind_candidate 可以为 null，因为只说了材料和靶，没有真正说清几何形状\n"
+            '- 用户: "gamma 点源 1 MeV，位于 (0,0,-20) mm，沿 +z 方向"\n'
+            '  source_candidate.source_type_candidate = "point"\n'
+            '  source_candidate.particle_candidate = "gamma"\n'
+            "  source_candidate.energy_candidate_mev = 1.0\n"
+            '  source_candidate.position_mode = "absolute"\n'
+            '  source_candidate.direction_mode = "explicit_vector"\n'
+            '- 用户: "在靶前表面外 5 mm 放一个 gamma 点源，朝靶心入射"\n'
+            '  source_candidate.position_mode = "relative_to_target_face"\n'
+            '  source_candidate.direction_mode = "toward_target_center"\n'
+            f"Context: {context_summary}\n"
+            f"User: {user_text}\n"
+            "JSON:"
+        )
+    return (
+        "Interpret the user request for a Geant4 configuration session.\n"
+        "Your job is to explain what the user appears to mean, not to write final config paths.\n"
+        "Return JSON only with this schema:\n"
+        f"{schema}"
+        "Hard rules:\n"
+        "- Do not output final config paths.\n"
+        "- Do not invent missing values.\n"
+        "- If the user is unclear, keep the corresponding field null and explain the ambiguity.\n"
+        "- Stay inside the schema. Do not add new keys.\n"
+        "- Prefer a short, faithful interpretation over a clever one.\n"
+        "- Use evidence_spans to point to the exact wording that supports your interpretation.\n"
+        "- If the request only changes one area, keep unrelated domains out of focus.\n"
+        "- Geometry and source are interpreted candidates only; final execution decisions happen later.\n"
+        "- Bind geometry_candidate to the target/object being built.\n"
+        "- Bind source_candidate to the emitter/beam/source phrase.\n"
+        "- If a sentence mentions both target and source, do not mix their properties.\n"
+        "- Relative phrases such as 'in front of target', 'outside target center', or 'toward target center' belong to source placement or source direction, not target size.\n"
+        "- If the user says '10 mm square target' or '10 mm cube', prefer box plus side_length_mm rather than slab thickness.\n"
+        "- If the user says a material together with target/object words such as 'copper target', 'lead slab', or 'tungsten box', treat that material as geometry_candidate.material_candidate unless the sentence clearly assigns it to source or something else.\n"
+        "- Words like 'target', '靶', '靶体', 'box target', or 'target box' usually describe the geometry object, not the source.\n"
+        "Examples:\n"
+        '- User: "10 mm x 20 mm x 30 mm copper box target"\n'
+        '  geometry_candidate.kind_candidate = "box"\n'
+        "  geometry_candidate.dimension_hints.size_triplet_mm = [10,20,30]\n"
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        '- User: "10 mm square copper target"\n'
+        '  geometry_candidate.kind_candidate = "box"\n'
+        "  geometry_candidate.dimension_hints.side_length_mm = 10\n"
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        '- User: "copper target"\n'
+        '  geometry_candidate.material_candidate = "G4_Cu"\n'
+        "  geometry_candidate.kind_candidate should stay null if the shape is not actually specified\n"
+        '- User: "gamma point source 1 MeV at (0,0,-20) mm along +z"\n'
+        '  source_candidate.source_type_candidate = "point"\n'
+        '  source_candidate.particle_candidate = "gamma"\n'
+        "  source_candidate.energy_candidate_mev = 1.0\n"
+        '  source_candidate.position_mode = "absolute"\n'
+        '  source_candidate.direction_mode = "explicit_vector"\n'
+        '- User: "place a gamma point source 5 mm in front of the target, toward target center"\n'
+        '  source_candidate.position_mode = "relative_to_target_face"\n'
+        '  source_candidate.direction_mode = "toward_target_center"\n'
+        f"Context: {context_summary}\n"
+        f"User: {user_text}\n"
+        "JSON:"
+    )
+
+
 def build_prompt(task: PromptTask | str, lang: str, context: dict[str, Any]) -> PromptBuildResult:
     task_key = PromptTask(task)
     profile = get_prompt_profile(task_key, lang)
@@ -581,6 +740,19 @@ def build_prompt(task: PromptTask | str, lang: str, context: dict[str, Any]) -> 
         prompt = build_normalization_user_turn_prompt(
             str(context.get("user_text", "")),
             str(context.get("context_summary", "")),
+        )
+        return PromptBuildResult(
+            prompt=prompt,
+            profile_id=profile.id,
+            validator_name=profile.validator_name,
+            output_contract=profile.output_contract.value,
+            temperature=profile.temperature,
+        )
+    if task_key == PromptTask.INTERPRET_USER_TURN:
+        prompt = build_interpret_user_turn_prompt(
+            str(context.get("user_text", "")),
+            str(context.get("context_summary", "")),
+            lang=profile.lang,
         )
         return PromptBuildResult(
             prompt=prompt,
@@ -702,6 +874,17 @@ def _validate_normalization_json_object(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _validate_interpreter_json_object(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _append_unknown_keys(errors, payload, _INTERPRETER_TOP_LEVEL_KEYS)
+    for key in _INTERPRETER_TOP_LEVEL_KEYS:
+        if key not in payload:
+            errors.append(f"missing_json_key:{key}")
+        elif not isinstance(payload.get(key), dict):
+            errors.append(f"json_key_not_object:{key}")
+    return errors
+
+
 def validate_prompt_output(
     task: PromptTask | str,
     lang: str,
@@ -731,6 +914,8 @@ def validate_prompt_output(
                 errors.extend(_validate_physics_recommend_json_object(parsed, allowed_lists))
             if profile.task == PromptTask.NORMALIZE_USER_TURN:
                 errors.extend(_validate_normalization_json_object(parsed))
+            if profile.task == PromptTask.INTERPRET_USER_TURN:
+                errors.extend(_validate_interpreter_json_object(parsed))
     if profile.output_contract == PromptOutputContract.ROUTE_LABEL:
         if text.strip() not in {"read_summary", "read_config", "config_mutation", "run_requested", "viewer_requested", "normal_chat"}:
             errors.append("unknown_route_label")

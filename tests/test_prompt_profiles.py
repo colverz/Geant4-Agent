@@ -199,6 +199,36 @@ class PromptProfilesTest(unittest.TestCase):
         self.assertIn("banned_normalized_key:module_size", result.errors)
         self.assertIn("narrative_set_to_phrase", result.errors)
 
+    def test_interpret_user_turn_profile_uses_candidate_boundary_prompt(self) -> None:
+        built = build_prompt(
+            PromptTask.INTERPRET_USER_TURN,
+            "en",
+            {
+                "user_text": "10 mm copper box target",
+                "context_summary": "phase=geometry",
+            },
+        )
+
+        self.assertEqual(built.profile_id, "interpret_user_turn_en_v1")
+        self.assertIn("Do not output final config paths.", built.prompt)
+        self.assertIn('"geometry_candidate"', built.prompt)
+        self.assertIn("Bind geometry_candidate to the target/object being built.", built.prompt)
+
+    def test_interpret_user_turn_validator_rejects_unknown_and_missing_keys(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.INTERPRET_USER_TURN,
+            "en",
+            {
+                "turn_summary": {},
+                "geometry_candidate": {},
+                "tool": "run_beam",
+            },
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:tool", result.errors)
+        self.assertIn("missing_json_key:source_candidate", result.errors)
+
 
 if __name__ == "__main__":
     unittest.main()
