@@ -55,6 +55,7 @@ from core.orchestrator.confirmation_policy import (
     _pending_item_from_update,
 )
 from core.orchestrator.constraint_ledger import lock_from_candidate
+from core.orchestrator.graph_override_policy import should_prefer_extracted_graph
 from core.orchestrator.path_ops import deep_copy, get_path, remove_path, set_path
 from core.orchestrator.phase_machine import decide_phase_transition
 from core.orchestrator.pipeline_debug import merge_v2_meta, merge_v2_missing_paths, prioritize_spatial_questions, prioritize_v2_compile_questions
@@ -381,37 +382,6 @@ def _dedupe_paths(paths: list[str]) -> list[str]:
         seen.add(item)
         out.append(item)
     return out
-
-
-_GRAPH_STRUCTURES = {"ring", "grid", "nest", "stack", "shell", "boolean"}
-
-
-def _has_explicit_graph_cue(text: str, structure: str | None) -> bool:
-    low = str(text or "").lower()
-    key = str(structure or "").strip().lower()
-    if key == "boolean":
-        if re.search(
-            r"\b(?:box|cube|cuboid|cylinder|sphere|solid|target)\b.{0,80}\bminus\b.{0,80}\b(?:box|cube|cuboid|cylinder|sphere|solid|target)\b",
-            low,
-        ):
-            return True
-        return bool(
-            re.search(
-                r"\b(?:boolean|union|intersect|intersection|subtract|subtraction|difference|cut out|hole)\b",
-                low,
-            )
-        )
-    if key == "ring":
-        return any(token in low for token in ("ring", "annulus", "circular array", "\u73af", "\u5706\u73af"))
-    if key == "grid":
-        return any(token in low for token in ("grid", "array", "matrix", "\u9635\u5217", "\u7f51\u683c"))
-    if key == "nest":
-        return any(token in low for token in ("inside", "nested", "embedded", "within", "\u5185\u5d4c", "\u5185\u90e8"))
-    if key == "stack":
-        return any(token in low for token in ("stack", "layer", "layered", "\u5806\u53e0", "\u5c42"))
-    if key == "shell":
-        return any(token in low for token in ("shell", "coating", "layer around", "\u58f3", "\u5305\u5c42"))
-    return False
 
 
 def _candidate_structure(candidate: CandidateUpdate | None) -> str | None:
@@ -1184,10 +1154,11 @@ def process_turn(
             if pipeline_selection.source == "v2":
                 extracted_candidate = _strip_source_updates(extracted_candidate)
             slot_geometry_ready = bool((slot_debug.get("geometry_v2") or {}).get("runtime_ready"))
-            prefer_extracted_graph = (
-                extracted_structure in _GRAPH_STRUCTURES
-                and slot_structure not in _GRAPH_STRUCTURES
-                and (not slot_geometry_ready or _has_explicit_graph_cue(text, extracted_structure))
+            prefer_extracted_graph = should_prefer_extracted_graph(
+                text=text,
+                extracted_structure=extracted_structure,
+                slot_structure=slot_structure,
+                slot_geometry_ready=slot_geometry_ready,
             )
             if prefer_extracted_graph:
                 user_candidate = _augment_geometry_targets(user_candidate, extracted_candidate)
