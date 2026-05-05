@@ -167,6 +167,38 @@ class PromptProfilesTest(unittest.TestCase):
         self.assertIn("unknown_json_key:tool", result.errors)
         self.assertIn("value_not_allowed:physics_list", result.errors)
 
+    def test_normalize_user_turn_profile_uses_controlled_prompt(self) -> None:
+        built = build_prompt(
+            PromptTask.NORMALIZE_USER_TURN,
+            "en",
+            {
+                "user_text": "Set up a copper target box that is 10 by 20 by 30 millimeters.",
+                "context_summary": "",
+            },
+        )
+
+        self.assertEqual(built.profile_id, "normalize_user_turn_en_v1")
+        self.assertIn("module_x:10 mm; module_y:20 mm; module_z:30 mm", built.prompt)
+        self.assertIn("MUST NOT contain phrases like 'set ... to ...'", built.prompt)
+
+    def test_normalize_user_turn_validator_rejects_alias_and_unknown_keys(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.NORMALIZE_USER_TURN,
+            "en",
+            {
+                "normalized_text": "module_size:10 mm; set geometry to copper box",
+                "language_detected": "en",
+                "structure_hint": "unknown_shape",
+                "tool": "run_beam",
+            },
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:tool", result.errors)
+        self.assertIn("value_not_allowed:structure_hint", result.errors)
+        self.assertIn("banned_normalized_key:module_size", result.errors)
+        self.assertIn("narrative_set_to_phrase", result.errors)
+
 
 if __name__ == "__main__":
     unittest.main()

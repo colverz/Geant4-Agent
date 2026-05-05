@@ -17,6 +17,7 @@ class PromptTask(str, Enum):
     RUNTIME_RESULT_QA = "runtime_result_qa"
     RESULT_QUESTION_ROUTE = "result_question_route"
     PHYSICS_RECOMMEND = "physics_recommend"
+    NORMALIZE_USER_TURN = "normalize_user_turn"
 
 
 class PromptOutputContract(str, Enum):
@@ -150,6 +151,98 @@ _PHYSICS_RECOMMEND_KEYS = {
     "covered_processes",
     "confidence",
 }
+_NORMALIZE_TOP_LEVEL_KEYS = {"normalized_text", "language_detected", "structure_hint"}
+_NORMALIZE_STRUCTURE_HINTS = {
+    "ring",
+    "grid",
+    "nest",
+    "stack",
+    "shell",
+    "single_box",
+    "single_tubs",
+    "single_sphere",
+    "single_cons",
+    "single_trd",
+    "single_polycone",
+    "single_cuttubs",
+    "boolean",
+    "unknown",
+}
+_NORMALIZE_CANONICAL_KEYS = [
+    "geometry_intent",
+    "structure",
+    "n",
+    "nx",
+    "ny",
+    "module_x",
+    "module_y",
+    "module_z",
+    "pitch_x",
+    "pitch_y",
+    "radius",
+    "clearance",
+    "parent_x",
+    "parent_y",
+    "parent_z",
+    "child_rmax",
+    "child_hz",
+    "rmax1",
+    "rmax2",
+    "x1",
+    "x2",
+    "y1",
+    "y2",
+    "z1",
+    "z2",
+    "z3",
+    "r1",
+    "r2",
+    "r3",
+    "tilt_x",
+    "tilt_y",
+    "bool_a_x",
+    "bool_a_y",
+    "bool_a_z",
+    "bool_b_x",
+    "bool_b_y",
+    "bool_b_z",
+    "stack_x",
+    "stack_y",
+    "t1",
+    "t2",
+    "t3",
+    "stack_clearance",
+    "nest_clearance",
+    "inner_r",
+    "th1",
+    "th2",
+    "th3",
+    "hz",
+    "particle",
+    "source_type",
+    "energy",
+    "position",
+    "direction",
+    "material",
+    "physics_list",
+    "output_format",
+    "output_path",
+]
+_NORMALIZE_BANNED_ALIASES = [
+    "num_elements",
+    "element_size",
+    "module_size",
+    "dimensions",
+    "element_radius",
+    "element_clearance",
+    "source_position",
+    "source_direction",
+]
+_NORMALIZE_GEOMETRY_INTENTS = (
+    "circular_placement|planar_array|containment_parent_child|z_layer_sequence|"
+    "coaxial_shells|single_box|single_tubs|single_sphere|single_cons|single_trd|"
+    "single_polycone|single_cuttubs|boolean|unresolved"
+)
 
 
 def _lang_key(lang: str) -> str:
@@ -350,6 +443,26 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
             "JSON:"
         ),
     ),
+    (PromptTask.NORMALIZE_USER_TURN, "zh"): PromptProfile(
+        id="normalize_user_turn_zh_v1",
+        task=PromptTask.NORMALIZE_USER_TURN,
+        lang="zh",
+        version="v1",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="normalization_json_contract",
+        template="__NORMALIZE_USER_TURN_PROMPT__",
+    ),
+    (PromptTask.NORMALIZE_USER_TURN, "en"): PromptProfile(
+        id="normalize_user_turn_en_v1",
+        task=PromptTask.NORMALIZE_USER_TURN,
+        lang="en",
+        version="v1",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="normalization_json_contract",
+        template="__NORMALIZE_USER_TURN_PROMPT__",
+    ),
     (PromptTask.SLOT_EXTRACT, "zh"): PromptProfile(
         id="slot_extract_zh_strict_slot_v2",
         task=PromptTask.SLOT_EXTRACT,
@@ -403,9 +516,79 @@ def list_prompt_profiles() -> list[PromptProfile]:
     return list(_PROFILES.values())
 
 
+def build_normalization_user_turn_prompt(user_text: str, context_summary: str = "") -> str:
+    ctx_block = ""
+    if context_summary.strip():
+        ctx_block = (
+            "Session context (persistent facts from previous turns; keep unless user explicitly changes them):\n"
+            f"{context_summary}\n"
+        )
+    examples = (
+        "Examples of valid normalized_text:\n"
+        "- User: Set up a copper target box that is 10 by 20 by 30 millimeters.\n"
+        "  normalized_text: geometry_intent:single_box; structure:single_box; module_x:10 mm; module_y:20 mm; module_z:30 mm; material:G4_Cu\n"
+        "- User: gamma point source 1 MeV at (0,0,-20) mm along +z.\n"
+        "  normalized_text: source_type:point; particle:gamma; energy:1 MeV; position:(0,0,-20) mm; direction:+z\n"
+        "- User: water cylinder radius 40 mm half length 80 mm; proton beam 150 MeV from (0,0,-120) mm along +z.\n"
+        "  normalized_text: geometry_intent:single_tubs; structure:single_tubs; child_rmax:40 mm; child_hz:80 mm; material:G4_WATER; source_type:beam; particle:proton; energy:150 MeV; position:(0,0,-120) mm; direction:+z\n"
+        "- User: 请配置一个10 mm x 20 mm x 30 mm的铜盒靶，1 MeV伽马点源放在(0,0,-20) mm，沿+z方向入射。\n"
+        "  normalized_text: geometry_intent:single_box; structure:single_box; module_x:10 mm; module_y:20 mm; module_z:30 mm; material:G4_Cu; source_type:point; particle:gamma; energy:1 MeV; position:(0,0,-20) mm; direction:+z\n"
+        "Invalid normalized_text examples:\n"
+        "- set geometry to copper box with size 10 by 20 by 30 millimeters\n"
+        "- set source energy to 1 MeV; set source position to (0,0,-20) mm\n"
+    )
+    return (
+        "Rewrite the user request into controlled English for downstream BERT parsing.\n"
+        "Output JSON only with keys:\n"
+        "- normalized_text: string\n"
+        "- language_detected: string\n"
+        "- structure_hint: one of [ring, grid, nest, stack, shell, single_box, single_tubs, single_sphere, single_cons, single_trd, single_polycone, single_cuttubs, boolean, unknown]\n"
+        "Normalization rules:\n"
+        "- Preserve all numeric values and units exactly (do not convert or round).\n"
+        "- normalized_text must be semicolon-separated key:value clauses (no narrative sentence).\n"
+        "- normalized_text MUST NOT contain phrases like 'set ... to ...'. Use only key:value clauses.\n"
+        f"- geometry_intent must be one of: {_NORMALIZE_GEOMETRY_INTENTS}.\n"
+        "- If user text does not explicitly mention geometry shape/layout, geometry_intent must be unresolved.\n"
+        "- Use only these canonical keys in normalized_text (plus geometry_intent):\n"
+        f"  {', '.join(_NORMALIZE_CANONICAL_KEYS)}\n"
+        "- Do NOT output alias keys such as:\n"
+        f"  {', '.join(_NORMALIZE_BANNED_ALIASES)}\n"
+        "- For 3D size, always emit module_x/module_y/module_z instead of any packed form. Convert '10 by 20 by 30 millimeters' into module_x:10 mm; module_y:20 mm; module_z:30 mm.\n"
+        "- For a box/cuboid target, emit geometry_intent:single_box and structure:single_box.\n"
+        "- For a cylinder/tube target, emit geometry_intent:single_tubs and structure:single_tubs.\n"
+        "- For source vectors, always emit position and direction.\n"
+        "- For point source / 点源, emit source_type:point. For beam / 束流, emit source_type:beam.\n"
+        "- For gamma / 伽马, emit particle:gamma. For proton / 质子, emit particle:proton.\n"
+        "- Normalize common materials to Geant4 names when explicit: copper/铜 -> G4_Cu; water/水 -> G4_WATER; air/空气 -> G4_AIR; silicon/硅 -> G4_Si; lead/铅 -> G4_Pb.\n"
+        "- If geometry is ambiguous, use:\n"
+        "  geometry_intent: unresolved; structure: unknown; ...\n"
+        "- If current turn omits fields but context already contains stable values, keep those values.\n"
+        "- Only overwrite a context value when user explicitly requests a change.\n"
+        "- Keep text concise and field-like (semicolon-separated clauses), no narrative sentences.\n"
+        "- Include only information present in user text; do not hallucinate values.\n"
+        "- No explanation or markdown.\n"
+        + examples
+        + ctx_block
+        + f"User text: {user_text}\n"
+        + "JSON:"
+    )
+
+
 def build_prompt(task: PromptTask | str, lang: str, context: dict[str, Any]) -> PromptBuildResult:
     task_key = PromptTask(task)
     profile = get_prompt_profile(task_key, lang)
+    if task_key == PromptTask.NORMALIZE_USER_TURN:
+        prompt = build_normalization_user_turn_prompt(
+            str(context.get("user_text", "")),
+            str(context.get("context_summary", "")),
+        )
+        return PromptBuildResult(
+            prompt=prompt,
+            profile_id=profile.id,
+            validator_name=profile.validator_name,
+            output_contract=profile.output_contract.value,
+            temperature=profile.temperature,
+        )
     if task_key in {PromptTask.SLOT_EXTRACT, PromptTask.SEMANTIC_EXTRACT}:
         user_text = str(context.get("user_text", ""))
         context_summary = str(context.get("context_summary", ""))
@@ -504,6 +687,21 @@ def _validate_physics_recommend_json_object(payload: dict[str, Any], allowed_lis
     return errors
 
 
+def _validate_normalization_json_object(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _append_unknown_keys(errors, payload, _NORMALIZE_TOP_LEVEL_KEYS)
+    structure_hint = payload.get("structure_hint")
+    if structure_hint not in (None, "") and str(structure_hint) not in _NORMALIZE_STRUCTURE_HINTS:
+        errors.append("value_not_allowed:structure_hint")
+    normalized_text = str(payload.get("normalized_text", "") or "")
+    for banned in _NORMALIZE_BANNED_ALIASES:
+        if re.search(rf"(?<![A-Za-z0-9_]){re.escape(banned)}(?![A-Za-z0-9_])", normalized_text):
+            errors.append(f"banned_normalized_key:{banned}")
+    if re.search(r"\bset\s+.+\s+to\b", normalized_text, flags=re.IGNORECASE):
+        errors.append("narrative_set_to_phrase")
+    return errors
+
+
 def validate_prompt_output(
     task: PromptTask | str,
     lang: str,
@@ -531,6 +729,8 @@ def validate_prompt_output(
                 if not isinstance(allowed_lists, list):
                     allowed_lists = []
                 errors.extend(_validate_physics_recommend_json_object(parsed, allowed_lists))
+            if profile.task == PromptTask.NORMALIZE_USER_TURN:
+                errors.extend(_validate_normalization_json_object(parsed))
     if profile.output_contract == PromptOutputContract.ROUTE_LABEL:
         if text.strip() not in {"read_summary", "read_config", "config_mutation", "run_requested", "viewer_requested", "normal_chat"}:
             errors.append("unknown_route_label")

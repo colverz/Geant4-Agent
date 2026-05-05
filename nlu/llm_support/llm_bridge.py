@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Dict, Iterable, List
 import json
 
+from core.config.prompt_profiles import PromptTask, build_prompt
+
 
 PARAM_DESCRIPTIONS: Dict[str, str] = {
     "module_x": "module size in x (mm)",
@@ -63,9 +65,9 @@ PARAM_DESCRIPTIONS: Dict[str, str] = {
 
 def describe_params(keys: Iterable[str]) -> List[str]:
     lines: List[str] = []
-    for k in keys:
-        desc = PARAM_DESCRIPTIONS.get(k, k)
-        lines.append(f"- {k}: {desc}")
+    for key in keys:
+        desc = PARAM_DESCRIPTIONS.get(key, key)
+        lines.append(f"- {key}: {desc}")
     return lines
 
 
@@ -73,10 +75,10 @@ def build_missing_params_schema(structure: str, missing: Iterable[str]) -> Dict[
     keys = list(missing)
     properties: Dict[str, object] = {}
     required: List[str] = []
-    for k in keys:
-        typ = "integer" if k in {"nx", "ny", "n"} else "number"
-        properties[k] = {"type": typ, "description": PARAM_DESCRIPTIONS.get(k, k)}
-        required.append(k)
+    for key in keys:
+        typ = "integer" if key in {"nx", "ny", "n"} else "number"
+        properties[key] = {"type": typ, "description": PARAM_DESCRIPTIONS.get(key, key)}
+        required.append(key)
     return {
         "title": f"{structure} missing parameters",
         "type": "object",
@@ -92,9 +94,10 @@ def build_missing_params_prompt(structure: str, missing: Iterable[str], fmt: str
         return ""
     if fmt == "json_schema":
         schema = build_missing_params_schema(structure, missing_list)
-        return (
-            "Return a JSON object that satisfies this JSON schema:\n"
-            + json.dumps(schema, ensure_ascii=False, indent=2)
+        return "Return a JSON object that satisfies this JSON schema:\n" + json.dumps(
+            schema,
+            ensure_ascii=False,
+            indent=2,
         )
     header = (
         "Some required geometry parameters are missing. "
@@ -105,136 +108,11 @@ def build_missing_params_prompt(structure: str, missing: Iterable[str], fmt: str
 
 
 def build_normalization_prompt(user_text: str, context_summary: str = "") -> str:
-    canonical_keys = [
-        "geometry_intent",
-        "structure",
-        "n",
-        "nx",
-        "ny",
-        "module_x",
-        "module_y",
-        "module_z",
-        "pitch_x",
-        "pitch_y",
-        "radius",
-        "clearance",
-        "parent_x",
-        "parent_y",
-        "parent_z",
-        "child_rmax",
-        "child_hz",
-        "rmax1",
-        "rmax2",
-        "x1",
-        "x2",
-        "y1",
-        "y2",
-        "z1",
-        "z2",
-        "z3",
-        "r1",
-        "r2",
-        "r3",
-        "tilt_x",
-        "tilt_y",
-        "bool_a_x",
-        "bool_a_y",
-        "bool_a_z",
-        "bool_b_x",
-        "bool_b_y",
-        "bool_b_z",
-        "stack_x",
-        "stack_y",
-        "t1",
-        "t2",
-        "t3",
-        "stack_clearance",
-        "nest_clearance",
-        "inner_r",
-        "th1",
-        "th2",
-        "th3",
-        "hz",
-        "particle",
-        "source_type",
-        "energy",
-        "position",
-        "direction",
-        "material",
-        "physics_list",
-        "output_format",
-        "output_path",
-    ]
-    banned_aliases = [
-        "num_elements",
-        "element_size",
-        "module_size",
-        "dimensions",
-        "element_radius",
-        "element_clearance",
-        "source_position",
-        "source_direction",
-    ]
-    intents = (
-        "circular_placement|planar_array|containment_parent_child|z_layer_sequence|"
-        "coaxial_shells|single_box|single_tubs|single_sphere|single_cons|single_trd|"
-        "single_polycone|single_cuttubs|boolean|unresolved"
-    )
-    ctx_block = ""
-    if context_summary.strip():
-        ctx_block = (
-            "Session context (persistent facts from previous turns; keep unless user explicitly changes them):\n"
-            f"{context_summary}\n"
-        )
-    examples = (
-        "Examples of valid normalized_text:\n"
-        "- User: Set up a copper target box that is 10 by 20 by 30 millimeters.\n"
-        "  normalized_text: geometry_intent:single_box; structure:single_box; module_x:10 mm; module_y:20 mm; module_z:30 mm; material:G4_Cu\n"
-        "- User: gamma point source 1 MeV at (0,0,-20) mm along +z.\n"
-        "  normalized_text: source_type:point; particle:gamma; energy:1 MeV; position:(0,0,-20) mm; direction:+z\n"
-        "- User: water cylinder radius 40 mm half length 80 mm; proton beam 150 MeV from (0,0,-120) mm along +z.\n"
-        "  normalized_text: geometry_intent:single_tubs; structure:single_tubs; child_rmax:40 mm; child_hz:80 mm; material:G4_WATER; source_type:beam; particle:proton; energy:150 MeV; position:(0,0,-120) mm; direction:+z\n"
-        "- User: \u8bf7\u914d\u7f6e\u4e00\u4e2a10 mm x 20 mm x 30 mm\u7684\u94dc\u76d2\u9776\uff0c1 MeV\u4f3d\u9a6c\u70b9\u6e90\u653e\u5728(0,0,-20) mm\uff0c\u6cbf+z\u65b9\u5411\u5165\u5c04\u3002\n"
-        "  normalized_text: geometry_intent:single_box; structure:single_box; module_x:10 mm; module_y:20 mm; module_z:30 mm; material:G4_Cu; source_type:point; particle:gamma; energy:1 MeV; position:(0,0,-20) mm; direction:+z\n"
-        "Invalid normalized_text examples:\n"
-        "- set geometry to copper box with size 10 by 20 by 30 millimeters\n"
-        "- set source energy to 1 MeV; set source position to (0,0,-20) mm\n"
-    )
-
-    return (
-        "Rewrite the user request into controlled English for downstream BERT parsing.\n"
-        "Output JSON only with keys:\n"
-        "- normalized_text: string\n"
-        "- language_detected: string\n"
-        "- structure_hint: one of [ring, grid, nest, stack, shell, single_box, single_tubs, single_sphere, single_cons, single_trd, single_polycone, single_cuttubs, boolean, unknown]\n"
-        "Normalization rules:\n"
-        "- Preserve all numeric values and units exactly (do not convert or round).\n"
-        "- normalized_text must be semicolon-separated key:value clauses (no narrative sentence).\n"
-        "- normalized_text MUST NOT contain phrases like 'set ... to ...'. Use only key:value clauses.\n"
-        f"- geometry_intent must be one of: {intents}.\n"
-        "- If user text does not explicitly mention geometry shape/layout, geometry_intent must be unresolved.\n"
-        "- Use only these canonical keys in normalized_text (plus geometry_intent):\n"
-        f"  {', '.join(canonical_keys)}\n"
-        "- Do NOT output alias keys such as:\n"
-        f"  {', '.join(banned_aliases)}\n"
-        "- For 3D size, always emit module_x/module_y/module_z instead of any packed form. Convert '10 by 20 by 30 millimeters' into module_x:10 mm; module_y:20 mm; module_z:30 mm.\n"
-        "- For a box/cuboid target, emit geometry_intent:single_box and structure:single_box.\n"
-        "- For a cylinder/tube target, emit geometry_intent:single_tubs and structure:single_tubs.\n"
-        "- For source vectors, always emit position and direction.\n"
-        "- For point source / \u70b9\u6e90, emit source_type:point. For beam / \u675f\u6d41, emit source_type:beam.\n"
-        "- For gamma / \u4f3d\u9a6c, emit particle:gamma. For proton / \u8d28\u5b50, emit particle:proton.\n"
-        "- Normalize common materials to Geant4 names when explicit: copper/\u94dc -> G4_Cu; water/\u6c34 -> G4_WATER; air/\u7a7a\u6c14 -> G4_AIR; silicon/\u7845 -> G4_Si; lead/\u94c5 -> G4_Pb.\n"
-        "- If geometry is ambiguous, use:\n"
-        "  geometry_intent: unresolved; structure: unknown; ...\n"
-        "- If current turn omits fields but context already contains stable values, keep those values.\n"
-        "- Only overwrite a context value when user explicitly requests a change.\n"
-        "- Keep text concise and field-like (semicolon-separated clauses), no narrative sentences.\n"
-        "- Include only information present in user text; do not hallucinate values.\n"
-        "- No explanation or markdown.\n"
-        + examples
-        + ctx_block
-        + f"User text: {user_text}\n"
-        + "JSON:"
-    )
-
-
+    return build_prompt(
+        PromptTask.NORMALIZE_USER_TURN,
+        "en",
+        {
+            "user_text": user_text,
+            "context_summary": context_summary,
+        },
+    ).prompt
