@@ -3,6 +3,7 @@
 import logging
 import re
 
+from core.config.prompt_profiles import PromptTask, build_prompt, validate_prompt_output
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 from nlu.llm_support.ollama_client import chat, extract_json
 
@@ -71,22 +72,30 @@ def recommend_physics_list(
     if not trigger:
         return None
 
-    prompt = (
-        "You are a Geant4 physics-list recommender.\n"
-        "Return JSON only with keys: physics_list, backup_physics_list, reasons, covered_processes, confidence.\n"
-        "- physics_list and backup_physics_list must be selected from allowed list.\n"
-        "- Keep reasons concise.\n"
-        f"Allowed: {', '.join(allowed_lists)}\n"
-        f"Context: {context_summary}\n"
-        f"Request: {merged_text}\n"
-        "JSON:"
+    prompt_build = build_prompt(
+        PromptTask.PHYSICS_RECOMMEND,
+        "en",
+        {
+            "allowed_lists_csv": ", ".join(allowed_lists),
+            "context_summary": context_summary,
+            "request_text": merged_text,
+        },
     )
     parsed: dict = {}
     try:
-        resp = chat(prompt, config_path=config_path, temperature=0.0)
+        resp = chat(prompt_build.prompt, config_path=config_path, temperature=prompt_build.temperature)
         maybe = extract_json(_clean_text(str(resp.get("response", "")))) or {}
         if isinstance(maybe, dict):
-            parsed = maybe
+            validation = validate_prompt_output(
+                PromptTask.PHYSICS_RECOMMEND,
+                "en",
+                maybe,
+                {"allowed_lists": allowed_lists},
+            )
+            if validation.ok:
+                parsed = maybe
+            else:
+                logger.warning("LLM physics-list recommendation rejected by prompt validation; using rule fallback.")
     except Exception:
         logger.warning("LLM physics-list recommendation failed; using rule fallback.", exc_info=True)
         parsed = {}

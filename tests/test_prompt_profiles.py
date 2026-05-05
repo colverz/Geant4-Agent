@@ -133,6 +133,40 @@ class PromptProfilesTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("internal_field_leak", result.errors)
 
+    def test_physics_recommend_profile_uses_allowed_list_context(self) -> None:
+        built = build_prompt(
+            PromptTask.PHYSICS_RECOMMEND,
+            "en",
+            {
+                "allowed_lists_csv": "FTFP_BERT, QBBC",
+                "context_summary": "particle=gamma",
+                "request_text": "recommend a physics list",
+            },
+        )
+
+        self.assertEqual(built.profile_id, "physics_recommend_en_v1")
+        self.assertIn("FTFP_BERT, QBBC", built.prompt)
+        self.assertIn("recommend a physics list", built.prompt)
+
+    def test_physics_recommend_validator_rejects_extra_fields_and_unknown_values(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.PHYSICS_RECOMMEND,
+            "en",
+            {
+                "physics_list": "UNKNOWN_LIST",
+                "backup_physics_list": "QBBC",
+                "reasons": [],
+                "covered_processes": [],
+                "confidence": 0.8,
+                "tool": "run_beam",
+            },
+            {"allowed_lists": ["FTFP_BERT", "QBBC"]},
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:tool", result.errors)
+        self.assertIn("value_not_allowed:physics_list", result.errors)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,7 @@ class PromptTask(str, Enum):
     RUNTIME_RESULT_EXPLAIN = "runtime_result_explain"
     RUNTIME_RESULT_QA = "runtime_result_qa"
     RESULT_QUESTION_ROUTE = "result_question_route"
+    PHYSICS_RECOMMEND = "physics_recommend"
 
 
 class PromptOutputContract(str, Enum):
@@ -142,6 +143,13 @@ _SEMANTIC_TOP_LEVEL_KEYS = {
     "updates",
 }
 _SEMANTIC_UPDATE_KEYS = {"path", "op", "value"}
+_PHYSICS_RECOMMEND_KEYS = {
+    "physics_list",
+    "backup_physics_list",
+    "reasons",
+    "covered_processes",
+    "confidence",
+}
 
 
 def _lang_key(lang: str) -> str:
@@ -306,6 +314,42 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
             "Context JSON:\n$payload_json\n\nRewrite now."
         ),
     ),
+    (PromptTask.PHYSICS_RECOMMEND, "zh"): PromptProfile(
+        id="physics_recommend_zh_v1",
+        task=PromptTask.PHYSICS_RECOMMEND,
+        lang="zh",
+        version="v1",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="physics_recommend_json_allowed_values",
+        template=(
+            "你是 Geant4 physics list 推荐层。只根据请求和上下文，从 allowed list 中选择 physics_list 和 backup_physics_list。\n"
+            "输出 JSON only，允许 keys: physics_list, backup_physics_list, reasons, covered_processes, confidence。\n"
+            "硬约束：physics_list 和 backup_physics_list 必须来自 allowed list；不要输出工具调用、配置路径、API key 或额外字段；reasons 保持简短。\n"
+            "Allowed: $allowed_lists_csv\n"
+            "Context: $context_summary\n"
+            "Request: $request_text\n"
+            "JSON:"
+        ),
+    ),
+    (PromptTask.PHYSICS_RECOMMEND, "en"): PromptProfile(
+        id="physics_recommend_en_v1",
+        task=PromptTask.PHYSICS_RECOMMEND,
+        lang="en",
+        version="v1",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="physics_recommend_json_allowed_values",
+        template=(
+            "You are a Geant4 physics-list recommendation layer. Select physics_list and backup_physics_list only from the allowed list.\n"
+            "Return JSON only with keys: physics_list, backup_physics_list, reasons, covered_processes, confidence.\n"
+            "Hard constraints: physics_list and backup_physics_list must come from the allowed list; do not output tool calls, config paths, API keys, or extra fields; keep reasons concise.\n"
+            "Allowed: $allowed_lists_csv\n"
+            "Context: $context_summary\n"
+            "Request: $request_text\n"
+            "JSON:"
+        ),
+    ),
     (PromptTask.SLOT_EXTRACT, "zh"): PromptProfile(
         id="slot_extract_zh_strict_slot_v2",
         task=PromptTask.SLOT_EXTRACT,
@@ -447,6 +491,19 @@ def _validate_semantic_json_object(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _validate_physics_recommend_json_object(payload: dict[str, Any], allowed_lists: list[str]) -> list[str]:
+    errors: list[str] = []
+    _append_unknown_keys(errors, payload, _PHYSICS_RECOMMEND_KEYS)
+    allowed = {str(item) for item in allowed_lists if str(item)}
+    for key in ("physics_list", "backup_physics_list"):
+        value = payload.get(key)
+        if value in (None, ""):
+            continue
+        if str(value) not in allowed:
+            errors.append(f"value_not_allowed:{key}")
+    return errors
+
+
 def validate_prompt_output(
     task: PromptTask | str,
     lang: str,
@@ -469,6 +526,11 @@ def validate_prompt_output(
                 errors.extend(_validate_slot_json_object(parsed))
             if profile.task == PromptTask.SEMANTIC_EXTRACT:
                 errors.extend(_validate_semantic_json_object(parsed))
+            if profile.task == PromptTask.PHYSICS_RECOMMEND:
+                allowed_lists = context.get("allowed_lists", [])
+                if not isinstance(allowed_lists, list):
+                    allowed_lists = []
+                errors.extend(_validate_physics_recommend_json_object(parsed, allowed_lists))
     if profile.output_contract == PromptOutputContract.ROUTE_LABEL:
         if text.strip() not in {"read_summary", "read_config", "config_mutation", "run_requested", "viewer_requested", "normal_chat"}:
             errors.append("unknown_route_label")
