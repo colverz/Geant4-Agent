@@ -244,7 +244,7 @@ def _write_markdown(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Run 3-class end-to-end regression and emit JSON/Markdown reports.")
-    ap.add_argument("--out_json", default="nlu/bert_lab/data/eval/regression_3class_results.json")
+    ap.add_argument("--out_json", default="nlu/training/bert_lab/data/eval/regression_3class_results.json")
     ap.add_argument("--out_md", default=f"docs/regression_3class_report_{date.today().isoformat()}.md")
     ap.add_argument("--min_confidence", type=float, default=0.6)
     ap.add_argument("--autofix", action="store_true")

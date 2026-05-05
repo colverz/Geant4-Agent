@@ -17,9 +17,11 @@ This checklist is the short operational version of
 - Phase 2 prompt consolidation is mostly complete for low-risk producers:
   response naturalization, physics recommendation, normalization, and
   interpreter prompts now route through `PromptProfile`.
-- Phase 3 BERT compatibility audit has started. Active `ui/`, `core/`, `nlu/`,
-  `legacy/runtime/`, and `tests/` Python paths no longer import
-  `nlu.bert_lab` directly.
+- Phase 3 BERT compatibility audit is complete for active paths and archived
+  BERT-lab tools. Active `ui/`, `core/`, `nlu/`, `legacy/runtime/`, and
+  `tests/` Python paths no longer import `nlu.bert_lab` directly. Archived
+  tools now import source-of-truth modules directly and default to
+  `nlu/training/bert_lab` / `nlu/llm_support` paths.
 
 ## Hard Rules
 
@@ -45,7 +47,8 @@ This checklist is the short operational version of
 1. Keep remaining strict slot/semantic prompt behavior stable; do not rewrite it
    unless tests prove a real maintenance benefit.
 2. Clarify or retire compatibility paths after import audit.
-3. Audit legacy tool scripts separately before touching `legacy/nlu_bert_lab_tools`.
+3. Keep `legacy/nlu_bert_lab_tools` archived; do not promote it back to active
+   workflow unless a specific script is modernized and tested.
 4. Revisit `session_manager.py` only for clearly bounded extraction, not broad
    opportunistic cleanup.
 
@@ -64,8 +67,9 @@ recommender prompts before touching strict slot/semantic JSON extraction prompts
 
 Current follow-up target:
 
-Audit and document `nlu/bert_lab` compatibility shims. Do not delete them while
-archived tools still import them.
+Move from BERT import audit to directory cleanup decisions. Start with
+documentation and entrypoint clarity; do not delete compatibility shims until a
+full import audit remains clean.
 
 ## Required Checks Before Commit
 
@@ -87,5 +91,5 @@ pytest -q
 
 ## Next Decision
 
-The next coding phase should finish the BERT compatibility audit and then move
-to directory cleanup only where imports prove a path is compatibility-only.
+The next coding phase should make directory cleanup decisions only where imports
+prove a path is compatibility-only.

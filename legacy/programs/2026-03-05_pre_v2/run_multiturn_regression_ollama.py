@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from core.orchestrator.session_manager import process_turn, reset_session
-from nlu.bert_lab.ollama_client import OPENAI_COMPAT_PROVIDERS
-from nlu.bert_lab.ollama_client import load_config
+from nlu.llm_support.ollama_client import OPENAI_COMPAT_PROVIDERS
+from nlu.llm_support.ollama_client import load_config
 
 
 INTERNAL_FIELD_RE = re.compile(r"\b[a-z]+(?:\.[a-z_]+)+\b")

@@ -4,15 +4,15 @@ import argparse
 import json
 from pathlib import Path
 
-from nlu.bert_lab.graph_search import search_candidate_graphs
-from nlu.bert_lab.infer import extract_params
-from nlu.bert_lab.llm_bridge import build_missing_params_prompt, build_missing_params_schema
-from nlu.bert_lab.ollama_client import chat, extract_json
-from nlu.bert_lab.postprocess import merge_params
+from nlu.llm_support.llm_bridge import build_missing_params_prompt, build_missing_params_schema
+from nlu.llm_support.ollama_client import chat, extract_json
+from nlu.runtime_components.graph_search import search_candidate_graphs
+from nlu.runtime_components.infer import extract_params
+from nlu.runtime_components.postprocess import merge_params
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = ROOT / "nlu" / "bert_lab" / "models"
+MODELS_DIR = ROOT / "nlu" / "training" / "bert_lab" / "models"
 
 
 def _default_structure_model() -> str:
@@ -20,14 +20,14 @@ def _default_structure_model() -> str:
         p = MODELS_DIR / name
         if (p / "config.json").exists():
             return str(p)
-    return "nlu/bert_lab/models/structure_controlled_v4c_e1"
+    return "nlu/training/bert_lab/models/structure_controlled_v4c_e1"
 
 
 def _default_ner_model() -> str:
     p = MODELS_DIR / "ner"
     if (p / "config.json").exists():
         return str(p)
-    return "nlu/bert_lab/models/ner"
+    return "nlu/training/bert_lab/models/ner"
 from builder.geometry.synthesize import synthesize_from_params
 
 
@@ -43,7 +43,7 @@ def main() -> None:
     parser.add_argument("--autofix", action="store_true")
     parser.add_argument("--prompt_format", default="text", choices=["text", "json_schema"])
     parser.add_argument("--llm_fill_missing", action="store_true")
-    parser.add_argument("--ollama_config", default="nlu/bert_lab/configs/ollama_config.json")
+    parser.add_argument("--ollama_config", default="nlu/llm_support/configs/ollama_config.json")
     args = parser.parse_args()
 
     params = extract_params(args.text, args.ner_model, args.device)

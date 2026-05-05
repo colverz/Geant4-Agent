@@ -7,14 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from builder.geometry.synthesize import synthesize_from_params
-from nlu.bert_lab.infer import extract_params, predict_structure
-from nlu.bert_lab.llm_bridge import build_missing_params_prompt
-from nlu.bert_lab.ollama_client import chat, extract_json
-from nlu.bert_lab.postprocess import merge_params
+from nlu.llm_support.llm_bridge import build_missing_params_prompt
+from nlu.llm_support.ollama_client import chat, extract_json
+from nlu.runtime_components.infer import extract_params, predict_structure
+from nlu.runtime_components.postprocess import merge_params
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-MODELS_DIR = ROOT / "nlu" / "bert_lab" / "models"
+MODELS_DIR = ROOT / "nlu" / "training" / "bert_lab" / "models"
 
 
 def _default_structure_model() -> str:
@@ -22,14 +22,14 @@ def _default_structure_model() -> str:
         p = MODELS_DIR / name
         if (p / "config.json").exists():
             return str(p)
-    return "nlu/bert_lab/models/structure_controlled_v4c_e1"
+    return "nlu/training/bert_lab/models/structure_controlled_v4c_e1"
 
 
 def _default_ner_model() -> str:
     p = MODELS_DIR / "ner"
     if (p / "config.json").exists():
         return str(p)
-    return "nlu/bert_lab/models/ner"
+    return "nlu/training/bert_lab/models/ner"
 
 
 @dataclass(frozen=True)
@@ -212,8 +212,8 @@ def main() -> None:
     parser.add_argument("--min_confidence", type=float, default=0.6)
     parser.add_argument("--autofix", action="store_true")
     parser.add_argument("--llm_fill_missing", action="store_true")
-    parser.add_argument("--ollama_config", default="nlu/bert_lab/configs/ollama_config.json")
-    parser.add_argument("--out", default="nlu/bert_lab/data/eval/e2e_rounds_report.json")
+    parser.add_argument("--ollama_config", default="nlu/llm_support/configs/ollama_config.json")
+    parser.add_argument("--out", default="nlu/training/bert_lab/data/eval/e2e_rounds_report.json")
     args = parser.parse_args()
 
     out_rows: list[dict[str, Any]] = []

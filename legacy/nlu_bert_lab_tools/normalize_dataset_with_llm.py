@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-from nlu.bert_lab.llm_bridge import build_normalization_prompt
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.llm_bridge import build_normalization_prompt
+from nlu.llm_support.ollama_client import chat, extract_json
 
 
 def normalize_text(text: str, config_path: str, temperature: float = 0.0) -> Dict[str, Any]:
@@ -83,7 +83,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Normalize JSONL dataset text into controlled English via Ollama.")
     ap.add_argument("--input", required=True, help="Input JSONL with at least key: text")
     ap.add_argument("--output", required=True, help="Output JSONL")
-    ap.add_argument("--config", default="nlu/bert_lab/configs/ollama_config.json", help="Ollama config path")
+    ap.add_argument("--config", default="nlu/llm_support/configs/ollama_config.json", help="Ollama config path")
     ap.add_argument("--limit", type=int, default=None, help="Optional max samples")
     ap.add_argument("--sleep_ms", type=int, default=0, help="Sleep milliseconds between requests")
     args = ap.parse_args()

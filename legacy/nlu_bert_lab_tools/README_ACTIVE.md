@@ -1,18 +1,14 @@
-# BERT Lab Active Paths (2026-02)
+# Archived BERT Lab Baseline
 
-Use these paths as the current baseline.
+This file is retained only to explain the older 2026-02 training baseline.
+These scripts are not part of the active product workflow.
 
-- Corpus build:
-  - `python -m nlu.bert_lab.build_controlled_corpus --n_structure 12000 --n_ner 16000 --n_multitask 24000 --seed 37`
-- Structure data: `nlu/bert_lab/data/controlled_structure.jsonl`
-- NER data: `nlu/bert_lab/data/controlled_ner.jsonl`
-- Multitask data: `nlu/bert_lab/data/controlled_multitask.jsonl`
-- Eval sets:
-  - `nlu/bert_lab/data/eval/structure_eval_in_dist.jsonl`
-  - `nlu/bert_lab/data/eval/structure_eval_hard.jsonl`
-  - `nlu/bert_lab/data/eval/structure_eval_realnorm.jsonl`
-- Default structure model priority:
-  - `nlu/bert_lab/models/structure_controlled_smoke`
-  - (fallbacks only if present)
+Use current source-of-truth paths when running an archived script manually:
 
-Legacy assets are archived under `nlu/bert_lab/archive/legacy_2026-02-13/`.
+- Corpus and evaluation data: `nlu/training/bert_lab/data/`
+- Training models: `nlu/training/bert_lab/models/`
+- LLM config: `nlu/llm_support/configs/`
+- Runtime graph/search/postprocess helpers: `nlu/runtime_components/`
+
+Older notes may mention `nlu/bert_lab/...`; that directory is now a
+compatibility shim path, not a place for new runtime or training behavior.

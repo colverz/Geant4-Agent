@@ -151,7 +151,7 @@ def main() -> None:
     parser.add_argument("--min_confidence", type=float, default=0.6)
     parser.add_argument("--autofix", action="store_true")
     parser.add_argument("--lang", default="en", choices=["en", "zh"])
-    parser.add_argument("--out", default="nlu/bert_lab/data/eval/workflow_e2e_report.json")
+    parser.add_argument("--out", default="nlu/training/bert_lab/data/eval/workflow_e2e_report.json")
     args = parser.parse_args()
 
     all_results: list[dict[str, Any]] = []

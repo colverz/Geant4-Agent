@@ -8,9 +8,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, List
 
-from nlu.bert_lab.bert_lab_data import generate_samples
-from nlu.bert_lab.data_multitask import generate_samples as generate_multitask_samples
-from nlu.bert_lab.generate_hardcases import generate as generate_hardcases
+from legacy.nlu_bert_lab_tools.generate_hardcases import generate as generate_hardcases
+from nlu.training.bert_lab.bert_lab_data import generate_samples
+from nlu.training.bert_lab.data_multitask import generate_samples as generate_multitask_samples
 
 
 STRUCT_LABELS = ["nest", "grid", "ring", "stack", "shell"]
@@ -118,8 +118,8 @@ def _stats(rows: List[Dict[str, object]]) -> Dict[str, object]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build structure evaluation suites")
-    ap.add_argument("--outdir", default="nlu/bert_lab/data/eval")
-    ap.add_argument("--train_structure", default="nlu/bert_lab/data/controlled_structure.jsonl")
+    ap.add_argument("--outdir", default="nlu/training/bert_lab/data/eval")
+    ap.add_argument("--train_structure", default="nlu/training/bert_lab/data/controlled_structure.jsonl")
     ap.add_argument("--n_in_dist", type=int, default=2400)
     ap.add_argument("--n_hard", type=int, default=2400)
     ap.add_argument("--n_realnorm", type=int, default=1800)
@@ -192,4 +192,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

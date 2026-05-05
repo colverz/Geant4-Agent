@@ -155,7 +155,7 @@ def main() -> None:
     parser.add_argument("--min_confidence", type=float, default=0.6)
     parser.add_argument("--autofix", action="store_true")
     parser.add_argument("--lang", default="en", choices=["en", "zh"])
-    parser.add_argument("--out_json", default="nlu/bert_lab/data/eval/workflow_e2e_lite_report.json")
+    parser.add_argument("--out_json", default="nlu/training/bert_lab/data/eval/workflow_e2e_lite_report.json")
     parser.add_argument("--out_md", default=f"docs/workflow_e2e_lite_report_{date.today().isoformat()}.md")
     args = parser.parse_args()
 

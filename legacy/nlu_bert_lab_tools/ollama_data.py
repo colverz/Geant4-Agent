@@ -5,7 +5,7 @@ import json
 import random
 from typing import Any, Dict, List
 
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.ollama_client import chat, extract_json
 
 
 PROMPT_TEMPLATE = """You are generating training samples for a geometry parameter extraction task.
@@ -69,7 +69,7 @@ def main() -> None:
     parser.add_argument("--out", required=True, help="Output JSONL path")
     parser.add_argument("--n", type=int, default=50, help="Number of samples")
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--config", default="nlu/bert_lab/configs/ollama_config.json")
+    parser.add_argument("--config", default="nlu/llm_support/configs/ollama_config.json")
     parser.add_argument("--max_retries", type=int, default=3)
     parser.add_argument("--num_predict", type=int, default=200)
     parser.add_argument("--num_ctx", type=int, default=2048)

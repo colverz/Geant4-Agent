@@ -12,9 +12,9 @@ from torch.utils.data import Dataset
 import numpy as np
 from transformers import AutoTokenizer, Trainer, TrainingArguments
 
-from nlu.bert_lab.labels import STRUCTURE_LABELS, TOKEN_LABELS
-from nlu.bert_lab.multitask import MultiTaskBert
-from nlu.bert_lab.ollama_client import chat, extract_json
+from nlu.llm_support.ollama_client import chat, extract_json
+from nlu.training.bert_lab.labels import STRUCTURE_LABELS, TOKEN_LABELS
+from nlu.training.bert_lab.multitask import MultiTaskBert
 
 
 STRUCTURE_TO_ID = {name: i for i, name in enumerate(STRUCTURE_LABELS)}
@@ -33,10 +33,10 @@ def _resolve_data_path(user_path: str | None) -> str:
     if user_path:
         return user_path
     candidates = [
-        "nlu/bert_lab/data/controlled_multitask.jsonl",
-        "nlu/bert_lab/data/bert_lab_multitask_samples.jsonl",
-        "nlu/bert_lab/data/bert_lab_samples_norm.jsonl",
-        "nlu/bert_lab/data/bert_lab_samples.jsonl",
+        "nlu/training/bert_lab/data/controlled_multitask.jsonl",
+        "nlu/training/bert_lab/data/bert_lab_multitask_samples.jsonl",
+        "nlu/training/bert_lab/data/bert_lab_samples_norm.jsonl",
+        "nlu/training/bert_lab/data/bert_lab_samples.jsonl",
     ]
     for p in candidates:
         if Path(p).exists():
@@ -239,7 +239,7 @@ def main() -> None:
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     parser.add_argument("--eval_split", type=float, default=0.2)
     parser.add_argument("--llm_aug_n", type=int, default=0, help="Extra LLM samples (structure-only)")
-    parser.add_argument("--ollama_config", default="nlu/bert_lab/configs/ollama_config.json")
+    parser.add_argument("--ollama_config", default="nlu/llm_support/configs/ollama_config.json")
     args = parser.parse_args()
 
     data_path = _resolve_data_path(args.data)

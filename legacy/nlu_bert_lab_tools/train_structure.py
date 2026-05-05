@@ -26,10 +26,10 @@ def _resolve_data_path(user_path: str | None) -> str:
     if user_path:
         return user_path
     candidates = [
-        "nlu/bert_lab/data/controlled_structure.jsonl",
-        "nlu/bert_lab/data/structure_mix_v2.jsonl",
-        "nlu/bert_lab/data/bert_lab_samples_norm.jsonl",
-        "nlu/bert_lab/data/bert_lab_samples.jsonl",
+        "nlu/training/bert_lab/data/controlled_structure.jsonl",
+        "nlu/training/bert_lab/data/structure_mix_v2.jsonl",
+        "nlu/training/bert_lab/data/bert_lab_samples_norm.jsonl",
+        "nlu/training/bert_lab/data/bert_lab_samples.jsonl",
     ]
     for p in candidates:
         if Path(p).exists():

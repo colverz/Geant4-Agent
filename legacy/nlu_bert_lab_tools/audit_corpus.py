@@ -78,9 +78,9 @@ def _leakage(train_rows: List[Dict[str, object]], eval_rows: List[Dict[str, obje
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Audit BERT corpora before training")
-    ap.add_argument("--train_structure", default="nlu/bert_lab/data/controlled_structure.jsonl")
-    ap.add_argument("--train_multitask", default="nlu/bert_lab/data/controlled_multitask.jsonl")
-    ap.add_argument("--eval_structure", default="nlu/bert_lab/data/structure_hard_eval.jsonl")
+    ap.add_argument("--train_structure", default="nlu/training/bert_lab/data/controlled_structure.jsonl")
+    ap.add_argument("--train_multitask", default="nlu/training/bert_lab/data/controlled_multitask.jsonl")
+    ap.add_argument("--eval_structure", default="nlu/training/bert_lab/data/structure_hard_eval.jsonl")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
@@ -105,4 +105,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -7,8 +7,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, List
 
-from nlu.bert_lab.bert_lab_data import generate_samples
-from nlu.bert_lab.data_multitask import generate_samples as generate_multitask_samples
+from nlu.training.bert_lab.bert_lab_data import generate_samples
+from nlu.training.bert_lab.data_multitask import generate_samples as generate_multitask_samples
 
 
 STRUCTURE_LABELS = ["nest", "grid", "ring", "stack", "shell"]
@@ -523,7 +523,7 @@ def _build_multitask_set(n: int, seed: int) -> List[Dict[str, object]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build controlled-English corpora for BERT training.")
-    ap.add_argument("--outdir", default="nlu/bert_lab/data", help="Output directory")
+    ap.add_argument("--outdir", default="nlu/training/bert_lab/data", help="Output directory")
     ap.add_argument("--n_structure", type=int, default=4000)
     ap.add_argument("--n_ner", type=int, default=4000)
     ap.add_argument("--n_multitask", type=int, default=5000)

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List
 
-from nlu.bert_lab.graph_search import search_candidate_graphs
-from nlu.bert_lab.postprocess import merge_params
+from nlu.runtime_components.graph_search import search_candidate_graphs
+from nlu.runtime_components.postprocess import merge_params
 
 
 @dataclass(frozen=True)
@@ -96,7 +96,7 @@ def main() -> None:
     parser.add_argument("--min_confidence", type=float, default=0.6)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--top_k", type=int, default=3)
-    parser.add_argument("--out_json", default="nlu/bert_lab/data/eval/graph_search_eval.json")
+    parser.add_argument("--out_json", default="nlu/training/bert_lab/data/eval/graph_search_eval.json")
     parser.add_argument("--out_md", default="docs/graph_search_eval_report.md")
     args = parser.parse_args()
 
@@ -131,4 +131,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
