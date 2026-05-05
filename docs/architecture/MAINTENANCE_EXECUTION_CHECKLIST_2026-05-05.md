@@ -14,8 +14,12 @@ This checklist is the short operational version of
 - Phase 1 orchestrator extraction is complete:
   `confirmation_policy.py`, `slot_memory.py`, `graph_override_policy.py`, and
   `candidate_pipeline.py` now own their respective policies/helpers.
-- Phase 2 prompt consolidation has started with response naturalization moving
-  onto `PromptProfile`.
+- Phase 2 prompt consolidation is mostly complete for low-risk producers:
+  response naturalization, physics recommendation, normalization, and
+  interpreter prompts now route through `PromptProfile`.
+- Phase 3 BERT compatibility audit has started. Active `ui/`, `core/`, `nlu/`,
+  `legacy/runtime/`, and `tests/` Python paths no longer import
+  `nlu.bert_lab` directly.
 
 ## Hard Rules
 
@@ -38,9 +42,10 @@ This checklist is the short operational version of
 
 ## Cleanup Priority
 
-1. Continue moving low-risk prompt strings into `PromptProfile`.
-2. Audit `nlu/bert_lab` imports before touching BERT compatibility shims.
-3. Clarify or retire compatibility paths after import audit.
+1. Keep remaining strict slot/semantic prompt behavior stable; do not rewrite it
+   unless tests prove a real maintenance benefit.
+2. Clarify or retire compatibility paths after import audit.
+3. Audit legacy tool scripts separately before touching `legacy/nlu_bert_lab_tools`.
 4. Revisit `session_manager.py` only for clearly bounded extraction, not broad
    opportunistic cleanup.
 
@@ -56,6 +61,11 @@ This checklist is the short operational version of
 Continue Phase 2 by migrating low-risk prompt producers to `PromptProfile`.
 Prefer response naturalization, runtime/result explanation, clarification, and
 recommender prompts before touching strict slot/semantic JSON extraction prompts.
+
+Current follow-up target:
+
+Audit and document `nlu/bert_lab` compatibility shims. Do not delete them while
+archived tools still import them.
 
 ## Required Checks Before Commit
 
@@ -77,6 +87,5 @@ pytest -q
 
 ## Next Decision
 
-The next coding phase should begin with `confirmation_policy.py`, not directory
-moves. Directory cleanup should wait until behavior-preserving extraction has
-reduced the size and ambiguity of `session_manager.py`.
+The next coding phase should finish the BERT compatibility audit and then move
+to directory cleanup only where imports prove a path is compatibility-only.

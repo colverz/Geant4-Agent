@@ -6,13 +6,13 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.semantic_frame import SemanticFrame
+from nlu.llm_support.llm_bridge import build_normalization_prompt
+from nlu.llm_support.ollama_client import chat, extract_json
 from nlu.runtime_components.graph_search import search_candidate_graphs
 from nlu.runtime_components.infer import extract_params
 from nlu.runtime_components.infer import _require_local_model_dir
-from nlu.bert_lab.llm_bridge import build_normalization_prompt
-from nlu.bert_lab.multitask_infer import predict_multitask
-from nlu.bert_lab.ollama_client import chat, extract_json
 from nlu.runtime_components.postprocess import merge_params
+from nlu.training.bert_lab.multitask_infer import predict_multitask
 
 
 ROOT = Path(__file__).resolve().parents[3]

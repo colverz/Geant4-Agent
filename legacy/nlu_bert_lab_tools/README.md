@@ -8,7 +8,12 @@ Typical examples moved here:
 - evaluation runners (`run_workflow_e2e.py`, `run_workflow_e2e_lite.py`, `run_regression_3class.py`)
 - corpus and normalization utilities (`build_controlled_corpus.py`, `build_eval_suites.py`, `normalize_dataset_with_llm.py`)
 
-These scripts are kept for reference. The active runtime still uses the retained modules under `nlu/bert_lab/` such as:
+These scripts are kept for reference. They may still import compatibility shims
+under `nlu/bert_lab/`, but the active web/runtime path should not depend on
+that directory directly. Runtime code should use `nlu/runtime_components`,
+`nlu/llm_support`, and `nlu/training/bert_lab` as the source of truth.
+
+Compatibility shims retained for these archived scripts include:
 
 - `semantic.py`
 - `ollama_client.py`

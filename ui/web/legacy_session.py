@@ -59,6 +59,6 @@ def build_context_summary(config: Dict[str, Any], history: List[Dict[str, str]])
 
 
 def extract_semantic_frame_legacy(*args, **kwargs):
-    from nlu.bert_lab.semantic import extract_semantic_frame
+    from legacy.runtime.bert_lab.semantic import extract_semantic_frame
 
     return extract_semantic_frame(*args, **kwargs)
