@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from core.audit.audit_log import append_audit_entry
+from core.agent.intent_router import route_user_turn
+from core.agent.turn_trace import NluTurnTrace, stable_hash
+from core.agent.workflow_graph import graph_path_for_intent, terminal_state_for_intent
 from core.config.defaults import build_strict_default_config
 from core.config.field_registry import friendly_label
 from core.config.phase_registry import phase_title
@@ -74,6 +77,7 @@ from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.orchestrator.slot_memory import _merge_slot_frame_with_memory, _refresh_slot_memory
 from core.orchestrator.turn_transaction import begin_turn, commit_turn
 from core.orchestrator.types import CandidateUpdate, Intent, Phase, Producer, SessionState, UpdateOp
+from core.runtime.types import ActionSafetyClass
 from core.slots.slot_mapper import slot_frame_to_candidates
 from core.validation.error_codes import (
     E_CANDIDATE_REJECTED_BY_GATE,
@@ -892,6 +896,8 @@ def process_turn(
         return {"error": "missing text"}
     _progress(progress_cb, "start", "Reading request", "Preparing session state and turn context.")
     state = get_or_create_session(payload.get("session_id"))
+    turn_id_before = state.turn_id
+    intent_decision = route_user_turn(text, lang)
     previous_missing_paths = _dedupe_paths(
         validate_layer_c_completeness(state.config).missing_required_paths + list(state.semantic_missing_paths)
     )
@@ -1537,7 +1543,55 @@ def process_turn(
     state.history.append({"role": "assistant", "content": question})
     _progress(progress_cb, "finalize", "Finalizing turn", "Persisting turn state and assembling response payload.")
     raw_dialogue = build_raw_dialogue(state.history)
+    candidate_patch_paths = _dedupe_paths([update.path for candidate in candidates for update in candidate.updates])
+    applied_paths = _dedupe_paths([update.path for update in committed_updates])
+    rejected_paths = _dedupe_paths([str(item.get("path", "")) for item in rejected_updates if str(item.get("path", ""))])
+    trace_intent = "config_mutation" if (candidate_patch_paths or applied_paths or pending_overwrite_required) else intent_decision.intent
+    trace_safety = intent_decision.safety_class
+    if trace_intent == "config_mutation":
+        trace_safety = ActionSafetyClass.CONFIG_MUTATION
+    trace_terminal = terminal_state_for_intent(
+        trace_intent,
+        mutation_applied=bool(applied_paths),
+        waiting_confirmation=pending_overwrite_required,
+        rejected=bool(rejected_overwrite_preview and not applied_paths),
+        unsupported=bool(hard_errors and not applied_paths),
+    )
+    trace_nodes = graph_path_for_intent(
+        trace_intent,
+        mutation_applied=bool(applied_paths),
+        waiting_confirmation=pending_overwrite_required,
+        rejected=bool(rejected_overwrite_preview and not applied_paths),
+        unsupported=bool(hard_errors and not applied_paths),
+    )
+    nlu_turn_trace = NluTurnTrace(
+        turn_id_before=turn_id_before,
+        turn_id_after=state.turn_id,
+        intent=trace_intent,
+        action_safety_class=trace_safety,
+        terminal_state=trace_terminal,
+        node_sequence=trace_nodes,
+        prompt_profile_id=slot_debug.get("prompt_profile_id") or intent_decision.prompt_profile_id,
+        llm_used=llm_used,
+        fallback_reason=fallback_reason,
+        candidate_patch_paths=candidate_patch_paths,
+        confirmation_required=pending_overwrite_required,
+        applied_paths=applied_paths,
+        rejected_paths=rejected_paths,
+        context_pack_hash=stable_hash({"summary": context_summary, "intent": intent_decision.intent}),
+        patch_hash=stable_hash({"applied": applied_paths, "pending": staged_pending_overwrite}),
+        grounding_status="legacy_validated",
+        interrupt_status="waiting_confirmation" if pending_overwrite_required else "none",
+        idempotency_key=stable_hash({"session_id": state.session_id, "turn_id": state.turn_id, "patch": applied_paths}),
+        runtime_payload_ready=is_complete,
+        tool_calls_allowed=[],
+        tool_calls_blocked=["run_beam", "viewer_open"] if trace_safety == ActionSafetyClass.CONFIG_MUTATION else [],
+    )
     internal_trace = {
+        "agent": {
+            "intent_decision": intent_decision.to_dict(),
+            "nlu_turn_trace": nlu_turn_trace.to_dict(),
+        },
         "nlu": {
             "llm_used": llm_used,
             "fallback_reason": fallback_reason,
@@ -1622,6 +1676,7 @@ def process_turn(
         "graph_candidates": debug.get("graph_candidates", []),
         "graph_choice": debug.get("graph_choice", {}),
         "inference_backend": debug.get("inference_backend", "orchestrated"),
+        "nlu_turn_trace": nlu_turn_trace.to_dict(),
         "internal_trace": internal_trace,
         "history": state.history[-10:],
         "audit_size": len(state.audit_trail),

@@ -25,6 +25,13 @@ class ActionSafetyClass(str, Enum):
     READ_ONLY = "read_only"
     CONFIG_MUTATION = "config_mutation"
     EXPENSIVE_RUNTIME = "expensive_runtime"
+    LOW_RISK_MUTATION = "low_risk_mutation"
+    STATE_OVERWRITE = "state_overwrite"
+    DESTRUCTIVE_MUTATION = "destructive_mutation"
+    COSTLY_RUNTIME = "costly_runtime"
+    EXTERNAL_EFFECT = "external_effect"
+    UNSUPPORTED = "unsupported"
+    AMBIGUOUS = "ambiguous"
 
 
 @dataclass(frozen=True)
