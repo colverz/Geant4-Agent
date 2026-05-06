@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from core.audit.audit_log import append_audit_entry
+from core.agent.composite_intent import detect_composite_intent
 from core.agent.context_pack import build_context_pack
 from core.agent.intent_router import route_user_turn
 from core.agent.turn_trace import NluTurnTrace, stable_hash
@@ -899,6 +900,7 @@ def process_turn(
     state = get_or_create_session(payload.get("session_id"))
     turn_id_before = state.turn_id
     intent_decision = route_user_turn(text, lang)
+    composite_intent = detect_composite_intent(text)
     previous_missing_paths = _dedupe_paths(
         validate_layer_c_completeness(state.config).missing_required_paths + list(state.semantic_missing_paths)
     )
@@ -1594,7 +1596,11 @@ def process_turn(
         idempotency_key=stable_hash({"session_id": state.session_id, "turn_id": state.turn_id, "patch": applied_paths}),
         runtime_payload_ready=is_complete,
         tool_calls_allowed=[],
-        tool_calls_blocked=["run_beam", "viewer_open"] if trace_safety == ActionSafetyClass.CONFIG_MUTATION else [],
+        tool_calls_blocked=["run_beam", "viewer_open"]
+        if (trace_safety == ActionSafetyClass.CONFIG_MUTATION or composite_intent.requires_staged_runtime_guard)
+        else [],
+        composite_intent=composite_intent.to_dict(),
+        guarded_runtime_intent_pending=composite_intent.requires_staged_runtime_guard,
     )
     final_context_pack = context_pack
     if trace_intent != context_pack.intent:
@@ -1616,6 +1622,7 @@ def process_turn(
     internal_trace = {
         "agent": {
             "intent_decision": intent_decision.to_dict(),
+            "composite_intent": composite_intent.to_dict(),
             "context_pack": final_context_pack.to_dict(),
             "initial_context_pack": context_pack.to_dict(),
             "nlu_turn_trace": nlu_turn_trace.to_dict(),

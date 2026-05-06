@@ -38,6 +38,8 @@ class NluTurnTrace:
     runtime_payload_ready: bool = False
     tool_calls_allowed: list[str] = field(default_factory=list)
     tool_calls_blocked: list[str] = field(default_factory=list)
+    composite_intent: dict[str, Any] = field(default_factory=dict)
+    guarded_runtime_intent_pending: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

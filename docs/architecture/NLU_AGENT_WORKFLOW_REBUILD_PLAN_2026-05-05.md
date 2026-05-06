@@ -440,6 +440,15 @@ Tests:
 
 Goal: build minimal, typed, auditable LLM context.
 
+Status as of 2026-05-06:
+
+- implemented a read-only `ContextPack` and `KnowledgeSnippet`
+- exposed `context_pack` and `context_pack_hash` through `process_turn`
+- added capability and unsupported capability visibility
+- added adversarial context evaluation for unsupported CT scanner, implicit runtime
+  requests, and LET scoring authority
+- not yet connected to LLM prompt construction or config mutation authority
+
 Tasks:
 
 - add `core/agent/context_pack.py`
@@ -454,6 +463,36 @@ Tests:
 - unsupported capability blocks fake config
 - deprecated snippet cannot ground a candidate patch
 - domain explanation can be used in answer but not mutation
+
+### P3a.5: Composite Intent Policy
+
+Goal: define how to handle turns that combine mutation and high-cost runtime intent
+before the interpretation frame starts producing path-level patches.
+
+Observed issue:
+
+`Change source energy to 10 MeV and run 10 events now` is currently routed as
+`run_requested`, so the safe runtime guard wins and mutation is not applied. This is
+safe, but the long-term desired behavior is more nuanced:
+
+```text
+stage/validate the mutation
+-> require or apply confirmation if needed
+-> return guarded runtime action
+-> never execute runtime from chat
+```
+
+Required policy:
+
+- `mutation + run/viewer` must never execute runtime directly
+- mutation can only apply after normal validation and confirmation policy
+- runtime request is returned as a separate guarded action after mutation state is
+  resolved
+- if mutation is ambiguous or unsupported, runtime action is not offered yet
+- trace must record both the mutation path and guarded runtime intent
+
+This should be implemented before P3b if we want the LLM interpreter to support
+composite user turns without losing safety.
 
 ### P3b: Build LLM Interpretation Frame V2
 
@@ -752,19 +791,25 @@ Stop and reassess if any of these happen:
 
 ## Near-Term Execution Recommendation
 
-Start with P1, P2, and P2.5 only.
+P1, P2, P2.5, and the first P3a slice are complete enough to move forward.
 
-Reason:
+Current checkpoint:
 
-- They create observability and routing boundaries without destabilizing the parser.
-- They make future failures diagnosable.
-- They let us prove whether a deeper rebuild is necessary before touching the
-  high-risk candidate merge logic.
-- They turn the workflow into a typed graph before we introduce KB grounding,
-  staged interrupts, or idempotency.
+- `NluTurnTrace` exists and is returned by `process_turn`.
+- `IntentDecision` and `WorkflowGraphSpec` are used by guard evaluators.
+- `ContextPack` exists as read-only trace context.
+- Scenario evaluators can check workflow nodes, runtime blocking, and context
+  supported/unsupported capabilities.
 
-After P1/P2/P2.5 pass full regression, move to P3a/P3b/P3c with a small
-interpreter-frame pilot behind a feature flag.
+Updated next steps:
+
+1. Finish P3a by adding context-pack shape tests to guard/scenario evaluators and
+   documenting the current capability KB as project support, not Geant4 support.
+2. Add P3a.5 composite intent policy before starting P3b.
+3. Start P3b only behind a feature flag after composite mutation/runtime behavior
+   is explicitly specified.
+4. Delay P3c implementation until we have at least one path-level interpretation
+   frame to check.
 
 ## References
 

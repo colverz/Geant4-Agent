@@ -23,7 +23,8 @@
       ]
     },
     "agent_expected": {
-      "must_not_call_runtime": true
+      "must_not_call_runtime": true,
+      "must_detect_composite_runtime_intent": true
     }
   },
   {

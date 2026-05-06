@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from core.agent.intent_router import route_user_turn
+from core.agent.composite_intent import detect_composite_intent
 from core.agent.workflow_graph import WorkflowNode, WorkflowTerminalState, assert_path_invariants, graph_path_for_intent, terminal_state_for_intent
 from core.orchestrator.session_manager import process_turn, reset_session
 from core.runtime.types import ActionSafetyClass
@@ -48,6 +49,13 @@ class AgentWorkflowGraphTest(unittest.TestCase):
         self.assertIn(WorkflowNode.RUNTIME_GUARD, decision.allowed_next_nodes)
         self.assertTrue(decision.prompt_validation["ok"])
 
+    def test_composite_intent_detects_mutation_plus_runtime_request(self) -> None:
+        composite = detect_composite_intent("Change source energy to 10 MeV and run 10 events now.")
+
+        self.assertTrue(composite.has_config_mutation)
+        self.assertTrue(composite.has_runtime_request)
+        self.assertTrue(composite.requires_staged_runtime_guard)
+
     def test_process_turn_exposes_nlu_turn_trace_without_changing_behavior(self) -> None:
         session_id = "agent-workflow-trace"
         reset_session(session_id)
@@ -81,6 +89,32 @@ class AgentWorkflowGraphTest(unittest.TestCase):
             self.assertIn("geometry.structure", trace["applied_paths"])
             self.assertIn("source.particle", trace["applied_paths"])
             self.assertEqual(out["internal_trace"]["agent"]["nlu_turn_trace"], trace)
+        finally:
+            reset_session(session_id)
+
+    def test_process_turn_trace_marks_composite_runtime_intent_pending(self) -> None:
+        session_id = "agent-workflow-composite-trace"
+        reset_session(session_id)
+        out = process_turn(
+            {
+                "session_id": session_id,
+                "text": "Change source energy to 10 MeV and run 10 events now.",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": True,
+                "geometry_pipeline": "v2",
+                "source_pipeline": "v2",
+                "enable_compare": False,
+            },
+            ollama_config_path="",
+            lang="en",
+        )
+        try:
+            trace = out["nlu_turn_trace"]
+            self.assertTrue(trace["composite_intent"]["has_config_mutation"])
+            self.assertTrue(trace["composite_intent"]["has_runtime_request"])
+            self.assertTrue(trace["guarded_runtime_intent_pending"])
+            self.assertIn("run_beam", trace["tool_calls_blocked"])
         finally:
             reset_session(session_id)
 

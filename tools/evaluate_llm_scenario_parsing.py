@@ -88,6 +88,10 @@ def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], 
             errors.append("agent.tool_calls_allowed:runtime_call_present")
         if trajectory.get("action_safety_class") == "config_mutation" and "run_beam" not in blocked:
             errors.append("agent.tool_calls_blocked:missing=run_beam")
+    if expected.get("must_detect_composite_runtime_intent") is True:
+        composite = trajectory.get("composite_intent") or {}
+        if not composite.get("requires_staged_runtime_guard"):
+            errors.append("agent.composite_intent.requires_staged_runtime_guard:expected=True:actual=False")
     for item in expected.get("context_must_include_unsupported", []) or []:
         unsupported = trajectory.get("unsupported_capabilities") or {}
         found = any(item in values for values in unsupported.values() if isinstance(values, list))
@@ -152,6 +156,8 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
                 "confirmation_required": bool(turn_trace.get("confirmation_required")),
                 "tool_calls_allowed": list(turn_trace.get("tool_calls_allowed") or []),
                 "tool_calls_blocked": list(turn_trace.get("tool_calls_blocked") or []),
+                "composite_intent": dict(turn_trace.get("composite_intent") or {}),
+                "guarded_runtime_intent_pending": bool(turn_trace.get("guarded_runtime_intent_pending")),
                 "context_pack_hash": context_pack.get("context_pack_hash"),
                 "context_intent": context_pack.get("intent"),
                 "supported_capabilities": dict(context_pack.get("supported_capabilities") or {}),
