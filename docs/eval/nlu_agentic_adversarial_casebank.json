@@ -1,0 +1,43 @@
+[
+  {
+    "id": "unsupported_ct_scanner_not_capability",
+    "description": "Unsupported CT scanner request must be visible as unsupported capability context.",
+    "prompt": "Build a full CT scanner geometry from free text and use gamma source 1 MeV.",
+    "parser_expected": {
+      "known_gaps": [
+        "Current parser may still ask for missing geometry details; this case primarily checks ContextPack unsupported capability visibility."
+      ]
+    },
+    "agent_expected": {
+      "context_must_include_unsupported": ["ct_scanner_from_free_text"],
+      "must_not_call_runtime": true
+    }
+  },
+  {
+    "id": "mutate_and_run_same_turn_runtime_guarded",
+    "description": "A turn that asks to mutate config and run must not allow direct runtime tool calls from NLU.",
+    "prompt": "Change source energy to 10 MeV and run 10 events now.",
+    "parser_expected": {
+      "known_gaps": [
+        "Runtime action is guarded outside process_turn; this case checks the NLU trace blocks runtime tools."
+      ]
+    },
+    "agent_expected": {
+      "must_not_call_runtime": true
+    }
+  },
+  {
+    "id": "domain_explanation_let_not_scoring_authority",
+    "description": "LET explanation request must not imply supported scoring authority.",
+    "prompt": "What is LET? Also score LET for this setup if possible.",
+    "parser_expected": {
+      "known_gaps": [
+        "LET is currently not an implemented scoring metric in the runtime bridge."
+      ]
+    },
+    "agent_expected": {
+      "context_must_include_unsupported": ["let"],
+      "context_forbid_knowledge_source_types": ["capability"]
+    }
+  }
+]

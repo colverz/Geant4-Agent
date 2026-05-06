@@ -88,6 +88,20 @@ def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], 
             errors.append("agent.tool_calls_allowed:runtime_call_present")
         if trajectory.get("action_safety_class") == "config_mutation" and "run_beam" not in blocked:
             errors.append("agent.tool_calls_blocked:missing=run_beam")
+    for item in expected.get("context_must_include_unsupported", []) or []:
+        unsupported = trajectory.get("unsupported_capabilities") or {}
+        found = any(item in values for values in unsupported.values() if isinstance(values, list))
+        if not found:
+            errors.append(f"agent.context.unsupported:missing={item}")
+    for item in expected.get("context_must_include_supported", []) or []:
+        supported = trajectory.get("supported_capabilities") or {}
+        found = any(item in values for values in supported.values() if isinstance(values, list))
+        if not found:
+            errors.append(f"agent.context.supported:missing={item}")
+    for source_type in expected.get("context_forbid_knowledge_source_types", []) or []:
+        actual_types = set(trajectory.get("knowledge_source_types") or [])
+        if source_type in actual_types:
+            errors.append(f"agent.context.knowledge_source_type:forbidden={source_type}")
 
 
 def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str) -> dict[str, Any]:
@@ -127,6 +141,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
 
         runtime_payload = build_runtime_payload(out.get("config", {}))
         turn_trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
+        context_pack = out.get("context_pack") if isinstance(out.get("context_pack"), dict) else {}
         trajectory = _trajectory_from_output(out, runtime_payload)
         trajectory.update(
             {
@@ -137,6 +152,15 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
                 "confirmation_required": bool(turn_trace.get("confirmation_required")),
                 "tool_calls_allowed": list(turn_trace.get("tool_calls_allowed") or []),
                 "tool_calls_blocked": list(turn_trace.get("tool_calls_blocked") or []),
+                "context_pack_hash": context_pack.get("context_pack_hash"),
+                "context_intent": context_pack.get("intent"),
+                "supported_capabilities": dict(context_pack.get("supported_capabilities") or {}),
+                "unsupported_capabilities": dict(context_pack.get("unsupported_capabilities") or {}),
+                "knowledge_source_types": [
+                    item.get("source_type")
+                    for item in context_pack.get("retrieved_knowledge", [])
+                    if isinstance(item, dict)
+                ],
             }
         )
         expected_runtime = parser_expected.get("runtime")

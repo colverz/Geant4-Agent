@@ -139,6 +139,14 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertIn("apply_session", trajectory["node_sequence"])
         self.assertIn("run_beam", trajectory["tool_calls_blocked"])
 
+    def test_agentic_adversarial_context_casebank_passes(self) -> None:
+        report = evaluate_llm_scenario_parsing(Path("docs/eval/nlu_agentic_adversarial_casebank.json"))
+
+        self.assertEqual(report["failed"], 0)
+        self.assertGreaterEqual(report["total"], 3)
+        for result in report["results"]:
+            self.assertIn("unsupported_capabilities", result["trajectory"])
+
     def test_model_override_is_reported_and_restored(self) -> None:
         previous = os.environ.get("GEANT4_LLM_MODEL_OVERRIDE")
         with patch.dict(os.environ, {}, clear=False):
