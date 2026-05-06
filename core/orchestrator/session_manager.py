@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from core.audit.audit_log import append_audit_entry
+from core.agent.context_pack import build_context_pack
 from core.agent.intent_router import route_user_turn
 from core.agent.turn_trace import NluTurnTrace, stable_hash
 from core.agent.workflow_graph import graph_path_for_intent, terminal_state_for_intent
@@ -907,6 +908,14 @@ def process_turn(
     before_config = deep_copy(state.config)
     draft = begin_turn(state)
     context_summary = _build_context_summary(state)
+    context_pack = build_context_pack(
+        user_turn=text,
+        intent_decision=intent_decision,
+        config=before_config,
+        staged_patch_summary={"pending_overwrite_count": len(state.pending_overwrite)}
+        if state.pending_overwrite
+        else None,
+    )
     pipeline_selection = select_pipelines(
         geometry=str(payload.get("geometry_pipeline", "")).strip() or None,
         source=str(payload.get("source_pipeline", "")).strip() or None,
@@ -1578,7 +1587,7 @@ def process_turn(
         confirmation_required=pending_overwrite_required,
         applied_paths=applied_paths,
         rejected_paths=rejected_paths,
-        context_pack_hash=stable_hash({"summary": context_summary, "intent": intent_decision.intent}),
+        context_pack_hash=context_pack.context_pack_hash,
         patch_hash=stable_hash({"applied": applied_paths, "pending": staged_pending_overwrite}),
         grounding_status="legacy_validated",
         interrupt_status="waiting_confirmation" if pending_overwrite_required else "none",
@@ -1587,9 +1596,28 @@ def process_turn(
         tool_calls_allowed=[],
         tool_calls_blocked=["run_beam", "viewer_open"] if trace_safety == ActionSafetyClass.CONFIG_MUTATION else [],
     )
+    final_context_pack = context_pack
+    if trace_intent != context_pack.intent:
+        final_context_pack = build_context_pack(
+            user_turn=text,
+            intent_decision=intent_decision,
+            config=before_config,
+            staged_patch_summary={"pending_overwrite_count": len(state.pending_overwrite)}
+            if state.pending_overwrite
+            else None,
+        )
+        object.__setattr__(final_context_pack, "intent", trace_intent)
+        object.__setattr__(
+            final_context_pack,
+            "context_pack_hash",
+            stable_hash({"base": final_context_pack.to_dict(), "final_intent": trace_intent}),
+        )
+        nlu_turn_trace.context_pack_hash = final_context_pack.context_pack_hash
     internal_trace = {
         "agent": {
             "intent_decision": intent_decision.to_dict(),
+            "context_pack": final_context_pack.to_dict(),
+            "initial_context_pack": context_pack.to_dict(),
             "nlu_turn_trace": nlu_turn_trace.to_dict(),
         },
         "nlu": {
@@ -1677,6 +1705,7 @@ def process_turn(
         "graph_choice": debug.get("graph_choice", {}),
         "inference_backend": debug.get("inference_backend", "orchestrated"),
         "nlu_turn_trace": nlu_turn_trace.to_dict(),
+        "context_pack": final_context_pack.to_dict(),
         "internal_trace": internal_trace,
         "history": state.history[-10:],
         "audit_size": len(state.audit_trail),
