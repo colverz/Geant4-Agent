@@ -31,6 +31,41 @@ phrase accumulation. LLMs should handle interpretation, disambiguation, planning
 and explanation. Deterministic code should own facts, state transitions, safety,
 and runtime execution.
 
+## 2026-05-06 Review Addendum
+
+A follow-up recommendation reviewed on 2026-05-06 keeps this plan's direction but
+strengthens it from a layered NLU design into a production-grade agent workflow.
+The accepted upgrades are:
+
+- define an explicit `WorkflowGraphSpec` before large behavior changes
+- use one shared `ActionSafetyClass` taxonomy across routing, confirmation,
+  runtime guards, and evaluation
+- build a knowledge-aware `ContextPack`, but never let knowledge snippets directly
+  authorize configuration changes
+- add an `EvidenceGroundingChecker` before LLM-proposed values reach normalization
+- treat confirmation as staged interrupt/resume through `StagedPatchStore`
+- add `IdempotencyReplayPolicy` before expanding runtime or batch side effects
+- expand casebanks toward adversarial trajectory behavior, not phrase coverage
+
+The upgraded workflow target is:
+
+```text
+IntentRouter
+-> Knowledge-Aware ContextPack
+-> LLM InterpretationFrame
+-> EvidenceGroundingChecker
+-> CandidatePatchNormalizer
+-> TypedValidator
+-> ConfirmationPolicy / InterruptResume
+-> SessionApply
+-> RuntimeActionGuard
+-> ResultGroundedAnswer
+-> TrajectoryEvaluation
+```
+
+This does not require adopting LangGraph or another framework immediately. First
+define the internal graph contract, trace it, and prove the invariants with tests.
+
 ## External Design Signals
 
 The plan is based on public agent systems and documentation, not leaked source.
@@ -99,6 +134,56 @@ Rules:
   execution from chat.
 - Only `config_mutation` and `clarification_answer` can enter candidate generation.
 
+The router should return a typed `IntentDecision` rather than a loose string:
+
+```python
+@dataclass
+class IntentDecision:
+    intent: str
+    confidence: float
+    safety_class: str
+    requires_kb: bool
+    allowed_next_nodes: list[str]
+```
+
+### Layer 1.5: Workflow Graph Spec
+
+Purpose: make the intended node sequence testable before decomposing
+`session_manager.py`.
+
+Initial nodes:
+
+```text
+start
+route_intent
+build_context
+interpret
+check_grounding
+normalize_patch
+validate
+confirmation_policy
+wait_confirmation
+apply_session
+runtime_guard
+answer
+end
+```
+
+Terminal states:
+
+```text
+read_only_answer
+mutation_applied
+waiting_confirmation
+rejected
+unsupported
+runtime_action_guarded
+error
+```
+
+The first implementation should be no-behavior-change: record the path in trace
+and assert path invariants.
+
 ### Layer 2: LLM Interpretation Agent
 
 Purpose: convert a user turn plus compact context into an interpretation frame.
@@ -124,7 +209,18 @@ Output contract:
 {
   "intent": "config_mutation",
   "confidence": 0.0,
-  "candidate_patch": {},
+  "candidate_updates": [
+    {
+      "path": "source.energy",
+      "operation": "set",
+      "value": 10,
+      "unit": "MeV",
+      "confidence": 0.94,
+      "evidence": [
+        {"source": "explicit_user_text", "text_span": "10 MeV"}
+      ]
+    }
+  ],
   "stable_slots_referenced": [],
   "ambiguities": [],
   "requires_confirmation": [],
@@ -134,6 +230,52 @@ Output contract:
   ]
 }
 ```
+
+### Layer 2.5: Knowledge-Aware Context Pack
+
+Purpose: give the LLM compact, auditable context without turning the knowledge base
+into an unchecked config generator.
+
+The context pack should include:
+
+- user turn
+- routed intent
+- current session summary
+- stable slots
+- staged patch summary
+- allowed config paths
+- supported and unsupported capabilities
+- retrieved knowledge snippets
+- latest runtime summary when relevant
+- context pack hash
+
+Knowledge categories:
+
+- capability KB can ground supported enum/capability decisions
+- domain explanation KB can support user-facing explanation, not mutation
+- implementation contract KB can support developer/runtime interpretation
+- deprecated or unsupported KB can block or explain, never ground patches
+
+Retrieval happens after routing. `read_config` needs current config and schema
+labels, while `config_mutation` needs capability KB and allowed paths. Normal chat
+should not receive Geant4 KB unless explicitly needed.
+
+### Layer 2.6: Evidence Grounding Checker
+
+Purpose: reject LLM-proposed values, paths, or assumptions that are not grounded.
+
+Every candidate update must be grounded in at least one approved source:
+
+- explicit user text
+- existing session value
+- capability KB
+- implementation contract
+- deterministic default policy
+- derived value with formula trace
+
+Numeric values are stricter: they must come from explicit user text, existing
+session state, deterministic default policy, or a transparent derivation.
+Ungrounded numbers are rejected, not merely confirmed.
 
 ### Layer 3: Candidate Patch Normalizer
 
@@ -241,8 +383,10 @@ Tasks:
 
 - create `core/nlu_trace.py` or `core/agent/turn_trace.py`
 - populate trace from existing `process_turn`
-- include intent, profile ids, LLM/fallback, candidate paths, confirmation status,
-  applied/rejected paths, runtime readiness
+- include node sequence, intent, action safety class, profile ids, LLM/fallback,
+  candidate paths, confirmation status, applied/rejected paths, context pack hash,
+  patch hash, grounding status, interrupt status, idempotency key/action id, and
+  runtime readiness
 - return trace in debug/API response under a stable field
 
 Tests:
@@ -261,6 +405,8 @@ Tasks:
 - move intent classification into a small module, e.g. `core/agent/intent_router.py`
 - keep deterministic router first, optional LLM router later
 - make router return `IntentDecision`
+- attach shared `ActionSafetyClass`
+- attach `requires_kb` and allowed next workflow nodes
 - ensure `/api/geant4/intent` and chat use the same router
 
 Tests:
@@ -270,14 +416,53 @@ Tests:
 - run/viewer requests return guarded action only
 - config mutations are the only chat path allowed into candidate generation
 
-### P3: Build LLM Interpretation Frame
+### P2.5: Add WorkflowGraphSpec
+
+Goal: define graph nodes, transitions, terminal states, and path contracts without
+changing behavior.
+
+Tasks:
+
+- add `core/agent/workflow_graph.py`
+- define workflow nodes and terminal states
+- map current `process_turn` branches onto graph paths
+- write graph path into `NluTurnTrace`
+
+Tests:
+
+- `read_config` path never reaches session apply
+- `normal_chat` path never reaches validation
+- `config_mutation` path passes validation before session apply
+- `run_requested` ends as guarded runtime action
+- unsupported request ends as unsupported or clarification
+
+### P3a: Add Knowledge-Aware ContextPackBuilder
+
+Goal: build minimal, typed, auditable LLM context.
+
+Tasks:
+
+- add `core/agent/context_pack.py`
+- define `ContextPack` and `KnowledgeSnippet`
+- add a minimal capability KB loader
+- separate supported, unsupported, deprecated, domain explanation, and implementation
+  contract snippets
+
+Tests:
+
+- supported capability can ground enum mapping
+- unsupported capability blocks fake config
+- deprecated snippet cannot ground a candidate patch
+- domain explanation can be used in answer but not mutation
+
+### P3b: Build LLM Interpretation Frame V2
 
 Goal: replace "LLM returns fields" with "LLM returns interpretation + evidence."
 
 Tasks:
 
 - add `PromptTask.INTERPRET_USER_TURN_V2`
-- define strict JSON output with `candidate_patch`, `ambiguities`,
+- define strict JSON output with path-level `candidate_updates`, `ambiguities`,
   `requires_confirmation`, `evidence`
 - validate output with allowlist and evidence checks
 - keep existing slot/semantic extractors as compatibility adapters
@@ -288,6 +473,26 @@ Tests:
 - internal fields reject
 - ungrounded numbers reject
 - unsupported request routes to clarification/unsupported, not hallucinated config
+
+### P3c: Add EvidenceGroundingChecker
+
+Goal: reject ungrounded paths, values, numbers, and unsupported capabilities before
+normalization.
+
+Tasks:
+
+- add `core/agent/evidence_grounding.py`
+- check evidence source type and text span
+- reject internal/private paths
+- reject unsupported/deprecated KB as grounding
+- reject ungrounded numeric values
+
+Tests:
+
+- LLM-invented number is rejected
+- user number without unit asks clarification unless default unit policy exists
+- existing stable value can be preserved
+- capability KB can ground enum values, not arbitrary numbers
 
 ### P4: Candidate Patch Normalizer
 
@@ -326,6 +531,46 @@ Tests:
 - approval applies exact staged patch
 - rejection leaves state unchanged
 
+### P5.1: StagedPatchStore + InterruptResumeController
+
+Goal: treat confirmation as a structured paused workflow.
+
+Tasks:
+
+- add `core/agent/staged_patch.py`
+- add `core/agent/interrupt_resume.py`
+- create `confirmation_id` and `patch_hash`
+- approval applies the exact staged patch
+- rejection leaves session unchanged
+- stale confirmation id is rejected
+- edit creates a new interpretation turn
+
+Tests:
+
+- approval applies exact staged patch
+- rejection leaves state unchanged
+- stale confirmation is rejected
+- mutated session invalidates older staged patch
+- patch hash mismatch cannot apply
+
+### P5.5: IdempotencyReplayPolicy
+
+Goal: prevent repeated side effects during retry/replay.
+
+Tasks:
+
+- add `core/agent/idempotency.py`
+- define replay behavior for interpretation, validation, session apply, Geant4 run,
+  viewer launch, file write, and batch run
+- introduce runtime `action_id` for non-replayable side effects
+
+Tests:
+
+- duplicate action id returns existing status/result
+- retry after validation does not re-run Geant4
+- viewer launch is never replayed automatically
+- read-only summary can be repeated safely
+
 ### P6: Agentic Casebank V2
 
 Goal: replace dictionary-like live casebank with behavior cases.
@@ -341,6 +586,10 @@ Case types:
 - request unsupported complex geometry
 - request run/viewer from chat
 - result question asking for unavailable dose metric
+- mutate-and-run in one turn must stage mutation and guard runtime action
+- unsupported CT scanner must not become fake geometry
+- stale confirmation must not mutate state
+- domain explanation must not authorize unsupported scoring
 
 Expected fields:
 
@@ -383,6 +632,11 @@ Metrics:
 - hallucinated value rejection rate
 - average latency
 - token/cost if available
+- invalid JSON rate
+- schema reject rate
+- unsupported hallucination rate
+- confirmation over-trigger and under-trigger rate
+- grounding failure rate
 
 Rules:
 
@@ -391,6 +645,17 @@ Rules:
 - never commit API keys
 - full live run is opt-in
 
+### P7.5: ModelRoutingPolicy
+
+Goal: use stronger models only when the workflow needs them.
+
+Suggested routing:
+
+- cheap model for low-risk interpretation
+- stronger model for ambiguous geometry/source/scoring
+- escalation after validation or grounding failure
+- fallback marked explicitly and never counted as success
+
 ### P8: Session Manager Decomposition
 
 Goal: reduce maintenance risk after boundaries are proven.
@@ -398,10 +663,15 @@ Goal: reduce maintenance risk after boundaries are proven.
 Extract in this order:
 
 1. `intent_router.py`
-2. `turn_trace.py`
-3. `candidate_patch.py`
-4. `confirmation_policy.py`
-5. `session_apply.py`
+2. `workflow_graph.py`
+3. `turn_trace.py`
+4. `context_pack.py`
+5. `evidence_grounding.py`
+6. `candidate_patch.py`
+7. `confirmation_policy.py`
+8. `staged_patch.py`
+9. `session_apply.py`
+10. `idempotency.py`
 
 Do not split everything at once. Each extraction needs tests before and after.
 
@@ -472,10 +742,17 @@ Stop and reassess if any of these happen:
 - Runtime actions can be triggered from normal chat.
 - Live LLM fallback is counted as success.
 - Secrets scan fails.
+- Knowledge snippets directly authorize unsupported config mutation.
+- Deprecated knowledge grounds a candidate patch.
+- Confirmation approval applies a different patch hash.
+- Runtime action repeats after retry/replay.
+- Stale confirmation can mutate state.
+- Result answer uses an unavailable metric.
+- Domain explanation KB is treated as capability support.
 
 ## Near-Term Execution Recommendation
 
-Start with P1 and P2 only.
+Start with P1, P2, and P2.5 only.
 
 Reason:
 
@@ -483,9 +760,11 @@ Reason:
 - They make future failures diagnosable.
 - They let us prove whether a deeper rebuild is necessary before touching the
   high-risk candidate merge logic.
+- They turn the workflow into a typed graph before we introduce KB grounding,
+  staged interrupts, or idempotency.
 
-After P1/P2 pass full regression, move to P3 with a small interpreter-frame pilot
-behind a feature flag.
+After P1/P2/P2.5 pass full regression, move to P3a/P3b/P3c with a small
+interpreter-frame pilot behind a feature flag.
 
 ## References
 
