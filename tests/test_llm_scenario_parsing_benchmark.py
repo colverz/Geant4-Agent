@@ -113,6 +113,32 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         errors = report["failures"][0]["errors"]
         self.assertTrue(any(error.startswith("agent.llm_used") for error in errors))
 
+    def test_agent_expected_can_require_workflow_nodes(self) -> None:
+        casebank = [
+            {
+                "id": "workflow_node_probe",
+                "prompt": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json.",
+                "parser_expected": {"is_complete": True},
+                "agent_expected": {
+                    "must_be_complete": True,
+                    "must_have_runtime_payload": True,
+                    "must_apply_session": True,
+                    "must_pass_validate": True,
+                    "must_not_call_runtime": True,
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "casebank.json"
+            path.write_text(json.dumps(casebank), encoding="utf-8")
+            report = evaluate_llm_scenario_parsing(path)
+
+        self.assertEqual(report["failed"], 0)
+        trajectory = report["results"][0]["trajectory"]
+        self.assertIn("validate", trajectory["node_sequence"])
+        self.assertIn("apply_session", trajectory["node_sequence"])
+        self.assertIn("run_beam", trajectory["tool_calls_blocked"])
+
     def test_model_override_is_reported_and_restored(self) -> None:
         previous = os.environ.get("GEANT4_LLM_MODEL_OVERRIDE")
         with patch.dict(os.environ, {}, clear=False):

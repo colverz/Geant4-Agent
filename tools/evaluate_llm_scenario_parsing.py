@@ -77,6 +77,17 @@ def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], 
         errors.append(f"agent.is_complete:expected=True:actual={trajectory['is_complete']!r}")
     if expected.get("must_have_runtime_payload") is True and not trajectory["runtime_payload_ready"]:
         errors.append("agent.runtime_payload_ready:expected=True:actual=False")
+    if expected.get("must_apply_session") is True and "apply_session" not in set(trajectory.get("node_sequence") or []):
+        errors.append("agent.node_sequence:missing=apply_session")
+    if expected.get("must_pass_validate") is True and "validate" not in set(trajectory.get("node_sequence") or []):
+        errors.append("agent.node_sequence:missing=validate")
+    if expected.get("must_not_call_runtime") is True:
+        blocked = set(trajectory.get("tool_calls_blocked") or [])
+        allowed = set(trajectory.get("tool_calls_allowed") or [])
+        if "run_beam" in allowed or "viewer_open" in allowed:
+            errors.append("agent.tool_calls_allowed:runtime_call_present")
+        if trajectory.get("action_safety_class") == "config_mutation" and "run_beam" not in blocked:
+            errors.append("agent.tool_calls_blocked:missing=run_beam")
 
 
 def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str) -> dict[str, Any]:
@@ -115,7 +126,19 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
             errors.append(f"is_complete:expected={parser_expected['is_complete']!r}:actual={out.get('is_complete')!r}")
 
         runtime_payload = build_runtime_payload(out.get("config", {}))
+        turn_trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
         trajectory = _trajectory_from_output(out, runtime_payload)
+        trajectory.update(
+            {
+                "node_sequence": list(turn_trace.get("node_sequence") or []),
+                "terminal_state": turn_trace.get("terminal_state"),
+                "action_safety_class": turn_trace.get("action_safety_class"),
+                "applied_paths": list(turn_trace.get("applied_paths") or []),
+                "confirmation_required": bool(turn_trace.get("confirmation_required")),
+                "tool_calls_allowed": list(turn_trace.get("tool_calls_allowed") or []),
+                "tool_calls_blocked": list(turn_trace.get("tool_calls_blocked") or []),
+            }
+        )
         expected_runtime = parser_expected.get("runtime")
         if isinstance(expected_runtime, dict):
             _compare_expected(expected_runtime, runtime_payload, "runtime", errors)

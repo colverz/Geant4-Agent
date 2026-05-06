@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from planner.runtime_intent import action_for_runtime_intent, classify_user_runtime_intent
+from core.agent.intent_router import IntentDecision, route_user_turn
+from core.agent.workflow_graph import assert_path_invariants, graph_path_for_intent
+from planner.runtime_intent import action_for_runtime_intent
 from planner.runtime_result import build_runtime_result_question_answer
 from core.orchestrator.path_ops import set_path
 from core.orchestrator.session_manager import get_or_create_session, reset_session
@@ -28,6 +30,41 @@ VALID_INTENTS = {
 VALID_SAFETY = {"read_only", "config_mutation", "expensive_runtime"}
 VALID_ACTIONS = {"config_summary", "runtime_summary", "step_async", "guarded_runtime_ui", "read_only_chat"}
 VALID_LANGS = {"zh", "en"}
+
+
+def _decision_action(decision: IntentDecision) -> str:
+    return action_for_runtime_intent(decision.intent).value
+
+
+def _decision_errors(
+    decision: IntentDecision,
+    *,
+    expected_intent: str,
+    expected_safety: str | None = None,
+    expected_action: str | None = None,
+) -> dict[str, Any]:
+    errors: dict[str, Any] = {}
+    if decision.intent != expected_intent:
+        errors["intent"] = {"expected": expected_intent, "actual": decision.intent}
+    if expected_safety is not None and decision.safety_class.value != expected_safety:
+        errors["safety"] = {"expected": expected_safety, "actual": decision.safety_class.value}
+    if expected_action is not None:
+        action = _decision_action(decision)
+        if action != expected_action:
+            errors["action"] = {"expected": expected_action, "actual": action}
+    graph_path = graph_path_for_intent(decision.intent)
+    try:
+        assert_path_invariants(decision.intent, graph_path)
+    except AssertionError as exc:
+        errors["workflow_graph"] = str(exc)
+    next_nodes = {node.value for node in decision.allowed_next_nodes}
+    if decision.intent == "config_mutation" and "validate" not in next_nodes:
+        errors["allowed_next_nodes"] = "config_mutation missing validate"
+    if decision.intent in {"read_config", "read_summary", "normal_chat"} and "apply_session" in next_nodes:
+        errors["allowed_next_nodes"] = "read-only route includes apply_session"
+    if decision.intent in {"run_requested", "viewer_requested"} and "runtime_guard" not in next_nodes:
+        errors["allowed_next_nodes"] = "runtime route missing runtime_guard"
+    return errors
 
 
 def _load_json(path: Path) -> Any:
@@ -189,15 +226,18 @@ def evaluate_workflow_guard(path: Path) -> dict[str, Any]:
     cases = _load_json(path)
     failures: list[dict[str, Any]] = []
     for case in cases:
-        result = classify_user_runtime_intent(case["text"], case["lang"])
-        if result.intent.value != case["expected_intent"] or result.action_safety_class.value != case["expected_safety"]:
+        decision = route_user_turn(case["text"], case["lang"])
+        errors = _decision_errors(
+            decision,
+            expected_intent=case["expected_intent"],
+            expected_safety=case["expected_safety"],
+        )
+        if errors:
             failures.append(
                 {
                     "id": case["id"],
-                    "expected_intent": case["expected_intent"],
-                    "actual_intent": result.intent.value,
-                    "expected_safety": case["expected_safety"],
-                    "actual_safety": result.action_safety_class.value,
+                    "errors": errors,
+                    "decision": decision.to_dict(),
                 }
             )
     return {"name": "workflow_guard", "total": len(cases), "failed": len(failures), "failures": failures}
@@ -231,20 +271,23 @@ def evaluate_multiturn_guard(path: Path) -> dict[str, Any]:
         lang = str(flow.get("lang", "en"))
         for index, turn in enumerate(flow.get("turns", [])):
             total += 1
-            result = classify_user_runtime_intent(turn["text"], turn.get("lang", lang))
-            action = action_for_runtime_intent(result.intent).value
-            errors: dict[str, Any] = {}
-            if result.intent.value != turn["expected_intent"]:
-                errors["intent"] = {"expected": turn["expected_intent"], "actual": result.intent.value}
-            if result.action_safety_class.value != turn["expected_safety"]:
-                errors["safety"] = {
-                    "expected": turn["expected_safety"],
-                    "actual": result.action_safety_class.value,
-                }
-            if action != turn["expected_action"]:
-                errors["action"] = {"expected": turn["expected_action"], "actual": action}
+            decision = route_user_turn(turn["text"], turn.get("lang", lang))
+            errors = _decision_errors(
+                decision,
+                expected_intent=turn["expected_intent"],
+                expected_safety=turn["expected_safety"],
+                expected_action=turn["expected_action"],
+            )
             if errors:
-                failures.append({"id": flow["id"], "turn_index": index, "text": turn["text"], "errors": errors})
+                failures.append(
+                    {
+                        "id": flow["id"],
+                        "turn_index": index,
+                        "text": turn["text"],
+                        "errors": errors,
+                        "decision": decision.to_dict(),
+                    }
+                )
     return {"name": "multiturn_guard", "total": total, "failed": len(failures), "failures": failures}
 
 
@@ -272,11 +315,15 @@ def evaluate_session_behavior_guard(path: Path) -> dict[str, Any]:
         errors: dict[str, Any] = {}
         session_id = f"casebank-session-behavior-{index}"
         turn_before = _seed_guard_session(session_id)
-        result = classify_user_runtime_intent(case["text"], case["lang"])
-        action = action_for_runtime_intent(result.intent).value
-
-        if result.intent.value != case["expected_intent"]:
-            errors["intent"] = {"expected": case["expected_intent"], "actual": result.intent.value}
+        decision = route_user_turn(case["text"], case["lang"])
+        action = _decision_action(decision)
+        errors.update(
+            _decision_errors(
+                decision,
+                expected_intent=case["expected_intent"],
+                expected_action=case["expected_action"],
+            )
+        )
         if action != case["expected_action"]:
             errors["action"] = {"expected": case["expected_action"], "actual": action}
 
@@ -346,7 +393,7 @@ def evaluate_session_behavior_guard(path: Path) -> dict[str, Any]:
             errors["status"] = {"expected": sorted(expected_statuses), "actual": status}
 
         if errors:
-            failures.append({"id": case["id"], "text": case["text"], "errors": errors})
+            failures.append({"id": case["id"], "text": case["text"], "errors": errors, "decision": decision.to_dict()})
     return {"name": "session_behavior_guard", "total": len(cases), "failed": len(failures), "failures": failures}
 
 
