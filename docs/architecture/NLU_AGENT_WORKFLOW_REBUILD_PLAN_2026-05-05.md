@@ -569,7 +569,9 @@ Status as of 2026-05-09:
 - confirmation reasons are tagged for low confidence, explicit overwrite, and
   delete/remove operations
 - guarded runtime actions are preserved as separate guarded action requests
-- not yet connected to confirmation policy or session mutation
+- added a read-only confirmation preview bridge that reuses the existing
+  confirmation policy without mutating session state
+- not yet connected to session mutation
 
 Tasks:
 

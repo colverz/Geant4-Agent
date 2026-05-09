@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from core.agent.action_safety import ActionSafetyClass
+from core.orchestrator.confirmation_policy import _extract_low_confidence_updates, _extract_pending_overwrites
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 
 
@@ -57,6 +58,38 @@ class CandidatePatchEnvelope:
             safety = item.get("safety_class")
             item["safety_class"] = safety.value if isinstance(safety, ActionSafetyClass) else str(safety)
         return payload
+
+
+@dataclass(frozen=True)
+class CandidatePatchConfirmationPreview:
+    candidate: CandidateUpdate
+    kept_candidate: CandidateUpdate | None
+    pending: list[dict[str, Any]]
+    requires_confirmation: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "candidate": {
+                "producer": self.candidate.producer.value,
+                "intent": self.candidate.intent.value,
+                "target_paths": list(self.candidate.target_paths),
+                "update_count": len(self.candidate.updates),
+                "confidence": self.candidate.confidence,
+                "rationale": self.candidate.rationale,
+            },
+            "kept_candidate": None
+            if self.kept_candidate is None
+            else {
+                "producer": self.kept_candidate.producer.value,
+                "intent": self.kept_candidate.intent.value,
+                "target_paths": list(self.kept_candidate.target_paths),
+                "update_count": len(self.kept_candidate.updates),
+                "confidence": self.kept_candidate.confidence,
+                "rationale": self.kept_candidate.rationale,
+            },
+            "pending": [dict(item) for item in self.pending],
+            "requires_confirmation": self.requires_confirmation,
+        }
 
 
 def _stable_hash(payload: Any) -> str:
@@ -214,14 +247,48 @@ def envelope_to_candidate_update(envelope: CandidatePatchEnvelope, *, turn_id: i
     )
 
 
+def preview_candidate_patch_confirmation(
+    envelope: CandidatePatchEnvelope,
+    *,
+    state_like: Any,
+    turn_id: int,
+    lang: str = "en",
+    min_confidence: float = 0.6,
+    producer: Producer = Producer.LLM_SEMANTIC_FRAME,
+) -> CandidatePatchConfirmationPreview:
+    candidate = envelope_to_candidate_update(envelope, turn_id=turn_id, producer=producer)
+    after_low_conf, low_pending = _extract_low_confidence_updates(
+        state_like,
+        [candidate],
+        min_confidence=min_confidence,
+        lang=lang,
+    )
+    after_overwrite, overwrite_pending = _extract_pending_overwrites(
+        state_like,
+        candidate,
+        after_low_conf,
+        lang=lang,
+    )
+    kept_candidate = after_overwrite[0] if after_overwrite else None
+    pending = low_pending + overwrite_pending
+    return CandidatePatchConfirmationPreview(
+        candidate=candidate,
+        kept_candidate=kept_candidate,
+        pending=pending,
+        requires_confirmation=bool(pending),
+    )
+
+
 __all__ = [
     "CONFIRM_DELETE",
     "CONFIRM_LOW_CONFIDENCE",
     "CONFIRM_OVERWRITE",
     "CandidatePatchEnvelope",
+    "CandidatePatchConfirmationPreview",
     "GuardedActionRequest",
     "PatchEvidence",
     "PatchOperation",
     "envelope_to_candidate_update",
     "normalize_interpreter_v2_payload",
+    "preview_candidate_patch_confirmation",
 ]

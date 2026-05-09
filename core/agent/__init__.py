@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from .candidate_patch import CandidatePatchEnvelope, GuardedActionRequest, PatchEvidence, PatchOperation, envelope_to_candidate_update, normalize_interpreter_v2_payload
+from .candidate_patch import (
+    CandidatePatchConfirmationPreview,
+    CandidatePatchEnvelope,
+    GuardedActionRequest,
+    PatchEvidence,
+    PatchOperation,
+    envelope_to_candidate_update,
+    normalize_interpreter_v2_payload,
+    preview_candidate_patch_confirmation,
+)
 from .composite_intent import CompositeIntent, detect_composite_intent
 from .context_pack import ContextPack, KnowledgeSnippet, build_context_pack
 from .evidence_grounding import EvidenceGroundingContext, EvidenceGroundingResult, check_candidate_update_grounding
@@ -11,6 +20,7 @@ from .workflow_graph import WorkflowNode, WorkflowTerminalState, graph_path_for_
 __all__ = [
     "ContextPack",
     "CandidatePatchEnvelope",
+    "CandidatePatchConfirmationPreview",
     "CompositeIntent",
     "EvidenceGroundingContext",
     "EvidenceGroundingResult",
@@ -28,5 +38,6 @@ __all__ = [
     "envelope_to_candidate_update",
     "graph_path_for_intent",
     "normalize_interpreter_v2_payload",
+    "preview_candidate_patch_confirmation",
     "route_user_turn",
 ]

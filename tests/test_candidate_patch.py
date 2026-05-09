@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from core.agent.candidate_patch import (
     CONFIRM_DELETE,
@@ -8,6 +9,7 @@ from core.agent.candidate_patch import (
     CONFIRM_OVERWRITE,
     envelope_to_candidate_update,
     normalize_interpreter_v2_payload,
+    preview_candidate_patch_confirmation,
 )
 from core.orchestrator.types import Intent, Producer
 
@@ -117,6 +119,70 @@ class CandidatePatchNormalizerTest(unittest.TestCase):
         second = normalize_interpreter_v2_payload(_payload())
 
         self.assertEqual(first.patch_hash, second.patch_hash)
+
+    def test_confirmation_preview_stages_low_confidence_without_session_apply(self) -> None:
+        payload = _payload()
+        payload["candidate_updates"][0]["confidence"] = 0.42
+        envelope = normalize_interpreter_v2_payload(payload)
+        state_like = SimpleNamespace(config={"source": {}})
+
+        preview = preview_candidate_patch_confirmation(envelope, state_like=state_like, turn_id=1, min_confidence=0.6)
+
+        self.assertTrue(preview.requires_confirmation)
+        self.assertIsNone(preview.kept_candidate)
+        self.assertEqual(preview.pending[0]["path"], "source.energy_mev")
+        self.assertEqual(preview.pending[0]["reason"], "low_confidence")
+        self.assertEqual(state_like.config, {"source": {}})
+
+    def test_confirmation_preview_stages_explicit_overwrite(self) -> None:
+        payload = _payload()
+        payload["candidate_updates"][0]["requires_confirmation"] = True
+        envelope = normalize_interpreter_v2_payload(payload)
+        state_like = SimpleNamespace(config={"source": {"energy_mev": 1.0}})
+
+        preview = preview_candidate_patch_confirmation(envelope, state_like=state_like, turn_id=1)
+
+        self.assertTrue(preview.requires_confirmation)
+        self.assertIsNone(preview.kept_candidate)
+        self.assertEqual(preview.pending[0]["path"], "source.energy_mev")
+        self.assertEqual(preview.pending[0]["old"], 1.0)
+        self.assertEqual(preview.pending[0]["new"], 10.0)
+        self.assertEqual(preview.pending[0]["reason"], "overwrite")
+        self.assertEqual(state_like.config["source"]["energy_mev"], 1.0)
+
+    def test_confirmation_preview_stages_delete(self) -> None:
+        payload = _payload()
+        payload["turn_summary"]["intent"] = "remove"
+        payload["candidate_updates"][0] = {
+            "path": "output.path",
+            "op": "remove",
+            "value": None,
+            "confidence": 0.9,
+            "evidence": [{"text": "delete output path", "source": "user", "role": "delete"}],
+            "requires_confirmation": False,
+        }
+        envelope = normalize_interpreter_v2_payload(payload)
+        state_like = SimpleNamespace(config={"output": {"path": "old.json"}})
+
+        preview = preview_candidate_patch_confirmation(envelope, state_like=state_like, turn_id=1)
+
+        self.assertTrue(preview.requires_confirmation)
+        self.assertIsNone(preview.kept_candidate)
+        self.assertEqual(preview.pending[0]["path"], "output.path")
+        self.assertEqual(preview.pending[0]["op"], "remove")
+        self.assertEqual(preview.pending[0]["reason"], "remove")
+        self.assertEqual(state_like.config["output"]["path"], "old.json")
+
+    def test_confirmation_preview_keeps_non_conflicting_candidate(self) -> None:
+        envelope = normalize_interpreter_v2_payload(_payload())
+        state_like = SimpleNamespace(config={"source": {}})
+
+        preview = preview_candidate_patch_confirmation(envelope, state_like=state_like, turn_id=1)
+
+        self.assertFalse(preview.requires_confirmation)
+        self.assertEqual(preview.pending, [])
+        self.assertIsNotNone(preview.kept_candidate)
+        self.assertEqual(preview.kept_candidate.updates[0].path, "source.energy_mev")
 
 
 if __name__ == "__main__":
