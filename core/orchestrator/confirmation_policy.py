@@ -33,26 +33,50 @@ def evaluate_confirmation_requirements(
     lang: str,
     min_confidence: float = 0.0,
     enforce_no_implicit_overwrite: bool = False,
+    low_confidence_first: bool = True,
+    evaluate_pending: bool = True,
 ) -> ConfirmationPolicyResult:
     working_candidates = list(candidates)
     rejected: list[dict[str, Any]] = []
     if enforce_no_implicit_overwrite:
         working_candidates, rejected = _enforce_no_implicit_overwrite(state_like, user_candidate, working_candidates)
-    working_candidates, low_confidence_pending = _extract_low_confidence_updates(
-        state_like,
-        working_candidates,
-        min_confidence=min_confidence,
-        lang=lang,
-    )
-    working_candidates, overwrite_pending = _extract_pending_overwrites(
-        state_like,
-        user_candidate,
-        working_candidates,
-        lang=lang,
-    )
+    if not evaluate_pending:
+        return ConfirmationPolicyResult(
+            filtered_candidates=working_candidates,
+            pending=[],
+            rejected=rejected,
+        )
+    if low_confidence_first:
+        working_candidates, low_confidence_pending = _extract_low_confidence_updates(
+            state_like,
+            working_candidates,
+            min_confidence=min_confidence,
+            lang=lang,
+        )
+        working_candidates, overwrite_pending = _extract_pending_overwrites(
+            state_like,
+            user_candidate,
+            working_candidates,
+            lang=lang,
+        )
+        pending = low_confidence_pending + overwrite_pending
+    else:
+        working_candidates, overwrite_pending = _extract_pending_overwrites(
+            state_like,
+            user_candidate,
+            working_candidates,
+            lang=lang,
+        )
+        working_candidates, low_confidence_pending = _extract_low_confidence_updates(
+            state_like,
+            working_candidates,
+            min_confidence=min_confidence,
+            lang=lang,
+        )
+        pending = overwrite_pending + low_confidence_pending
     return ConfirmationPolicyResult(
         filtered_candidates=working_candidates,
-        pending=low_confidence_pending + overwrite_pending,
+        pending=pending,
         rejected=rejected,
     )
 

@@ -87,6 +87,42 @@ class ConfirmationPolicyPublicApiTest(unittest.TestCase):
         self.assertEqual(result.pending, [])
         self.assertEqual(result.rejected[0]["reason_code"], E_OVERWRITE_WITHOUT_EXPLICIT_USER_INTENT)
 
+    def test_public_api_can_preserve_session_manager_confirmation_order(self) -> None:
+        state_like = SimpleNamespace(config={"source": {"energy": 1.0}})
+        candidate = _candidate(path="source.energy", value=10.0, confidence=0.42)
+
+        result = evaluate_confirmation_requirements(
+            state_like,
+            candidate,
+            [candidate],
+            lang="en",
+            min_confidence=0.6,
+            low_confidence_first=False,
+        )
+
+        self.assertTrue(result.requires_confirmation)
+        self.assertEqual(result.pending[0]["reason"], "overwrite")
+        self.assertEqual(result.pending[0]["old"], 1.0)
+        self.assertEqual(result.pending[0]["new"], 10.0)
+
+    def test_public_api_can_skip_pending_evaluation_for_confirm_apply_path(self) -> None:
+        state_like = SimpleNamespace(config={"source": {"energy": 1.0}})
+        candidate = _candidate(path="source.energy", value=10.0)
+
+        result = evaluate_confirmation_requirements(
+            state_like,
+            candidate,
+            [candidate],
+            lang="en",
+            min_confidence=0.6,
+            low_confidence_first=False,
+            evaluate_pending=False,
+        )
+
+        self.assertFalse(result.requires_confirmation)
+        self.assertEqual(result.pending, [])
+        self.assertEqual(result.filtered_candidates[0].updates[0].value, 10.0)
+
 
 if __name__ == "__main__":
     unittest.main()

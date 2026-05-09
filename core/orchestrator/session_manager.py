@@ -62,13 +62,11 @@ from core.orchestrator.candidate_pipeline import (
 )
 from core.orchestrator.confirmation_policy import (
     _candidate_from_pending_overwrite,
-    _enforce_no_implicit_overwrite,
-    _extract_low_confidence_updates,
-    _extract_pending_overwrites,
     _has_pending_overwrite_path,
     _is_unset_for_overwrite,
     _merge_pending_overwrites,
     _pending_item_from_update,
+    evaluate_confirmation_requirements,
 )
 from core.orchestrator.constraint_ledger import lock_from_candidate
 from core.orchestrator.graph_override_policy import should_prefer_extracted_graph
@@ -1354,24 +1352,21 @@ def process_turn(
         if refreshed_pending:
             staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, refreshed_pending)
 
-    candidates, policy_rejected = _enforce_no_implicit_overwrite(draft, user_candidate, candidates)
+    confirmation_policy_result = evaluate_confirmation_requirements(
+        draft,
+        user_candidate,
+        candidates,
+        lang=lang,
+        min_confidence=min_confidence if not applying_pending_overwrite else 0.0,
+        enforce_no_implicit_overwrite=True,
+        low_confidence_first=False,
+        evaluate_pending=not applying_pending_overwrite,
+    )
+    candidates = confirmation_policy_result.filtered_candidates
+    policy_rejected = confirmation_policy_result.rejected
     if not applying_pending_overwrite:
-        candidates, new_pending_overwrite = _extract_pending_overwrites(
-            draft,
-            user_candidate,
-            candidates,
-            lang=lang,
-        )
-        if new_pending_overwrite:
-            staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, new_pending_overwrite)
-        candidates, low_confidence_pending = _extract_low_confidence_updates(
-            draft,
-            candidates,
-            min_confidence=min_confidence,
-            lang=lang,
-        )
-        if low_confidence_pending:
-            staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, low_confidence_pending)
+        if confirmation_policy_result.pending:
+            staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, confirmation_policy_result.pending)
         candidates, staged_pending_overwrite = _stage_dependent_geometry_updates_for_pending(
             draft,
             candidates,
