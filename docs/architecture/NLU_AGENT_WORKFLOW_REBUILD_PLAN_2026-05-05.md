@@ -528,6 +528,17 @@ Tests:
 Goal: reject ungrounded paths, values, numbers, and unsupported capabilities before
 normalization.
 
+Status as of 2026-05-09:
+
+- added `core/agent/evidence_grounding.py`
+- added `EvidenceGroundingContext` and `check_candidate_update_grounding()`
+- interpreter v2 prompt validation now delegates path/evidence/number grounding to
+  the checker
+- covered invented numbers, unitless user numbers, stable context preservation,
+  capability KB enum grounding, capability KB numeric rejection, unsupported KB
+  grounding rejection, internal paths, and missing evidence spans
+- not yet connected to candidate patch normalization or session mutation
+
 Tasks:
 
 - add `core/agent/evidence_grounding.py`

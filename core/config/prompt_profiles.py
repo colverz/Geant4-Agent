@@ -7,6 +7,8 @@ import re
 from string import Template
 from typing import Any
 
+from core.agent.evidence_grounding import EvidenceGroundingContext, check_candidate_update_grounding
+
 
 class PromptTask(str, Enum):
     SLOT_EXTRACT = "slot_extract"
@@ -1031,10 +1033,6 @@ def _validate_interpreter_json_object(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
-def _numeric_tokens_from_value(value: Any) -> set[str]:
-    return _numeric_tokens(json.dumps(value, ensure_ascii=False))
-
-
 def _validate_interpreter_v2_json_object(payload: dict[str, Any], context: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     _append_unknown_keys(errors, payload, _INTERPRETER_V2_TOP_LEVEL_KEYS)
@@ -1048,11 +1046,11 @@ def _validate_interpreter_v2_json_object(payload: dict[str, Any], context: dict[
     elif turn_summary is not None:
         errors.append("json_key_not_object:turn_summary")
 
-    grounding_text = " ".join(
-        str(context.get(key, "") or "")
-        for key in ("user_text", "context_summary", "stable_context_text", "base_message")
+    grounding_context = EvidenceGroundingContext.from_mapping(
+        context,
+        allowed_paths=_INTERPRETER_V2_ALLOWED_UPDATE_PATHS,
+        allowed_evidence_sources=_INTERPRETER_V2_ALLOWED_EVIDENCE_SOURCES,
     )
-    grounded_numbers = _numeric_tokens(grounding_text)
 
     updates = payload.get("candidate_updates")
     if isinstance(updates, list):
@@ -1062,33 +1060,18 @@ def _validate_interpreter_v2_json_object(payload: dict[str, Any], context: dict[
                 errors.append(f"json_key_not_object:{prefix.rstrip('.')}")
                 continue
             _append_unknown_keys(errors, item, _INTERPRETER_V2_UPDATE_KEYS, prefix)
-            path = str(item.get("path", "") or "")
-            if path and path not in _INTERPRETER_V2_ALLOWED_UPDATE_PATHS:
-                errors.append(f"value_not_allowed:{prefix}path")
             op = str(item.get("op", "") or "")
             if op and op not in _INTERPRETER_V2_ALLOWED_OPS:
                 errors.append(f"value_not_allowed:{prefix}op")
             evidence = item.get("evidence")
-            if op in {"set", "remove"} and not evidence:
-                errors.append(f"missing_evidence:{prefix}evidence")
             if isinstance(evidence, list):
                 for ev_idx, ev in enumerate(evidence):
                     ev_prefix = f"{prefix}evidence[{ev_idx}]."
                     if not isinstance(ev, dict):
-                        errors.append(f"json_key_not_object:{ev_prefix.rstrip('.')}")
                         continue
                     _append_unknown_keys(errors, ev, _INTERPRETER_V2_EVIDENCE_KEYS, ev_prefix)
-                    source = str(ev.get("source", "") or "")
-                    if source and source not in _INTERPRETER_V2_ALLOWED_EVIDENCE_SOURCES:
-                        errors.append(f"value_not_allowed:{ev_prefix}source")
-                    if not str(ev.get("text", "") or "").strip():
-                        errors.append(f"missing_evidence_text:{ev_prefix}text")
-            elif evidence is not None:
-                errors.append(f"json_key_not_array:{prefix}evidence")
-            if grounded_numbers:
-                invented = _numeric_tokens_from_value(item.get("value")) - grounded_numbers
-                if invented:
-                    errors.append(f"ungrounded_numeric_value:{prefix}value")
+            grounding = check_candidate_update_grounding(item, context=grounding_context, prefix=prefix)
+            errors.extend(grounding.errors)
     elif updates is not None:
         errors.append("json_key_not_array:candidate_updates")
 
