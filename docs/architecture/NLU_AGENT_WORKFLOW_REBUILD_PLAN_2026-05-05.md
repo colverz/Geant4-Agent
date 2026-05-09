@@ -560,6 +560,17 @@ Tests:
 
 Goal: centralize path-level update rules.
 
+Status as of 2026-05-09:
+
+- started P4a typed patch envelope
+- added `core/agent/candidate_patch.py`
+- interpreter v2 payload can now normalize into `CandidatePatchEnvelope`
+- envelope can convert into existing `CandidateUpdate` without applying session
+- confirmation reasons are tagged for low confidence, explicit overwrite, and
+  delete/remove operations
+- guarded runtime actions are preserved as separate guarded action requests
+- not yet connected to confirmation policy or session mutation
+
 Tasks:
 
 - create `core/agent/candidate_patch.py`
