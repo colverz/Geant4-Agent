@@ -506,6 +506,8 @@ Status as of 2026-05-09:
 - added validator checks for JSON-only output, allowed update paths, allowed ops,
   evidence source allowlist, guarded runtime actions, and grounded numeric values
 - exposed `build_interpreter_v2_prompt()` for pilot usage
+- added `run_interpreter_v2()` and an opt-in live LLM evaluator for checking real
+  model output against the path/evidence contract
 - not yet connected to session mutation or runtime execution
 
 Tasks:

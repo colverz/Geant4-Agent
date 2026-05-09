@@ -43,6 +43,24 @@ class EvidenceGroundingCheckerTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("ungrounded_numeric_value:candidate_updates[0].value", result.errors)
 
+    def test_numeric_grounding_treats_integer_and_float_forms_as_equivalent(self) -> None:
+        context = EvidenceGroundingContext.from_mapping(
+            {"user_text": "Set source energy to 10 MeV."},
+            allowed_paths={"source.energy_mev"},
+        )
+
+        result = check_candidate_update_grounding(
+            {
+                "path": "source.energy_mev",
+                "op": "set",
+                "value": 10.0,
+                "evidence": [{"text": "10 MeV", "source": "user", "role": "energy"}],
+            },
+            context=context,
+        )
+
+        self.assertTrue(result.ok, result.errors)
+
     def test_rejects_user_numeric_value_without_unit_for_unit_path(self) -> None:
         context = EvidenceGroundingContext.from_mapping(
             {"user_text": "Set source energy to 10."},

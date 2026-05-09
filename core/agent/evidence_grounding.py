@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 
@@ -72,8 +73,19 @@ def _coerce_term_set(value: Any) -> frozenset[str]:
     return frozenset(terms)
 
 
+def _canonical_numeric_token(token: str) -> str:
+    try:
+        value = Decimal(str(token).lower())
+    except (InvalidOperation, ValueError):
+        return str(token).lower()
+    normalized = value.normalize()
+    if normalized == normalized.to_integral():
+        return str(normalized.quantize(Decimal(1)))
+    return format(normalized, "f").rstrip("0").rstrip(".")
+
+
 def numeric_tokens(value: Any) -> set[str]:
-    return {token.lower() for token in _NUMBER_PATTERN.findall(str(value or ""))}
+    return {_canonical_numeric_token(token) for token in _NUMBER_PATTERN.findall(str(value or ""))}
 
 
 def numeric_tokens_from_value(value: Any) -> set[str]:
