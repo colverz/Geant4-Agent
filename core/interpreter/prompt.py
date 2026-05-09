@@ -25,3 +25,16 @@ def build_interpreter_prompt(user_text: str, context_summary: str) -> str:
             "context_summary": context_summary,
         },
     ).prompt
+
+
+def build_interpreter_v2_prompt(user_text: str, context_summary: str) -> str:
+    language = detect_prompt_language(user_text)
+    profile_lang = "zh" if language in {"zh", "mixed"} else "en"
+    return build_prompt(
+        PromptTask.INTERPRET_USER_TURN_V2,
+        profile_lang,
+        {
+            "user_text": user_text,
+            "context_summary": context_summary,
+        },
+    ).prompt

@@ -229,6 +229,100 @@ class PromptProfilesTest(unittest.TestCase):
         self.assertIn("unknown_json_key:tool", result.errors)
         self.assertIn("missing_json_key:source_candidate", result.errors)
 
+    def test_interpret_user_turn_v2_profile_uses_path_evidence_boundary_prompt(self) -> None:
+        built = build_prompt(
+            PromptTask.INTERPRET_USER_TURN_V2,
+            "en",
+            {
+                "user_text": "Change source energy to 10 MeV and run 10 events now.",
+                "context_summary": "source.energy_mev=1",
+            },
+        )
+
+        self.assertEqual(built.profile_id, "interpret_user_turn_en_v2_path_evidence")
+        self.assertIn('"candidate_updates"', built.prompt)
+        self.assertIn('"guarded_actions"', built.prompt)
+        self.assertIn("Never call tools, never run Geant4", built.prompt)
+        self.assertIn("source.energy_mev", built.prompt)
+
+    def test_interpret_user_turn_v2_validator_accepts_grounded_update_and_guarded_runtime(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.INTERPRET_USER_TURN_V2,
+            "en",
+            {
+                "turn_summary": {
+                    "intent": "modify",
+                    "focus": "mixed",
+                    "user_goal": "change source energy and request a run",
+                    "requires_confirmation": False,
+                },
+                "candidate_updates": [
+                    {
+                        "path": "source.energy_mev",
+                        "op": "set",
+                        "value": 10,
+                        "confidence": 0.9,
+                        "evidence": [{"text": "10 MeV", "source": "user", "role": "energy"}],
+                        "requires_confirmation": True,
+                    }
+                ],
+                "ambiguities": [],
+                "unsupported_requests": [],
+                "guarded_actions": [
+                    {
+                        "action": "run_beam",
+                        "safety_class": "expensive_runtime",
+                        "requested": True,
+                        "reason": "user asked to run 10 events",
+                    }
+                ],
+            },
+            {"user_text": "Change source energy to 10 MeV and run 10 events now."},
+        )
+
+        self.assertTrue(result.ok, result.errors)
+
+    def test_interpret_user_turn_v2_validator_rejects_unapproved_path_tool_and_ungrounded_number(self) -> None:
+        result = validate_prompt_output(
+            PromptTask.INTERPRET_USER_TURN_V2,
+            "en",
+            {
+                "turn_summary": {
+                    "intent": "modify",
+                    "focus": "mixed",
+                    "user_goal": "change source energy",
+                    "requires_confirmation": False,
+                    "debug": "leak",
+                },
+                "candidate_updates": [
+                    {
+                        "path": "runtime.command",
+                        "op": "set",
+                        "value": 99,
+                        "confidence": 0.9,
+                        "evidence": [{"text": "10 MeV", "source": "tool", "role": "energy"}],
+                        "requires_confirmation": False,
+                        "tool": "run_beam",
+                    }
+                ],
+                "ambiguities": [],
+                "unsupported_requests": [],
+                "guarded_actions": [{"action": "shell", "safety_class": "read_only", "requested": True, "reason": "bad"}],
+                "shell_command": "geant4",
+            },
+            {"user_text": "Change source energy to 10 MeV."},
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("unknown_json_key:shell_command", result.errors)
+        self.assertIn("unknown_json_key:turn_summary.debug", result.errors)
+        self.assertIn("value_not_allowed:candidate_updates[0].path", result.errors)
+        self.assertIn("unknown_json_key:candidate_updates[0].tool", result.errors)
+        self.assertIn("value_not_allowed:candidate_updates[0].evidence[0].source", result.errors)
+        self.assertIn("ungrounded_numeric_value:candidate_updates[0].value", result.errors)
+        self.assertIn("value_not_allowed:guarded_actions[0].action", result.errors)
+        self.assertIn("value_not_allowed:guarded_actions[0].safety_class", result.errors)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,7 +11,7 @@ from core.interpreter.merged import (
     MergedTurnInterpretation,
     merge_candidates,
 )
-from core.interpreter.prompt import build_interpreter_prompt, detect_prompt_language
+from core.interpreter.prompt import build_interpreter_prompt, build_interpreter_v2_prompt, detect_prompt_language
 from core.interpreter.parser import InterpreterParseResult, parse_interpreter_response
 from core.interpreter.runner import InterpreterRunResult, run_interpreter
 
@@ -27,6 +27,7 @@ __all__ = [
     "InterpreterParseResult",
     "InterpreterRunResult",
     "build_interpreter_prompt",
+    "build_interpreter_v2_prompt",
     "detect_prompt_language",
     "merge_candidates",
     "parse_interpreter_response",

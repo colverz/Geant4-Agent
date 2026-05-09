@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from core.interpreter import build_interpreter_prompt, detect_prompt_language, parse_interpreter_response
+from core.interpreter import build_interpreter_prompt, build_interpreter_v2_prompt, detect_prompt_language, parse_interpreter_response
 
 
 class InterpreterPromptTests(unittest.TestCase):
@@ -37,6 +37,17 @@ class InterpreterPromptTests(unittest.TestCase):
         )
         self.assertIn("treat that material as geometry_candidate.material_candidate", prompt)
         self.assertIn('User: "copper target"', prompt)
+
+    def test_v2_prompt_mentions_guarded_actions_and_path_updates(self) -> None:
+        prompt = build_interpreter_v2_prompt(
+            "Change source energy to 10 MeV and run 10 events now.",
+            "source.energy_mev=1",
+        )
+
+        self.assertIn('"candidate_updates"', prompt)
+        self.assertIn('"guarded_actions"', prompt)
+        self.assertIn("candidate_updates.path must be one of", prompt)
+        self.assertIn("never execute", prompt.lower())
 
     def test_language_detector_distinguishes_en_zh_and_mixed(self) -> None:
         self.assertEqual(detect_prompt_language("copper box target"), "en")

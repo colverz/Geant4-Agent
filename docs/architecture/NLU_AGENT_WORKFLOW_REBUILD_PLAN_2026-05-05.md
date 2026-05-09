@@ -498,6 +498,16 @@ composite user turns without losing safety.
 
 Goal: replace "LLM returns fields" with "LLM returns interpretation + evidence."
 
+Status as of 2026-05-09:
+
+- added `PromptTask.INTERPRET_USER_TURN_V2`
+- added a path/evidence prompt profile for `candidate_updates`, `ambiguities`,
+  `unsupported_requests`, and `guarded_actions`
+- added validator checks for JSON-only output, allowed update paths, allowed ops,
+  evidence source allowlist, guarded runtime actions, and grounded numeric values
+- exposed `build_interpreter_v2_prompt()` for pilot usage
+- not yet connected to session mutation or runtime execution
+
 Tasks:
 
 - add `PromptTask.INTERPRET_USER_TURN_V2`

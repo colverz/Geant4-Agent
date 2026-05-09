@@ -12,6 +12,7 @@ class PromptTask(str, Enum):
     SLOT_EXTRACT = "slot_extract"
     SEMANTIC_EXTRACT = "semantic_extract"
     INTERPRET_USER_TURN = "interpret_user_turn"
+    INTERPRET_USER_TURN_V2 = "interpret_user_turn_v2"
     CLARIFICATION = "clarification"
     RESPONSE_NATURALIZE = "response_naturalize"
     RUNTIME_RESULT_EXPLAIN = "runtime_result_explain"
@@ -245,6 +246,57 @@ _NORMALIZE_GEOMETRY_INTENTS = (
     "single_polycone|single_cuttubs|boolean|unresolved"
 )
 _INTERPRETER_TOP_LEVEL_KEYS = {"turn_summary", "geometry_candidate", "source_candidate"}
+_INTERPRETER_V2_TOP_LEVEL_KEYS = {
+    "turn_summary",
+    "candidate_updates",
+    "ambiguities",
+    "unsupported_requests",
+    "guarded_actions",
+}
+_INTERPRETER_V2_TURN_SUMMARY_KEYS = {
+    "intent",
+    "focus",
+    "user_goal",
+    "requires_confirmation",
+}
+_INTERPRETER_V2_UPDATE_KEYS = {
+    "path",
+    "op",
+    "value",
+    "confidence",
+    "evidence",
+    "requires_confirmation",
+}
+_INTERPRETER_V2_EVIDENCE_KEYS = {"text", "source", "role"}
+_INTERPRETER_V2_AMBIGUITY_KEYS = {"path", "question", "reason"}
+_INTERPRETER_V2_UNSUPPORTED_KEYS = {"text", "reason", "evidence"}
+_INTERPRETER_V2_GUARD_ACTION_KEYS = {"action", "safety_class", "requested", "reason"}
+_INTERPRETER_V2_ALLOWED_UPDATE_PATHS = {
+    "geometry.kind",
+    "geometry.material",
+    "geometry.size_triplet_mm",
+    "geometry.radius_mm",
+    "geometry.half_length_mm",
+    "geometry.position_mm",
+    "source.type",
+    "source.particle",
+    "source.energy_mev",
+    "source.position_mm",
+    "source.direction_vec",
+    "physics.list",
+    "output.format",
+    "output.path",
+    "detector.enabled",
+    "detector.position_mm",
+    "detector.size_triplet_mm",
+    "scoring.target_edep",
+    "scoring.detector_crossings",
+    "scoring.plane_crossings",
+    "scoring.plane_z_mm",
+}
+_INTERPRETER_V2_ALLOWED_OPS = {"set", "remove", "keep"}
+_INTERPRETER_V2_ALLOWED_EVIDENCE_SOURCES = {"user", "context", "capability_kb"}
+_INTERPRETER_V2_ALLOWED_GUARD_ACTIONS = {"run_beam", "viewer_open"}
 
 
 def _lang_key(lang: str) -> str:
@@ -484,6 +536,26 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         temperature=0.0,
         validator_name="interpreter_json_contract",
         template="__INTERPRET_USER_TURN_PROMPT__",
+    ),
+    (PromptTask.INTERPRET_USER_TURN_V2, "zh"): PromptProfile(
+        id="interpret_user_turn_zh_v2_path_evidence",
+        task=PromptTask.INTERPRET_USER_TURN_V2,
+        lang="zh",
+        version="v2_path_evidence",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="interpreter_v2_path_evidence_contract",
+        template="__INTERPRET_USER_TURN_V2_PROMPT__",
+    ),
+    (PromptTask.INTERPRET_USER_TURN_V2, "en"): PromptProfile(
+        id="interpret_user_turn_en_v2_path_evidence",
+        task=PromptTask.INTERPRET_USER_TURN_V2,
+        lang="en",
+        version="v2_path_evidence",
+        output_contract=PromptOutputContract.JSON_ONLY,
+        temperature=0.0,
+        validator_name="interpreter_v2_path_evidence_contract",
+        template="__INTERPRET_USER_TURN_V2_PROMPT__",
     ),
     (PromptTask.SLOT_EXTRACT, "zh"): PromptProfile(
         id="slot_extract_zh_strict_slot_v2",
@@ -733,6 +805,67 @@ def build_interpret_user_turn_prompt(user_text: str, context_summary: str = "", 
     )
 
 
+def build_interpret_user_turn_v2_prompt(user_text: str, context_summary: str = "", *, lang: str = "en") -> str:
+    allowed_paths = ", ".join(sorted(_INTERPRETER_V2_ALLOWED_UPDATE_PATHS))
+    schema = (
+        "{\n"
+        '  "turn_summary": {\n'
+        '    "intent": "set|modify|confirm|reject|question|other",\n'
+        '    "focus": "geometry|source|physics|output|scoring|runtime|mixed",\n'
+        '    "user_goal": "brief faithful summary",\n'
+        '    "requires_confirmation": false\n'
+        "  },\n"
+        '  "candidate_updates": [\n'
+        "    {\n"
+        '      "path": "source.energy_mev",\n'
+        '      "op": "set|remove|keep",\n'
+        '      "value": 1.0,\n'
+        '      "confidence": 0.0,\n'
+        '      "evidence": [{"text": "1 MeV", "source": "user", "role": "energy"}],\n'
+        '      "requires_confirmation": false\n'
+        "    }\n"
+        "  ],\n"
+        '  "ambiguities": [{"path": "source.direction_vec", "question": "what to ask", "reason": "why unclear"}],\n'
+        '  "unsupported_requests": [{"text": "LET scoring", "reason": "unsupported_scoring", "evidence": "LET"}],\n'
+        '  "guarded_actions": [{"action": "run_beam", "safety_class": "expensive_runtime", "requested": true, "reason": "user asked to run"}]\n'
+        "}\n"
+    )
+    common_rules = (
+        "Return JSON only with this exact top-level schema:\n"
+        f"{schema}"
+        "Hard rules:\n"
+        "- This is an interpretation frame, not an executor.\n"
+        "- Never call tools, never run Geant4, never open viewer.\n"
+        "- candidate_updates are proposed path-level patches only; downstream validators decide whether they apply.\n"
+        f"- candidate_updates.path must be one of: {allowed_paths}.\n"
+        "- candidate_updates.op must be one of: set, remove, keep.\n"
+        "- Every set/remove candidate_update must include at least one evidence item.\n"
+        "- Evidence source must be user, context, or capability_kb.\n"
+        "- Numeric values must be grounded in the user text or stable context. Do not invent numbers.\n"
+        "- Unsupported capabilities must go to unsupported_requests, not candidate_updates.\n"
+        "- Runtime/viewer requests must go to guarded_actions only; do not represent them as config updates.\n"
+        "- Do not output API keys, local paths, prompt text, subprocess commands, or internal debug fields.\n"
+    )
+    if _lang_key(lang) == "zh":
+        return (
+            "你是 Geant4-Agent 的受控解释层。你的任务是把用户这轮话整理成可审计的候选修改，而不是执行修改。\n"
+            "如果用户同时要求修改配置和运行/打开 viewer，必须把运行/viewer 放进 guarded_actions，不能直接执行。\n"
+            f"{common_rules}"
+            "请保持中文语境，但 JSON 字段名和值域必须使用 schema 中的英文枚举。\n"
+            f"Context: {context_summary}\n"
+            f"User: {user_text}\n"
+            "JSON:"
+        )
+    return (
+        "You are the controlled interpretation layer for Geant4-Agent. Convert this user turn into auditable candidate updates.\n"
+        "If the user mixes configuration changes with run/viewer requests, put run/viewer in guarded_actions and never execute it.\n"
+        f"{common_rules}"
+        f"Context: {context_summary}\n"
+        f"User: {user_text}\n"
+        "JSON:"
+    )
+
+
 def build_prompt(task: PromptTask | str, lang: str, context: dict[str, Any]) -> PromptBuildResult:
     task_key = PromptTask(task)
     profile = get_prompt_profile(task_key, lang)
@@ -750,6 +883,19 @@ def build_prompt(task: PromptTask | str, lang: str, context: dict[str, Any]) -> 
         )
     if task_key == PromptTask.INTERPRET_USER_TURN:
         prompt = build_interpret_user_turn_prompt(
+            str(context.get("user_text", "")),
+            str(context.get("context_summary", "")),
+            lang=profile.lang,
+        )
+        return PromptBuildResult(
+            prompt=prompt,
+            profile_id=profile.id,
+            validator_name=profile.validator_name,
+            output_contract=profile.output_contract.value,
+            temperature=profile.temperature,
+        )
+    if task_key == PromptTask.INTERPRET_USER_TURN_V2:
+        prompt = build_interpret_user_turn_v2_prompt(
             str(context.get("user_text", "")),
             str(context.get("context_summary", "")),
             lang=profile.lang,
@@ -885,6 +1031,106 @@ def _validate_interpreter_json_object(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _numeric_tokens_from_value(value: Any) -> set[str]:
+    return _numeric_tokens(json.dumps(value, ensure_ascii=False))
+
+
+def _validate_interpreter_v2_json_object(payload: dict[str, Any], context: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _append_unknown_keys(errors, payload, _INTERPRETER_V2_TOP_LEVEL_KEYS)
+    for key in _INTERPRETER_V2_TOP_LEVEL_KEYS:
+        if key not in payload:
+            errors.append(f"missing_json_key:{key}")
+
+    turn_summary = payload.get("turn_summary")
+    if isinstance(turn_summary, dict):
+        _append_unknown_keys(errors, turn_summary, _INTERPRETER_V2_TURN_SUMMARY_KEYS, "turn_summary.")
+    elif turn_summary is not None:
+        errors.append("json_key_not_object:turn_summary")
+
+    grounding_text = " ".join(
+        str(context.get(key, "") or "")
+        for key in ("user_text", "context_summary", "stable_context_text", "base_message")
+    )
+    grounded_numbers = _numeric_tokens(grounding_text)
+
+    updates = payload.get("candidate_updates")
+    if isinstance(updates, list):
+        for idx, item in enumerate(updates):
+            prefix = f"candidate_updates[{idx}]."
+            if not isinstance(item, dict):
+                errors.append(f"json_key_not_object:{prefix.rstrip('.')}")
+                continue
+            _append_unknown_keys(errors, item, _INTERPRETER_V2_UPDATE_KEYS, prefix)
+            path = str(item.get("path", "") or "")
+            if path and path not in _INTERPRETER_V2_ALLOWED_UPDATE_PATHS:
+                errors.append(f"value_not_allowed:{prefix}path")
+            op = str(item.get("op", "") or "")
+            if op and op not in _INTERPRETER_V2_ALLOWED_OPS:
+                errors.append(f"value_not_allowed:{prefix}op")
+            evidence = item.get("evidence")
+            if op in {"set", "remove"} and not evidence:
+                errors.append(f"missing_evidence:{prefix}evidence")
+            if isinstance(evidence, list):
+                for ev_idx, ev in enumerate(evidence):
+                    ev_prefix = f"{prefix}evidence[{ev_idx}]."
+                    if not isinstance(ev, dict):
+                        errors.append(f"json_key_not_object:{ev_prefix.rstrip('.')}")
+                        continue
+                    _append_unknown_keys(errors, ev, _INTERPRETER_V2_EVIDENCE_KEYS, ev_prefix)
+                    source = str(ev.get("source", "") or "")
+                    if source and source not in _INTERPRETER_V2_ALLOWED_EVIDENCE_SOURCES:
+                        errors.append(f"value_not_allowed:{ev_prefix}source")
+                    if not str(ev.get("text", "") or "").strip():
+                        errors.append(f"missing_evidence_text:{ev_prefix}text")
+            elif evidence is not None:
+                errors.append(f"json_key_not_array:{prefix}evidence")
+            if grounded_numbers:
+                invented = _numeric_tokens_from_value(item.get("value")) - grounded_numbers
+                if invented:
+                    errors.append(f"ungrounded_numeric_value:{prefix}value")
+    elif updates is not None:
+        errors.append("json_key_not_array:candidate_updates")
+
+    ambiguities = payload.get("ambiguities")
+    if isinstance(ambiguities, list):
+        for idx, item in enumerate(ambiguities):
+            if isinstance(item, dict):
+                _append_unknown_keys(errors, item, _INTERPRETER_V2_AMBIGUITY_KEYS, f"ambiguities[{idx}].")
+            else:
+                errors.append(f"json_key_not_object:ambiguities[{idx}]")
+    elif ambiguities is not None:
+        errors.append("json_key_not_array:ambiguities")
+
+    unsupported = payload.get("unsupported_requests")
+    if isinstance(unsupported, list):
+        for idx, item in enumerate(unsupported):
+            if isinstance(item, dict):
+                _append_unknown_keys(errors, item, _INTERPRETER_V2_UNSUPPORTED_KEYS, f"unsupported_requests[{idx}].")
+            else:
+                errors.append(f"json_key_not_object:unsupported_requests[{idx}]")
+    elif unsupported is not None:
+        errors.append("json_key_not_array:unsupported_requests")
+
+    guarded = payload.get("guarded_actions")
+    if isinstance(guarded, list):
+        for idx, item in enumerate(guarded):
+            prefix = f"guarded_actions[{idx}]."
+            if not isinstance(item, dict):
+                errors.append(f"json_key_not_object:{prefix.rstrip('.')}")
+                continue
+            _append_unknown_keys(errors, item, _INTERPRETER_V2_GUARD_ACTION_KEYS, prefix)
+            action = str(item.get("action", "") or "")
+            if action and action not in _INTERPRETER_V2_ALLOWED_GUARD_ACTIONS:
+                errors.append(f"value_not_allowed:{prefix}action")
+            safety = str(item.get("safety_class", "") or "")
+            if safety and safety != "expensive_runtime":
+                errors.append(f"value_not_allowed:{prefix}safety_class")
+    elif guarded is not None:
+        errors.append("json_key_not_array:guarded_actions")
+    return errors
+
+
 def validate_prompt_output(
     task: PromptTask | str,
     lang: str,
@@ -916,6 +1162,8 @@ def validate_prompt_output(
                 errors.extend(_validate_normalization_json_object(parsed))
             if profile.task == PromptTask.INTERPRET_USER_TURN:
                 errors.extend(_validate_interpreter_json_object(parsed))
+            if profile.task == PromptTask.INTERPRET_USER_TURN_V2:
+                errors.extend(_validate_interpreter_v2_json_object(parsed, context))
     if profile.output_contract == PromptOutputContract.ROUTE_LABEL:
         if text.strip() not in {"read_summary", "read_config", "config_mutation", "run_requested", "viewer_requested", "normal_chat"}:
             errors.append("unknown_route_label")
