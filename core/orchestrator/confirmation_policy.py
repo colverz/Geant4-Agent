@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from core.config.field_registry import friendly_label
@@ -11,6 +12,49 @@ from core.validation.error_codes import E_OVERWRITE_WITHOUT_EXPLICIT_USER_INTENT
 _EXPLICIT_TARGET_DEPENDENCIES = {
     "geometry.structure": {"geometry.chosen_skeleton", "geometry.graph_program", "geometry.root_name"},
 }
+
+
+@dataclass(frozen=True)
+class ConfirmationPolicyResult:
+    filtered_candidates: list[CandidateUpdate]
+    pending: list[dict[str, Any]] = field(default_factory=list)
+    rejected: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def requires_confirmation(self) -> bool:
+        return bool(self.pending)
+
+
+def evaluate_confirmation_requirements(
+    state_like: Any,
+    user_candidate: CandidateUpdate,
+    candidates: list[CandidateUpdate],
+    *,
+    lang: str,
+    min_confidence: float = 0.0,
+    enforce_no_implicit_overwrite: bool = False,
+) -> ConfirmationPolicyResult:
+    working_candidates = list(candidates)
+    rejected: list[dict[str, Any]] = []
+    if enforce_no_implicit_overwrite:
+        working_candidates, rejected = _enforce_no_implicit_overwrite(state_like, user_candidate, working_candidates)
+    working_candidates, low_confidence_pending = _extract_low_confidence_updates(
+        state_like,
+        working_candidates,
+        min_confidence=min_confidence,
+        lang=lang,
+    )
+    working_candidates, overwrite_pending = _extract_pending_overwrites(
+        state_like,
+        user_candidate,
+        working_candidates,
+        lang=lang,
+    )
+    return ConfirmationPolicyResult(
+        filtered_candidates=working_candidates,
+        pending=low_confidence_pending + overwrite_pending,
+        rejected=rejected,
+    )
 
 
 def _path_explicitly_requested(user_candidate: CandidateUpdate, path: str) -> bool:

@@ -591,6 +591,15 @@ Tests:
 
 Goal: stop spreading confirmation logic through session orchestration.
 
+Status as of 2026-05-10:
+
+- added public `ConfirmationPolicyResult`
+- added public `evaluate_confirmation_requirements()`
+- candidate patch preview now depends on the public API instead of private
+  `_extract_*` helpers
+- existing private helpers remain for current session manager compatibility
+- not yet migrated session manager to the public API
+
 Tasks:
 
 - create `core/agent/confirmation_policy.py`

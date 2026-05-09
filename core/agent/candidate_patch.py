@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from core.agent.action_safety import ActionSafetyClass
-from core.orchestrator.confirmation_policy import _extract_low_confidence_updates, _extract_pending_overwrites
+from core.orchestrator.confirmation_policy import evaluate_confirmation_requirements
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 
 
@@ -257,25 +257,19 @@ def preview_candidate_patch_confirmation(
     producer: Producer = Producer.LLM_SEMANTIC_FRAME,
 ) -> CandidatePatchConfirmationPreview:
     candidate = envelope_to_candidate_update(envelope, turn_id=turn_id, producer=producer)
-    after_low_conf, low_pending = _extract_low_confidence_updates(
-        state_like,
-        [candidate],
-        min_confidence=min_confidence,
-        lang=lang,
-    )
-    after_overwrite, overwrite_pending = _extract_pending_overwrites(
+    result = evaluate_confirmation_requirements(
         state_like,
         candidate,
-        after_low_conf,
+        [candidate],
         lang=lang,
+        min_confidence=min_confidence,
     )
-    kept_candidate = after_overwrite[0] if after_overwrite else None
-    pending = low_pending + overwrite_pending
+    kept_candidate = result.filtered_candidates[0] if result.filtered_candidates else None
     return CandidatePatchConfirmationPreview(
         candidate=candidate,
         kept_candidate=kept_candidate,
-        pending=pending,
-        requires_confirmation=bool(pending),
+        pending=result.pending,
+        requires_confirmation=result.requires_confirmation,
     )
 
 
