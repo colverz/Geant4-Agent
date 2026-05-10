@@ -16,6 +16,12 @@ from .evidence_grounding import EvidenceGroundingContext, EvidenceGroundingResul
 from .intent_router import IntentDecision, route_user_turn
 from .interrupt_resume import InterruptResumeController, InterruptResumeResult, InterruptResumeStatus
 from .staged_patch import StagedPatch, StagedPatchStatus, StagedPatchStore, build_staged_patch_reference
+from .staged_patch_bridge import (
+    StagedPatchCompatibilityPreview,
+    apply_confirmation_candidate,
+    preview_staged_patch_compatibility,
+    staged_patch_to_confirmation_candidate,
+)
 from .turn_trace import NluTurnTrace
 from .workflow_graph import WorkflowNode, WorkflowTerminalState, graph_path_for_intent
 
@@ -36,6 +42,7 @@ __all__ = [
     "PatchEvidence",
     "PatchOperation",
     "StagedPatch",
+    "StagedPatchCompatibilityPreview",
     "StagedPatchStatus",
     "StagedPatchStore",
     "WorkflowNode",
@@ -48,5 +55,8 @@ __all__ = [
     "graph_path_for_intent",
     "normalize_interpreter_v2_payload",
     "preview_candidate_patch_confirmation",
+    "preview_staged_patch_compatibility",
     "route_user_turn",
+    "apply_confirmation_candidate",
+    "staged_patch_to_confirmation_candidate",
 ]

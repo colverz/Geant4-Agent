@@ -640,6 +640,8 @@ Execution note as of 2026-05-10:
   without changing current confirm/reject application flow
 - added staged confirmation ids and staged patch hashes to `NluTurnTrace` for
   debug/agent observability
+- added a staged-patch compatibility bridge proving staged approval/rejection
+  semantics match the existing pending-overwrite confirmation flow
 - start with an independent staged-patch boundary; do not replace
   `SessionState.pending_overwrite` in the first P5.1 step
 - use the staged-patch boundary to prove exact patch hash, stale turn/config
