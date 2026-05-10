@@ -681,6 +681,8 @@ Status as of 2026-05-10:
   rejected, and missing `action_id` stays backward-compatible with a suggested id
 - frontend runtime controls now send stable `action_id` values for run/viewer
   actions, so the backend idempotency guard is exercised in normal UI use
+- existing Geant4 log/debug panel now includes idempotency decision/action id
+  information for local testing
 
 Tasks:
 

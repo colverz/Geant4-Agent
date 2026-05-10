@@ -647,6 +647,27 @@ function summarizeGeant4Log(payload) {
   return Array.isArray(lines) ? lines.join("\n") : JSON.stringify(payload, null, 2);
 }
 
+function summarizeIdempotency(info) {
+  if (!info) return "";
+  const lines = [
+    `idempotency.decision: ${info.decision || (info.enabled ? "execute" : "disabled")}`,
+    `idempotency.action_id: ${info.action_id || info.suggested_action_id || ""}`,
+  ];
+  if (info.reason) lines.push(`idempotency.reason: ${info.reason}`);
+  if (info.suggested_action_id && info.suggested_action_id !== info.action_id) {
+    lines.push(`idempotency.suggested_action_id: ${info.suggested_action_id}`);
+  }
+  return lines.filter(Boolean).join("\n");
+}
+
+function summarizeRuntimePayloadWithIdempotency(data = {}) {
+  const runtimeLog = summarizeGeant4Log({
+    lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
+  });
+  const idempotencyLog = summarizeIdempotency(data.idempotency);
+  return [runtimeLog, idempotencyLog].filter(Boolean).join("\n");
+}
+
 function summarizeGeometryCompare(compare) {
   if (!compare) return "";
   const mismatches = Array.isArray(compare.mismatches) ? compare.mismatches : [];
@@ -1149,9 +1170,7 @@ async function openGeant4Viewer() {
   await refreshGeant4State();
   state.lastRuntimeSmokeReport = data.runtime_smoke_report || state.lastRuntimeSmokeReport;
   renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
-  $("geant4-log").textContent = summarizeGeant4Log({
-    lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
-  });
+  $("geant4-log").textContent = summarizeRuntimePayloadWithIdempotency(data);
   renderRuntimeLogSummary({
     lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
   });
@@ -1178,9 +1197,7 @@ async function runGeant4(events) {
   });
   const data = await res.json();
   await refreshGeant4State();
-  $("geant4-log").textContent = summarizeGeant4Log({
-    lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
-  });
+  $("geant4-log").textContent = summarizeRuntimePayloadWithIdempotency(data);
   renderRuntimeLogSummary({
     lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
   });
