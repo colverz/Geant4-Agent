@@ -77,7 +77,20 @@ class ConfigSummaryApiTest(unittest.TestCase):
         self.assertTrue(body["confirmation"]["required"])
         self.assertEqual(body["confirmation"]["status"], "waiting_confirmation")
         self.assertEqual(body["confirmation"]["items"][0]["path"], "source.energy")
+        self.assertTrue(body["confirmation"]["confirmation_id"])
+        self.assertTrue(body["confirmation"]["patch_hash"])
+        self.assertEqual(body["confirmation"]["staged_patch"]["base_turn_id"], turn_id_before)
         self.assertIn(ConfirmationResponse.KEEP_ORIGINAL, body["confirmation"]["available_responses"])
+
+        _, repeated = handle_post_request(
+            "/api/config/summary",
+            {"session_id": sid, "lang": "en"},
+            legacy_sessions={},
+            solve_fn=lambda payload: {"unexpected": "solve"},
+            step_fn=lambda payload: {"unexpected": "step"},
+        )
+        self.assertEqual(repeated["confirmation"]["confirmation_id"], body["confirmation"]["confirmation_id"])
+        self.assertEqual(repeated["confirmation"]["patch_hash"], body["confirmation"]["patch_hash"])
 
 
 if __name__ == "__main__":

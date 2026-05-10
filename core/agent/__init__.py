@@ -15,7 +15,7 @@ from .context_pack import ContextPack, KnowledgeSnippet, build_context_pack
 from .evidence_grounding import EvidenceGroundingContext, EvidenceGroundingResult, check_candidate_update_grounding
 from .intent_router import IntentDecision, route_user_turn
 from .interrupt_resume import InterruptResumeController, InterruptResumeResult, InterruptResumeStatus
-from .staged_patch import StagedPatch, StagedPatchStatus, StagedPatchStore
+from .staged_patch import StagedPatch, StagedPatchStatus, StagedPatchStore, build_staged_patch_reference
 from .turn_trace import NluTurnTrace
 from .workflow_graph import WorkflowNode, WorkflowTerminalState, graph_path_for_intent
 
@@ -41,6 +41,7 @@ __all__ = [
     "WorkflowNode",
     "WorkflowTerminalState",
     "build_context_pack",
+    "build_staged_patch_reference",
     "check_candidate_update_grounding",
     "detect_composite_intent",
     "envelope_to_candidate_update",

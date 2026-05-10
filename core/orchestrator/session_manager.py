@@ -11,6 +11,7 @@ from core.audit.audit_log import append_audit_entry
 from core.agent.composite_intent import detect_composite_intent
 from core.agent.context_pack import build_context_pack
 from core.agent.intent_router import route_user_turn
+from core.agent.staged_patch import build_staged_patch_reference
 from core.agent.turn_trace import NluTurnTrace, stable_hash
 from core.agent.workflow_graph import graph_path_for_intent, terminal_state_for_intent
 from core.config.defaults import build_strict_default_config
@@ -315,6 +316,36 @@ def _apply_updates(config: dict, updates: list) -> None:
             remove_path(config, upd.path)
             continue
         set_path(config, upd.path, upd.value)
+
+
+def _build_confirmation_payload_with_staged_reference(
+    items: list[dict[str, Any]],
+    *,
+    lang: str,
+    session_id: str,
+    turn_id: int,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    payload = build_confirmation_payload(items, lang=lang)
+    if not items:
+        return payload
+    patch = build_staged_patch_reference(
+        session_id=session_id,
+        base_turn_id=turn_id,
+        base_config=config,
+        pending_items=items,
+    )
+    payload["confirmation_id"] = patch.confirmation_id
+    payload["patch_hash"] = patch.patch_hash
+    payload["staged_patch"] = {
+        "schema_version": patch.schema_version,
+        "confirmation_id": patch.confirmation_id,
+        "patch_hash": patch.patch_hash,
+        "base_turn_id": patch.base_turn_id,
+        "base_config_hash": patch.base_config_hash,
+        "status": patch.status,
+    }
+    return payload
 
 
 def _build_v2_bridge_candidates(
@@ -1444,9 +1475,12 @@ def process_turn(
     )
     final_missing_paths = _dedupe_paths(final_report.missing_required_paths + list(semantic_missing_paths))
     pending_overwrite_required = bool(staged_pending_overwrite and (not applying_pending_overwrite or confirm_apply_failed))
-    confirmation_payload = build_confirmation_payload(
+    confirmation_payload = _build_confirmation_payload_with_staged_reference(
         staged_pending_overwrite if pending_overwrite_required else [],
         lang=lang,
+        session_id=state.session_id,
+        turn_id=state.turn_id,
+        config=draft.config,
     )
     is_complete = bool(final_report.ok and not final_missing_paths and not pending_overwrite_required and not confirm_apply_failed)
     dialogue_pending_preview = list(staged_pending_overwrite) if pending_overwrite_required else []
@@ -1742,7 +1776,13 @@ def get_session_config_summary(session_id: str, *, lang: str = "zh") -> dict[str
         config = deep_copy(state.config)
         phase = state.phase.value
         pending_overwrite = [dict(item) for item in state.pending_overwrite]
-        confirmation_payload = build_confirmation_payload(pending_overwrite, lang=lang)
+        confirmation_payload = _build_confirmation_payload_with_staged_reference(
+            pending_overwrite,
+            lang=lang,
+            session_id=state.session_id,
+            turn_id=state.turn_id,
+            config=config,
+        )
         semantic_missing = list(state.semantic_missing_paths)
         dialogue_summary = dict(state.dialogue_summary or {})
         last_asked_paths = list(state.last_asked_paths)

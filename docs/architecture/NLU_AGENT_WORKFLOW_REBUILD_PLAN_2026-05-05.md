@@ -636,6 +636,8 @@ Execution note as of 2026-05-10:
 
 - started P5.1 with standalone `StagedPatch`, `StagedPatchStore`, and
   `InterruptResumeController`
+- exposed staged-patch reference metadata through existing confirmation payloads
+  without changing current confirm/reject application flow
 - start with an independent staged-patch boundary; do not replace
   `SessionState.pending_overwrite` in the first P5.1 step
 - use the staged-patch boundary to prove exact patch hash, stale turn/config

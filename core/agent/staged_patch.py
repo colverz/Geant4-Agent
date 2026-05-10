@@ -68,6 +68,40 @@ def build_staged_patch(
     )
 
 
+def build_staged_patch_reference(
+    *,
+    session_id: str,
+    base_turn_id: int,
+    base_config: dict[str, Any],
+    pending_items: list[dict[str, Any]],
+) -> StagedPatch:
+    patch = build_staged_patch(
+        session_id=session_id,
+        base_turn_id=base_turn_id,
+        base_config=base_config,
+        pending_items=pending_items,
+        confirmation_id="pending-reference",
+    )
+    confirmation_id = stable_hash(
+        {
+            "schema_version": STAGED_PATCH_SCHEMA_VERSION,
+            "session_id": session_id,
+            "base_turn_id": int(base_turn_id),
+            "patch_hash": patch.patch_hash,
+        }
+    )
+    return StagedPatch(
+        confirmation_id=confirmation_id,
+        patch_hash=patch.patch_hash,
+        session_id=patch.session_id,
+        base_turn_id=patch.base_turn_id,
+        base_config_hash=patch.base_config_hash,
+        pending_items=patch.pending_items,
+        status=patch.status,
+        schema_version=patch.schema_version,
+    )
+
+
 def verify_staged_patch_hash(patch: StagedPatch) -> bool:
     return patch.patch_hash == _patch_hash(
         session_id=patch.session_id,
@@ -172,5 +206,6 @@ __all__ = [
     "StagedPatchStore",
     "apply_staged_patch",
     "build_staged_patch",
+    "build_staged_patch_reference",
     "verify_staged_patch_hash",
 ]

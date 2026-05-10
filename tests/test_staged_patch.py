@@ -9,6 +9,7 @@ from core.agent.staged_patch import (
     StagedPatchStore,
     apply_staged_patch,
     build_staged_patch,
+    build_staged_patch_reference,
     verify_staged_patch_hash,
 )
 from core.orchestrator.confirmation_policy import ConfirmationReason
@@ -55,6 +56,24 @@ class StagedPatchTest(unittest.TestCase):
         self.assertEqual(first.patch_hash, second.patch_hash)
         self.assertTrue(verify_staged_patch_hash(first))
         self.assertEqual(first.status, StagedPatchStatus.PENDING)
+
+    def test_build_staged_patch_reference_uses_stable_confirmation_id(self) -> None:
+        first = build_staged_patch_reference(
+            session_id="s1",
+            base_turn_id=3,
+            base_config=_config(),
+            pending_items=_pending(),
+        )
+        second = build_staged_patch_reference(
+            session_id="s1",
+            base_turn_id=3,
+            base_config=_config(),
+            pending_items=_pending(),
+        )
+
+        self.assertEqual(first.confirmation_id, second.confirmation_id)
+        self.assertEqual(first.patch_hash, second.patch_hash)
+        self.assertTrue(verify_staged_patch_hash(first))
 
     def test_apply_staged_patch_applies_exact_values_without_mutating_input(self) -> None:
         config = _config()
