@@ -711,6 +711,16 @@ Status as of 2026-05-10:
   forbidden session apply, and guarded runtime tool blocking without calling LLM
   or runtime
 - fixed composite runtime detection for mutation turns that say "run it"
+- expanded P6 cases from phrase checks into behavior trajectories for result
+  follow-up, negated mutation, mutation + runtime, mutation + viewer, unsupported
+  geometry, and Chinese mixed action turns
+- connected selected P6 cases to real `process_turn()` output through
+  `expected_session_trace`, so the casebank now verifies `nlu_turn_trace` fields
+  instead of only checking the standalone router/evaluator
+- aligned composite mutation + runtime/viewer trace behavior: the mainline trace
+  now records `intent=config_mutation`, blocks the runtime/viewer tool, and keeps
+  `guarded_runtime_intent_pending=true` instead of presenting the turn as a direct
+  runtime request
 
 Case types:
 

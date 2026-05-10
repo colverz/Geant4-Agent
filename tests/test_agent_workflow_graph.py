@@ -137,6 +137,10 @@ class AgentWorkflowGraphTest(unittest.TestCase):
         )
         try:
             trace = out["nlu_turn_trace"]
+            self.assertEqual(trace["intent"], "config_mutation")
+            self.assertEqual(trace["action_safety_class"], "config_mutation")
+            self.assertIn("validate", trace["node_sequence"])
+            self.assertNotIn("runtime_guard", trace["node_sequence"])
             self.assertTrue(trace["composite_intent"]["has_config_mutation"])
             self.assertTrue(trace["composite_intent"]["has_runtime_request"])
             self.assertTrue(trace["guarded_runtime_intent_pending"])

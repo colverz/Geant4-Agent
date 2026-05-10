@@ -424,7 +424,6 @@ def evaluate_agentic_behavior(path: Path) -> dict[str, Any]:
         if composite.requires_staged_runtime_guard:
             effective_intent = "config_mutation"
             effective_safety = "config_mutation"
-            waiting_confirmation = True
         if effective_intent != case["expected_intent"]:
             errors["intent"] = {"expected": case["expected_intent"], "actual": effective_intent, "router_intent": decision.intent}
         if effective_safety != case["expected_safety"]:
@@ -445,7 +444,11 @@ def evaluate_agentic_behavior(path: Path) -> dict[str, Any]:
             errors["composite_viewer_request"] = {"expected": True, "actual": composite.has_viewer_request}
         if trace_expect.get("must_not_detect_viewer_request") and composite.has_viewer_request:
             errors["composite_viewer_request"] = {"expected": False, "actual": composite.has_viewer_request}
-        mutation_applied = effective_intent == "config_mutation" and not waiting_confirmation
+        mutation_applied = (
+            effective_intent == "config_mutation"
+            and not waiting_confirmation
+            and not bool(trace_expect.get("must_not_apply_session"))
+        )
         path_nodes = graph_path_for_intent(
             effective_intent,
             mutation_applied=mutation_applied,

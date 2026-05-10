@@ -1591,7 +1591,11 @@ def process_turn(
     candidate_patch_paths = _dedupe_paths([update.path for candidate in candidates for update in candidate.updates])
     applied_paths = _dedupe_paths([update.path for update in committed_updates])
     rejected_paths = _dedupe_paths([str(item.get("path", "")) for item in rejected_updates if str(item.get("path", ""))])
-    trace_intent = "config_mutation" if (candidate_patch_paths or applied_paths or pending_overwrite_required) else intent_decision.intent
+    trace_intent = (
+        "config_mutation"
+        if (candidate_patch_paths or applied_paths or pending_overwrite_required or composite_intent.requires_staged_runtime_guard)
+        else intent_decision.intent
+    )
     trace_safety = intent_decision.safety_class
     if trace_intent == "config_mutation":
         trace_safety = ActionSafetyClass.CONFIG_MUTATION
@@ -1609,6 +1613,13 @@ def process_turn(
         rejected=bool(rejected_overwrite_preview and not applied_paths),
         unsupported=bool(hard_errors and not applied_paths),
     )
+    trace_blocked_tools: list[str] = []
+    if trace_safety == ActionSafetyClass.CONFIG_MUTATION or composite_intent.requires_staged_runtime_guard:
+        trace_blocked_tools = ["run_beam", "viewer_open"]
+    elif trace_intent == "run_requested":
+        trace_blocked_tools = ["run_beam"]
+    elif trace_intent == "viewer_requested":
+        trace_blocked_tools = ["viewer_open"]
     nlu_turn_trace = NluTurnTrace(
         turn_id_before=turn_id_before,
         turn_id_after=state.turn_id,
@@ -1632,9 +1643,7 @@ def process_turn(
         idempotency_key=stable_hash({"session_id": state.session_id, "turn_id": state.turn_id, "patch": applied_paths}),
         runtime_payload_ready=is_complete,
         tool_calls_allowed=[],
-        tool_calls_blocked=["run_beam", "viewer_open"]
-        if (trace_safety == ActionSafetyClass.CONFIG_MUTATION or composite_intent.requires_staged_runtime_guard)
-        else [],
+        tool_calls_blocked=trace_blocked_tools,
         composite_intent=composite_intent.to_dict(),
         guarded_runtime_intent_pending=composite_intent.requires_staged_runtime_guard,
     )

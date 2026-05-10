@@ -12,6 +12,14 @@
       "must_not_require_confirmation": true,
       "must_not_detect_config_mutation": true,
       "must_block_tools": []
+    },
+    "expected_session_trace": {
+      "intent": "read_config",
+      "safety": "read_only",
+      "must_include_nodes": [],
+      "must_not_apply_session": true,
+      "must_block_tools": [],
+      "guarded_runtime_intent_pending": false
     }
   },
   {
@@ -27,6 +35,14 @@
       "must_not_require_confirmation": true,
       "must_not_detect_config_mutation": true,
       "must_block_tools": []
+    },
+    "expected_session_trace": {
+      "intent": "read_summary",
+      "safety": "read_only",
+      "must_include_nodes": [],
+      "must_not_apply_session": true,
+      "must_block_tools": [],
+      "guarded_runtime_intent_pending": false
     }
   },
   {
@@ -42,6 +58,14 @@
       "must_not_require_confirmation": true,
       "must_not_detect_config_mutation": true,
       "must_block_tools": []
+    },
+    "expected_session_trace": {
+      "intent": "read_summary",
+      "safety": "read_only",
+      "must_include_nodes": [],
+      "must_not_apply_session": true,
+      "must_block_tools": [],
+      "guarded_runtime_intent_pending": false
     }
   },
   {
@@ -56,8 +80,24 @@
       "must_not_call_runtime": true,
       "must_not_require_confirmation": false,
       "must_detect_runtime_request": true,
-      "must_include_nodes": ["runtime_guard"],
-      "must_block_tools": ["run_beam"]
+      "must_include_nodes": [
+        "runtime_guard"
+      ],
+      "must_block_tools": [
+        "run_beam"
+      ]
+    },
+    "expected_session_trace": {
+      "intent": "run_requested",
+      "safety": "expensive_runtime",
+      "must_include_nodes": [
+        "runtime_guard"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "run_beam"
+      ],
+      "guarded_runtime_intent_pending": false
     }
   },
   {
@@ -70,7 +110,10 @@
     "expected_trace": {
       "must_detect_config_mutation": true,
       "must_not_call_runtime": true,
-      "must_include_nodes": ["validate", "apply_session"],
+      "must_include_nodes": [
+        "validate",
+        "apply_session"
+      ],
       "must_block_tools": []
     }
   },
@@ -84,7 +127,10 @@
     "expected_trace": {
       "must_detect_config_mutation": true,
       "must_not_call_runtime": true,
-      "must_include_nodes": ["validate", "apply_session"],
+      "must_include_nodes": [
+        "validate",
+        "apply_session"
+      ],
       "must_block_tools": []
     }
   },
@@ -94,13 +140,30 @@
     "lang": "en",
     "expected_intent": "config_mutation",
     "expected_safety": "config_mutation",
-    "expected_terminal": "waiting_confirmation",
+    "expected_terminal": "read_only_answer",
     "expected_trace": {
       "must_detect_config_mutation": true,
       "must_detect_runtime_request": true,
       "must_not_call_runtime": true,
-      "must_include_nodes": ["validate", "wait_confirmation"],
-      "must_block_tools": ["run_beam"]
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_block_tools": [
+        "run_beam"
+      ],
+      "must_not_apply_session": true
+    },
+    "expected_session_trace": {
+      "intent": "config_mutation",
+      "safety": "config_mutation",
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "run_beam"
+      ],
+      "guarded_runtime_intent_pending": true
     }
   },
   {
@@ -109,13 +172,30 @@
     "lang": "en",
     "expected_intent": "config_mutation",
     "expected_safety": "config_mutation",
-    "expected_terminal": "waiting_confirmation",
+    "expected_terminal": "read_only_answer",
     "expected_trace": {
       "must_detect_config_mutation": true,
       "must_detect_viewer_request": true,
       "must_not_call_runtime": true,
-      "must_include_nodes": ["validate", "wait_confirmation"],
-      "must_block_tools": ["viewer_open"]
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_block_tools": [
+        "viewer_open"
+      ],
+      "must_not_apply_session": true
+    },
+    "expected_session_trace": {
+      "intent": "config_mutation",
+      "safety": "config_mutation",
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "viewer_open"
+      ],
+      "guarded_runtime_intent_pending": true
     }
   },
   {
@@ -154,20 +234,36 @@
     "lang": "en",
     "expected_intent": "config_mutation",
     "expected_safety": "config_mutation",
-    "expected_terminal": "waiting_confirmation",
+    "expected_terminal": "read_only_answer",
     "expected_trace": {
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
       "must_require_kb": true,
       "must_detect_config_mutation": true,
       "must_detect_runtime_request": true,
-      "must_include_nodes": ["validate", "wait_confirmation"],
-      "must_block_tools": ["run_beam"]
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_block_tools": [
+        "run_beam"
+      ]
+    },
+    "expected_session_trace": {
+      "intent": "config_mutation",
+      "safety": "config_mutation",
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "run_beam"
+      ],
+      "guarded_runtime_intent_pending": true
     }
   },
   {
     "id": "viewer-request-guarded",
-    "text": "\u6253\u5f00 Geant4 viewer \u770b\u4e00\u4e0b\u51e0\u4f55",
+    "text": "打开 Geant4 viewer 看一下几何",
     "lang": "zh",
     "expected_intent": "viewer_requested",
     "expected_safety": "expensive_runtime",
@@ -176,13 +272,29 @@
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
       "must_detect_viewer_request": true,
-      "must_include_nodes": ["runtime_guard"],
-      "must_block_tools": ["viewer_open"]
+      "must_include_nodes": [
+        "runtime_guard"
+      ],
+      "must_block_tools": [
+        "viewer_open"
+      ]
+    },
+    "expected_session_trace": {
+      "intent": "viewer_requested",
+      "safety": "expensive_runtime",
+      "must_include_nodes": [
+        "runtime_guard"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "viewer_open"
+      ],
+      "guarded_runtime_intent_pending": false
     }
   },
   {
     "id": "zh-negated-mutation-read-config",
-    "text": "\u663e\u793a\u5f53\u524d\u914d\u7f6e\u91cc\u7684\u6e90\u65b9\u5411\uff0c\u4e0d\u8981\u4fee\u6539",
+    "text": "显示当前配置里的源方向，不要修改",
     "lang": "zh",
     "expected_intent": "read_config",
     "expected_safety": "read_only",
@@ -193,36 +305,78 @@
       "must_not_require_confirmation": true,
       "must_not_detect_config_mutation": true,
       "must_block_tools": []
+    },
+    "expected_session_trace": {
+      "intent": "read_config",
+      "safety": "read_only",
+      "must_include_nodes": [],
+      "must_not_apply_session": true,
+      "must_block_tools": [],
+      "guarded_runtime_intent_pending": false
     }
   },
   {
     "id": "zh-mutation-plus-runtime-staged",
-    "text": "\u628a\u6e90\u80fd\u91cf\u6539\u6210 10 MeV \u7136\u540e\u8fd0\u884c 10 \u4e2a\u4e8b\u4ef6",
+    "text": "把源能量改成 10 MeV 然后运行 10 个事件",
     "lang": "zh",
     "expected_intent": "config_mutation",
     "expected_safety": "config_mutation",
-    "expected_terminal": "waiting_confirmation",
+    "expected_terminal": "read_only_answer",
     "expected_trace": {
       "must_detect_config_mutation": true,
       "must_detect_runtime_request": true,
       "must_not_call_runtime": true,
-      "must_include_nodes": ["validate", "wait_confirmation"],
-      "must_block_tools": ["run_beam"]
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_block_tools": [
+        "run_beam"
+      ],
+      "must_not_apply_session": true
+    },
+    "expected_session_trace": {
+      "intent": "config_mutation",
+      "safety": "config_mutation",
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "run_beam"
+      ],
+      "guarded_runtime_intent_pending": true
     }
   },
   {
     "id": "zh-delete-scorer-plus-viewer-staged",
-    "text": "\u8bf7\u5220\u9664 scorer\uff0c\u7136\u540e\u6253\u5f00 viewer",
+    "text": "请删除 scorer，然后打开 viewer",
     "lang": "zh",
     "expected_intent": "config_mutation",
     "expected_safety": "config_mutation",
-    "expected_terminal": "waiting_confirmation",
+    "expected_terminal": "read_only_answer",
     "expected_trace": {
       "must_detect_config_mutation": true,
       "must_detect_viewer_request": true,
       "must_not_call_runtime": true,
-      "must_include_nodes": ["validate", "wait_confirmation"],
-      "must_block_tools": ["viewer_open"]
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_block_tools": [
+        "viewer_open"
+      ],
+      "must_not_apply_session": true
+    },
+    "expected_session_trace": {
+      "intent": "config_mutation",
+      "safety": "config_mutation",
+      "must_include_nodes": [
+        "validate"
+      ],
+      "must_not_apply_session": true,
+      "must_block_tools": [
+        "viewer_open"
+      ],
+      "guarded_runtime_intent_pending": true
     }
   }
 ]
