@@ -702,6 +702,16 @@ Tests:
 
 Goal: replace dictionary-like live casebank with behavior cases.
 
+Status as of 2026-05-10:
+
+- started `docs/eval/agentic_behavior_casebank.json`
+- extended `tools/evaluate_guard_casebanks.py` with trajectory-level
+  `evaluate_agentic_behavior()`
+- first evaluator checks intent, safety, terminal state, workflow nodes,
+  forbidden session apply, and guarded runtime tool blocking without calling LLM
+  or runtime
+- fixed composite runtime detection for mutation turns that say "run it"
+
 Case types:
 
 - read config after previous configuration

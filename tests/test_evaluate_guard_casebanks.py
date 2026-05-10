@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 from tools.evaluate_guard_casebanks import (
+    evaluate_agentic_behavior,
     evaluate_multiturn_guard,
     evaluate_runtime_result_qa,
     evaluate_session_behavior_guard,
@@ -63,6 +64,12 @@ class EvaluateGuardCasebanksTest(unittest.TestCase):
 
     def test_session_behavior_guard_casebank_passes(self) -> None:
         report = evaluate_session_behavior_guard(Path("docs/eval/session_behavior_casebank.json"))
+
+        self.assertEqual(report["failed"], 0)
+        self.assertGreater(report["total"], 0)
+
+    def test_agentic_behavior_casebank_passes(self) -> None:
+        report = evaluate_agentic_behavior(Path("docs/eval/agentic_behavior_casebank.json"))
 
         self.assertEqual(report["failed"], 0)
         self.assertGreater(report["total"], 0)

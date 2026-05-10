@@ -56,6 +56,13 @@ class AgentWorkflowGraphTest(unittest.TestCase):
         self.assertTrue(composite.has_runtime_request)
         self.assertTrue(composite.requires_staged_runtime_guard)
 
+    def test_composite_intent_detects_run_it_after_mutation(self) -> None:
+        composite = detect_composite_intent("Build a full CT scanner gantry with rotating source and run it.")
+
+        self.assertTrue(composite.has_config_mutation)
+        self.assertTrue(composite.has_runtime_request)
+        self.assertTrue(composite.requires_staged_runtime_guard)
+
     def test_process_turn_exposes_nlu_turn_trace_without_changing_behavior(self) -> None:
         session_id = "agent-workflow-trace"
         reset_session(session_id)

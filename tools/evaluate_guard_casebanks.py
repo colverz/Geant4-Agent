@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from core.agent.composite_intent import detect_composite_intent
 from core.agent.intent_router import IntentDecision, route_user_turn
-from core.agent.workflow_graph import assert_path_invariants, graph_path_for_intent
+from core.agent.workflow_graph import WorkflowNode, assert_path_invariants, graph_path_for_intent, terminal_state_for_intent
 from planner.runtime_intent import action_for_runtime_intent
 from planner.runtime_result import build_runtime_result_question_answer
 from core.orchestrator.path_ops import set_path
@@ -18,6 +19,7 @@ DEFAULT_WORKFLOW_CASEBANK = Path("docs/eval/workflow_guard_casebank.json")
 DEFAULT_RUNTIME_QA_CASEBANK = Path("docs/eval/runtime_result_qa_casebank.json")
 DEFAULT_MULTITURN_CASEBANK = Path("docs/eval/multiturn_guard_casebank.json")
 DEFAULT_SESSION_BEHAVIOR_CASEBANK = Path("docs/eval/session_behavior_casebank.json")
+DEFAULT_AGENTIC_BEHAVIOR_CASEBANK = Path("docs/eval/agentic_behavior_casebank.json")
 
 VALID_INTENTS = {
     "read_config",
@@ -92,6 +94,7 @@ def validate_casebank_shapes(
     runtime_qa_path: Path = DEFAULT_RUNTIME_QA_CASEBANK,
     multiturn_path: Path = DEFAULT_MULTITURN_CASEBANK,
     session_behavior_path: Path = DEFAULT_SESSION_BEHAVIOR_CASEBANK,
+    agentic_behavior_path: Path = DEFAULT_AGENTIC_BEHAVIOR_CASEBANK,
 ) -> dict[str, Any]:
     failures: list[dict[str, Any]] = []
 
@@ -99,6 +102,7 @@ def validate_casebank_shapes(
     runtime_qa = _load_json(runtime_qa_path)
     multiturn = _load_json(multiturn_path)
     session_behavior = _load_json(session_behavior_path)
+    agentic_behavior = _load_json(agentic_behavior_path)
 
     def add_failure(casebank: str, item_id: str, error: str) -> None:
         failures.append({"casebank": casebank, "id": item_id, "error": error})
@@ -121,6 +125,11 @@ def validate_casebank_shapes(
                 "expect_config_mutation_allowed",
             },
         ),
+        (
+            "agentic_behavior",
+            agentic_behavior,
+            {"id", "text", "lang", "expected_intent", "expected_safety", "expected_terminal", "expected_trace"},
+        ),
     ):
         if not isinstance(items, list):
             add_failure(casebank, "<root>", "not_list")
@@ -142,6 +151,9 @@ def validate_casebank_shapes(
                 add_failure(casebank, item_id, f"invalid_safety:{item['expected_safety']}")
             if "expected_action" in item and item["expected_action"] not in VALID_ACTIONS:
                 add_failure(casebank, item_id, f"invalid_action:{item['expected_action']}")
+            if casebank == "agentic_behavior":
+                if not isinstance(item.get("expected_trace"), dict):
+                    add_failure(casebank, item_id, "expected_trace_not_object")
             if casebank == "runtime_result_qa":
                 if not isinstance(item.get("expected_substrings"), list):
                     add_failure(casebank, item_id, "expected_substrings_not_list")
@@ -186,6 +198,7 @@ def validate_casebank_shapes(
         (len(workflow) if isinstance(workflow, list) else 0)
         + (len(runtime_qa) if isinstance(runtime_qa, list) else 0)
         + (len(session_behavior) if isinstance(session_behavior, list) else 0)
+        + (len(agentic_behavior) if isinstance(agentic_behavior, list) else 0)
         + sum(len(flow.get("turns", [])) for flow in multiturn if isinstance(flow, dict) and isinstance(flow.get("turns"), list))
     )
     return {"name": "casebank_schema", "total": total, "failed": len(failures), "failures": failures}
@@ -397,12 +410,92 @@ def evaluate_session_behavior_guard(path: Path) -> dict[str, Any]:
     return {"name": "session_behavior_guard", "total": len(cases), "failed": len(failures), "failures": failures}
 
 
+def evaluate_agentic_behavior(path: Path) -> dict[str, Any]:
+    cases = _load_json(path)
+    failures: list[dict[str, Any]] = []
+    for case in cases:
+        errors: dict[str, Any] = {}
+        decision = route_user_turn(case["text"], case["lang"])
+        composite = detect_composite_intent(case["text"])
+        trace_expect = dict(case.get("expected_trace") or {})
+        effective_intent = decision.intent
+        effective_safety = decision.safety_class.value
+        waiting_confirmation = bool(trace_expect.get("must_require_confirmation", False))
+        if composite.requires_staged_runtime_guard:
+            effective_intent = "config_mutation"
+            effective_safety = "config_mutation"
+            waiting_confirmation = True
+        if effective_intent != case["expected_intent"]:
+            errors["intent"] = {"expected": case["expected_intent"], "actual": effective_intent, "router_intent": decision.intent}
+        if effective_safety != case["expected_safety"]:
+            errors["safety"] = {"expected": case["expected_safety"], "actual": effective_safety}
+        if trace_expect.get("must_require_kb") and not decision.requires_kb:
+            errors["requires_kb"] = {"expected": True, "actual": decision.requires_kb}
+        if trace_expect.get("must_not_require_confirmation") and waiting_confirmation:
+            errors["confirmation"] = "unexpected_waiting_confirmation"
+        mutation_applied = effective_intent == "config_mutation" and not waiting_confirmation
+        path_nodes = graph_path_for_intent(
+            effective_intent,
+            mutation_applied=mutation_applied,
+            waiting_confirmation=waiting_confirmation,
+        )
+        terminal = terminal_state_for_intent(
+            effective_intent,
+            mutation_applied=mutation_applied,
+            waiting_confirmation=waiting_confirmation,
+        )
+        node_values = [node.value for node in path_nodes]
+        if terminal.value != case["expected_terminal"]:
+            errors["terminal"] = {"expected": case["expected_terminal"], "actual": terminal.value}
+        for node in trace_expect.get("must_include_nodes", []):
+            if str(node) not in node_values:
+                errors.setdefault("missing_nodes", []).append(str(node))
+        if trace_expect.get("must_not_apply_session") and WorkflowNode.APPLY_SESSION.value in node_values:
+            errors["apply_session"] = "forbidden_apply_session_present"
+        if trace_expect.get("must_not_call_runtime"):
+            action = _decision_action(decision)
+            if action not in {"config_summary", "runtime_summary", "guarded_runtime_ui", "read_only_chat", "step_async"}:
+                errors["runtime_action"] = f"unexpected_action:{action}"
+        blocked = set(trace_expect.get("must_block_tools") or [])
+        if blocked:
+            if composite.requires_staged_runtime_guard:
+                actual_blocked = set()
+                if composite.has_runtime_request:
+                    actual_blocked.add("run_beam")
+                if composite.has_viewer_request:
+                    actual_blocked.add("viewer_open")
+            elif decision.intent == "run_requested":
+                actual_blocked = {"run_beam"}
+            elif decision.intent == "viewer_requested":
+                actual_blocked = {"viewer_open"}
+            else:
+                actual_blocked = set()
+            missing_blocked = sorted(blocked - actual_blocked)
+            if missing_blocked:
+                errors["blocked_tools"] = {"missing": missing_blocked, "actual": sorted(actual_blocked)}
+        if errors:
+            failures.append(
+                {
+                    "id": case["id"],
+                    "text": case["text"],
+                    "errors": errors,
+                    "decision": decision.to_dict(),
+                    "composite_intent": composite.to_dict(),
+                    "effective_intent": effective_intent,
+                    "node_sequence": node_values,
+                    "terminal": terminal.value,
+                }
+            )
+    return {"name": "agentic_behavior", "total": len(cases), "failed": len(failures), "failures": failures}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate lightweight user-safety and grounded-result casebanks.")
     parser.add_argument("--workflow", type=Path, default=DEFAULT_WORKFLOW_CASEBANK)
     parser.add_argument("--runtime-qa", type=Path, default=DEFAULT_RUNTIME_QA_CASEBANK)
     parser.add_argument("--multiturn", type=Path, default=DEFAULT_MULTITURN_CASEBANK)
     parser.add_argument("--session-behavior", type=Path, default=DEFAULT_SESSION_BEHAVIOR_CASEBANK)
+    parser.add_argument("--agentic-behavior", type=Path, default=DEFAULT_AGENTIC_BEHAVIOR_CASEBANK)
     parser.add_argument("--json", action="store_true", help="Emit JSON only.")
     args = parser.parse_args()
 
@@ -412,11 +505,13 @@ def main() -> int:
             runtime_qa_path=args.runtime_qa,
             multiturn_path=args.multiturn,
             session_behavior_path=args.session_behavior,
+            agentic_behavior_path=args.agentic_behavior,
         ),
         evaluate_workflow_guard(args.workflow),
         evaluate_runtime_result_qa(args.runtime_qa),
         evaluate_multiturn_guard(args.multiturn),
         evaluate_session_behavior_guard(args.session_behavior),
+        evaluate_agentic_behavior(args.agentic_behavior),
     ]
     failed = sum(item["failed"] for item in reports)
     output = {"ok": failed == 0, "failed": failed, "reports": reports}

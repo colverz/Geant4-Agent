@@ -12,6 +12,7 @@ _MUTATION_PATTERN = re.compile(
 _RUNTIME_PATTERN = re.compile(
     r"\b(run|rerun|execute|start)\b.*\b(events?|simulation|geant4|beam)\b|"
     r"\brun\s+\d+\s+events?\b|"
+    r"\brun\s+it\b|"
     r"(\u8fd0\u884c|\u91cd\u8dd1|\u6267\u884c|\u5f00\u59cb).*(event|\u4e8b\u4ef6|geant4|\u6a21\u62df|\u7c92\u5b50\u675f)",
     flags=re.IGNORECASE,
 )
