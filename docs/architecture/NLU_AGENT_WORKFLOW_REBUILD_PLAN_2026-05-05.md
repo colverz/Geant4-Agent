@@ -670,6 +670,14 @@ Tests:
 
 Goal: prevent repeated side effects during retry/replay.
 
+Status as of 2026-05-10:
+
+- started standalone `core/agent/idempotency.py`
+- defined replay classes for read-only queries, deterministic validation, config
+  mutation, reusable runtime runs, never-replay viewer launch, and external side
+  effects
+- first step is policy-only; it does not yet wrap Geant4 web/runtime handlers
+
 Tasks:
 
 - add `core/agent/idempotency.py`
