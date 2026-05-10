@@ -605,6 +605,8 @@ Status as of 2026-05-10:
   `_extract_*` helpers
 - session manager confirmation evaluation and pending-confirmation flow now use
   the public API wrappers
+- confirmation and candidate-patch tests no longer depend on confirmation
+  private helper functions
 - existing private helpers remain for lower-level compatibility tests and as
   implementation details
 - not yet migrated confirmation into a staged patch store

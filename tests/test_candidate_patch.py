@@ -11,6 +11,7 @@ from core.agent.candidate_patch import (
     normalize_interpreter_v2_payload,
     preview_candidate_patch_confirmation,
 )
+from core.orchestrator.confirmation_policy import ConfirmationReason
 from core.orchestrator.types import Intent, Producer
 
 
@@ -131,7 +132,7 @@ class CandidatePatchNormalizerTest(unittest.TestCase):
         self.assertTrue(preview.requires_confirmation)
         self.assertIsNone(preview.kept_candidate)
         self.assertEqual(preview.pending[0]["path"], "source.energy_mev")
-        self.assertEqual(preview.pending[0]["reason"], "low_confidence")
+        self.assertEqual(preview.pending[0]["reason"], ConfirmationReason.LOW_CONFIDENCE)
         self.assertEqual(state_like.config, {"source": {}})
 
     def test_confirmation_preview_stages_explicit_overwrite(self) -> None:
@@ -147,7 +148,7 @@ class CandidatePatchNormalizerTest(unittest.TestCase):
         self.assertEqual(preview.pending[0]["path"], "source.energy_mev")
         self.assertEqual(preview.pending[0]["old"], 1.0)
         self.assertEqual(preview.pending[0]["new"], 10.0)
-        self.assertEqual(preview.pending[0]["reason"], "overwrite")
+        self.assertEqual(preview.pending[0]["reason"], ConfirmationReason.OVERWRITE)
         self.assertEqual(state_like.config["source"]["energy_mev"], 1.0)
 
     def test_confirmation_preview_stages_delete(self) -> None:
@@ -170,7 +171,7 @@ class CandidatePatchNormalizerTest(unittest.TestCase):
         self.assertIsNone(preview.kept_candidate)
         self.assertEqual(preview.pending[0]["path"], "output.path")
         self.assertEqual(preview.pending[0]["op"], "remove")
-        self.assertEqual(preview.pending[0]["reason"], "remove")
+        self.assertEqual(preview.pending[0]["reason"], ConfirmationReason.REMOVE)
         self.assertEqual(state_like.config["output"]["path"], "old.json")
 
     def test_confirmation_preview_keeps_non_conflicting_candidate(self) -> None:

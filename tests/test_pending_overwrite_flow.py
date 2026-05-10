@@ -4,9 +4,9 @@ import unittest
 from types import SimpleNamespace
 
 from core.orchestrator.confirmation_policy import (
-    _candidate_from_pending_overwrite,
-    _extract_low_confidence_updates,
-    _extract_pending_overwrites,
+    ConfirmationReason,
+    build_candidate_from_pending_confirmation,
+    evaluate_confirmation_requirements,
 )
 from core.orchestrator.session_manager import (
     _augment_geometry_targets,
@@ -93,17 +93,18 @@ class PendingOverwriteFlowTest(unittest.TestCase):
             rationale="low_confidence_test",
         )
 
-        filtered, pending = _extract_low_confidence_updates(
+        result = evaluate_confirmation_requirements(
             state_like,
+            candidate,
             [candidate],
             min_confidence=0.6,
             lang="en",
         )
 
-        self.assertEqual(filtered, [])
-        self.assertEqual(pending[0]["path"], "output.format")
-        self.assertEqual(pending[0]["reason"], "low_confidence")
-        self.assertEqual(pending[0]["confidence"], 0.42)
+        self.assertEqual(result.filtered_candidates, [])
+        self.assertEqual(result.pending[0]["path"], "output.format")
+        self.assertEqual(result.pending[0]["reason"], ConfirmationReason.LOW_CONFIDENCE)
+        self.assertEqual(result.pending[0]["confidence"], 0.42)
 
     def test_remove_update_is_staged_and_confirm_preserves_remove_op(self) -> None:
         state_like = SimpleNamespace(config={"output": {"path": "old.json"}})
@@ -133,12 +134,12 @@ class PendingOverwriteFlowTest(unittest.TestCase):
             rationale="remove_test",
         )
 
-        filtered, pending = _extract_pending_overwrites(state_like, user_candidate, [candidate], lang="en")
-        confirmed = _candidate_from_pending_overwrite(pending, turn_id=3)
+        result = evaluate_confirmation_requirements(state_like, user_candidate, [candidate], lang="en")
+        confirmed = build_candidate_from_pending_confirmation(result.pending, turn_id=3)
 
-        self.assertEqual(filtered, [])
-        self.assertEqual(pending[0]["reason"], "remove")
-        self.assertEqual(pending[0]["op"], "remove")
+        self.assertEqual(result.filtered_candidates, [])
+        self.assertEqual(result.pending[0]["reason"], ConfirmationReason.REMOVE)
+        self.assertEqual(result.pending[0]["op"], "remove")
         self.assertEqual(confirmed.updates[0].op, "remove")
 
     def test_geometry_overwrite_stages_structure_and_params_atomically(self) -> None:
