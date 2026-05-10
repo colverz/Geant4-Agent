@@ -32,6 +32,8 @@ class NluTurnTrace:
     rejected_paths: list[str] = field(default_factory=list)
     context_pack_hash: str = ""
     patch_hash: str = ""
+    confirmation_id: str = ""
+    confirmation_patch_hash: str = ""
     grounding_status: str = "not_checked"
     interrupt_status: str = "none"
     idempotency_key: str = ""

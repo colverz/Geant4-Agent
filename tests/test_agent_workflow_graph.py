@@ -86,6 +86,8 @@ class AgentWorkflowGraphTest(unittest.TestCase):
             self.assertIn("validate", trace["node_sequence"])
             self.assertIn("apply_session", trace["node_sequence"])
             self.assertTrue(trace["runtime_payload_ready"])
+            self.assertEqual(trace["confirmation_id"], "")
+            self.assertEqual(trace["confirmation_patch_hash"], "")
             self.assertIn("geometry.structure", trace["applied_paths"])
             self.assertIn("source.particle", trace["applied_paths"])
             self.assertEqual(out["internal_trace"]["agent"]["nlu_turn_trace"], trace)

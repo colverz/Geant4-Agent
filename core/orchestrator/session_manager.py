@@ -1625,6 +1625,8 @@ def process_turn(
         rejected_paths=rejected_paths,
         context_pack_hash=context_pack.context_pack_hash,
         patch_hash=stable_hash({"applied": applied_paths, "pending": staged_pending_overwrite}),
+        confirmation_id=str(confirmation_payload.get("confirmation_id") or ""),
+        confirmation_patch_hash=str(confirmation_payload.get("patch_hash") or ""),
         grounding_status="legacy_validated",
         interrupt_status="waiting_confirmation" if pending_overwrite_required else "none",
         idempotency_key=stable_hash({"session_id": state.session_id, "turn_id": state.turn_id, "patch": applied_paths}),

@@ -162,6 +162,9 @@ class PendingOverwriteFlowTest(unittest.TestCase):
         self.assertTrue(second.get("confirmation", {}).get("confirmation_id"))
         self.assertTrue(second.get("confirmation", {}).get("patch_hash"))
         self.assertEqual(second.get("confirmation", {}).get("staged_patch", {}).get("base_turn_id"), get_or_create_session(sid).turn_id)
+        self.assertEqual(second.get("nlu_turn_trace", {}).get("confirmation_id"), second.get("confirmation", {}).get("confirmation_id"))
+        self.assertEqual(second.get("nlu_turn_trace", {}).get("confirmation_patch_hash"), second.get("confirmation", {}).get("patch_hash"))
+        self.assertEqual(second.get("internal_trace", {}).get("agent", {}).get("nlu_turn_trace"), second.get("nlu_turn_trace"))
         self.assertEqual(second.get("config", {}).get("geometry", {}).get("structure"), "single_box")
 
         state = get_or_create_session(sid)
