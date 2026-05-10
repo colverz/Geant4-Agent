@@ -3,7 +3,14 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from core.orchestrator.confirmation_policy import ConfirmationPolicyResult, evaluate_confirmation_requirements
+from core.orchestrator.confirmation_policy import (
+    ConfirmationPolicyResult,
+    build_candidate_from_pending_confirmation,
+    has_pending_confirmation_path,
+    is_unset_for_confirmation,
+    merge_pending_confirmations,
+    evaluate_confirmation_requirements,
+)
 from core.orchestrator.types import CandidateUpdate, Intent, Producer, UpdateOp
 from core.validation.error_codes import E_OVERWRITE_WITHOUT_EXPLICIT_USER_INTENT
 
@@ -122,6 +129,48 @@ class ConfirmationPolicyPublicApiTest(unittest.TestCase):
         self.assertFalse(result.requires_confirmation)
         self.assertEqual(result.pending, [])
         self.assertEqual(result.filtered_candidates[0].updates[0].value, 10.0)
+
+    def test_public_api_builds_confirm_candidate_from_pending_items(self) -> None:
+        pending = [
+            {"path": "source.energy", "op": "set", "new": 10.0},
+            {"path": "output.path", "op": "remove", "new": None},
+        ]
+
+        candidate = build_candidate_from_pending_confirmation(pending, turn_id=7)
+
+        self.assertEqual(candidate.producer, Producer.USER_EXPLICIT)
+        self.assertEqual(candidate.intent, Intent.MODIFY)
+        self.assertEqual(candidate.target_paths, ["output.path", "source.energy"])
+        self.assertEqual(candidate.updates[0].path, "source.energy")
+        self.assertEqual(candidate.updates[0].value, 10.0)
+        self.assertEqual(candidate.updates[1].op, "remove")
+        self.assertEqual(candidate.updates[1].turn_id, 7)
+
+    def test_public_api_merges_pending_confirmations_by_path(self) -> None:
+        existing = [
+            {"path": "source.energy", "new": 1.0},
+            {"path": "source.particle", "new": "gamma"},
+        ]
+        additions = [
+            {"path": "source.energy", "new": 5.0},
+            {"path": "source.direction", "new": [0, 0, 1]},
+        ]
+
+        merged = merge_pending_confirmations(existing, additions)
+
+        by_path = {item["path"]: item for item in merged}
+        self.assertEqual(by_path["source.energy"]["new"], 5.0)
+        self.assertEqual(by_path["source.particle"]["new"], "gamma")
+        self.assertEqual(by_path["source.direction"]["new"], [0, 0, 1])
+
+    def test_public_api_checks_pending_path_and_unset_values(self) -> None:
+        pending = [{"path": "geometry.structure", "new": "box"}]
+
+        self.assertTrue(has_pending_confirmation_path(pending, "geometry.structure"))
+        self.assertFalse(has_pending_confirmation_path(pending, "geometry.params.x"))
+        self.assertTrue(is_unset_for_confirmation(None))
+        self.assertTrue(is_unset_for_confirmation({}))
+        self.assertFalse(is_unset_for_confirmation("gamma"))
 
 
 if __name__ == "__main__":

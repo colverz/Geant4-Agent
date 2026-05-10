@@ -61,12 +61,12 @@ from core.orchestrator.candidate_pipeline import (
     strip_source_updates as _strip_source_updates,
 )
 from core.orchestrator.confirmation_policy import (
-    _candidate_from_pending_overwrite,
-    _has_pending_overwrite_path,
-    _is_unset_for_overwrite,
-    _merge_pending_overwrites,
-    _pending_item_from_update,
+    build_candidate_from_pending_confirmation,
+    build_pending_confirmation_item,
     evaluate_confirmation_requirements,
+    has_pending_confirmation_path,
+    is_unset_for_confirmation,
+    merge_pending_confirmations,
 )
 from core.orchestrator.constraint_ledger import lock_from_candidate
 from core.orchestrator.graph_override_policy import should_prefer_extracted_graph
@@ -278,7 +278,7 @@ def _build_source_pending_dependency_items(
     if "source.direction" in pending_paths:
         return []
     old_direction = get_path(state_like.config, "source.direction")
-    if _is_unset_for_overwrite(old_direction):
+    if is_unset_for_confirmation(old_direction):
         return []
     return [
         {
@@ -305,7 +305,7 @@ def _stage_dependent_source_updates_for_pending(
     )
     if not dependency_items:
         return candidates, staged_pending_overwrite
-    staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, dependency_items)
+    staged_pending_overwrite = merge_pending_confirmations(staged_pending_overwrite, dependency_items)
     return candidates, staged_pending_overwrite
 
 def _apply_updates(config: dict, updates: list) -> None:
@@ -744,7 +744,7 @@ def _stage_dependent_geometry_updates_for_pending(
 ) -> tuple[list[CandidateUpdate], list[dict[str, Any]]]:
     # When structure overwrite is pending confirmation, geometry params from
     # the same turn must be committed atomically with structure after confirm.
-    if not _has_pending_overwrite_path(staged_pending_overwrite, "geometry.structure"):
+    if not has_pending_confirmation_path(staged_pending_overwrite, "geometry.structure"):
         return candidates, staged_pending_overwrite
 
     dependency_items: list[dict[str, Any]] = []
@@ -754,7 +754,7 @@ def _stage_dependent_geometry_updates_for_pending(
         for update in candidate.updates:
             if update.path.startswith("geometry.params."):
                 dependency_items.append(
-                    _pending_item_from_update(
+                    build_pending_confirmation_item(
                         update,
                         draft=draft,
                         lang=lang,
@@ -780,7 +780,7 @@ def _stage_dependent_geometry_updates_for_pending(
         )
 
     if dependency_items:
-        staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, dependency_items)
+        staged_pending_overwrite = merge_pending_confirmations(staged_pending_overwrite, dependency_items)
     return filtered_candidates, staged_pending_overwrite
 
 
@@ -1261,7 +1261,7 @@ def process_turn(
     if state.pending_overwrite:
         if user_candidate.intent == Intent.CONFIRM:
             staged_pending_overwrite = list(state.pending_overwrite)
-            confirmed_candidate = _candidate_from_pending_overwrite(staged_pending_overwrite, turn_id=state.turn_id)
+            confirmed_candidate = build_candidate_from_pending_confirmation(staged_pending_overwrite, turn_id=state.turn_id)
             content_candidates = [confirmed_candidate]
             user_candidate = confirmed_candidate
             applying_pending_overwrite = True
@@ -1339,7 +1339,7 @@ def process_turn(
                 )
             for update in replacement_updates:
                 refreshed_pending.append(
-                    _pending_item_from_update(
+                    build_pending_confirmation_item(
                         update,
                         draft=draft,
                         lang=lang,
@@ -1350,7 +1350,7 @@ def process_turn(
                 filtered_candidates.append(filtered_candidate)
         candidates = filtered_candidates
         if refreshed_pending:
-            staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, refreshed_pending)
+            staged_pending_overwrite = merge_pending_confirmations(staged_pending_overwrite, refreshed_pending)
 
     confirmation_policy_result = evaluate_confirmation_requirements(
         draft,
@@ -1366,7 +1366,7 @@ def process_turn(
     policy_rejected = confirmation_policy_result.rejected
     if not applying_pending_overwrite:
         if confirmation_policy_result.pending:
-            staged_pending_overwrite = _merge_pending_overwrites(staged_pending_overwrite, confirmation_policy_result.pending)
+            staged_pending_overwrite = merge_pending_confirmations(staged_pending_overwrite, confirmation_policy_result.pending)
         candidates, staged_pending_overwrite = _stage_dependent_geometry_updates_for_pending(
             draft,
             candidates,

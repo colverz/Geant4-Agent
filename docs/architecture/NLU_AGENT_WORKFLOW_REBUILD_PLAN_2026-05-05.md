@@ -595,14 +595,21 @@ Status as of 2026-05-10:
 
 - added public `ConfirmationPolicyResult`
 - added public `evaluate_confirmation_requirements()`
+- added public pending confirmation helpers for confirm-candidate construction,
+  pending merge/path checks, unset checks, and pending item construction
 - candidate patch preview now depends on the public API instead of private
   `_extract_*` helpers
-- existing private helpers remain for current session manager compatibility
-- not yet migrated session manager to the public API
+- session manager confirmation evaluation and pending-confirmation flow now use
+  the public API wrappers
+- existing private helpers remain for lower-level compatibility tests and as
+  implementation details
+- not yet migrated confirmation into a staged patch store
 
 Tasks:
 
-- create `core/agent/confirmation_policy.py`
+- keep confirmation policy centralized in `core/orchestrator/confirmation_policy.py`
+  until a real staged-patch boundary is introduced; do not create a duplicate
+  `core/agent/confirmation_policy.py`
 - define confirmation reasons as enum/string constants
 - return user-visible confirmation payload
 - support approve/reject/keep-original paths

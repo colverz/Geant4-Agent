@@ -81,6 +81,44 @@ def evaluate_confirmation_requirements(
     )
 
 
+def is_unset_for_confirmation(value: Any) -> bool:
+    return _is_unset_for_overwrite(value)
+
+
+def build_candidate_from_pending_confirmation(items: list[dict[str, Any]], *, turn_id: int) -> CandidateUpdate:
+    return _candidate_from_pending_overwrite(items, turn_id=turn_id)
+
+
+def merge_pending_confirmations(
+    existing: list[dict[str, Any]],
+    additions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return _merge_pending_overwrites(existing, additions)
+
+
+def has_pending_confirmation_path(items: list[dict[str, Any]], path: str) -> bool:
+    return _has_pending_overwrite_path(items, path)
+
+
+def build_pending_confirmation_item(
+    update: UpdateOp,
+    *,
+    draft: Any,
+    lang: str,
+    producer: str,
+    reason: str = "overwrite",
+    confidence: float | None = None,
+) -> dict[str, Any]:
+    return _pending_item_from_update(
+        update,
+        draft=draft,
+        lang=lang,
+        producer=producer,
+        reason=reason,
+        confidence=confidence,
+    )
+
+
 def _path_explicitly_requested(user_candidate: CandidateUpdate, path: str) -> bool:
     expanded_targets = {str(target) for target in user_candidate.target_paths if isinstance(target, str) and target}
     for target in list(expanded_targets):
