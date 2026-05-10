@@ -20,13 +20,33 @@ def _runtime_patch() -> dict:
     }
 
 
+def _complete_runtime_patch() -> dict:
+    return {
+        "geometry": {
+            "structure": "single_box",
+            "params": {"module_x": 10.0, "module_y": 20.0, "module_z": 30.0},
+        },
+        "source": {
+            "type": "point",
+            "particle": "gamma",
+            "energy": 1.0,
+            "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
+            "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+        },
+        "physics_list": {"name": "FTFP_BERT"},
+    }
+
+
 class Geant4WebApiTest(unittest.TestCase):
     def setUp(self) -> None:
         self._previous_server = geant4_api._GEANT4_SERVER
+        self._previous_idempotency_policy = geant4_api._IDEMPOTENCY_POLICY
         geant4_api._GEANT4_SERVER = Geant4McpServer(adapter=InMemoryGeant4Adapter())
+        geant4_api._IDEMPOTENCY_POLICY = geant4_api.IdempotencyReplayPolicy()
 
     def tearDown(self) -> None:
         geant4_api._GEANT4_SERVER = self._previous_server
+        geant4_api._IDEMPOTENCY_POLICY = self._previous_idempotency_policy
 
     def test_default_web_server_uses_in_memory_without_runtime_env(self) -> None:
         geant4_api._GEANT4_SERVER = None
@@ -202,6 +222,76 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertEqual(qa_status, 200)
         self.assertEqual(qa_body["runtime_result_explanation"]["prompt_profile_id"], "runtime_result_qa_en_v1")
         self.assertIn("does not report dose", qa_body["runtime_result_explanation"]["message"])
+
+    def test_run_without_action_id_keeps_compatibility_and_returns_suggested_action_id(self) -> None:
+        geant4_api.handle_geant4_post("/api/geant4/apply", {"patch": _runtime_patch()})
+        geant4_api.handle_geant4_post("/api/geant4/initialize", {})
+
+        status, body = geant4_api.handle_geant4_post("/api/geant4/run", {"events": 2})
+
+        self.assertEqual(status, 200)
+        self.assertFalse(body["idempotency"]["enabled"])
+        self.assertEqual(body["idempotency"]["action_name"], "run_beam")
+        self.assertTrue(body["idempotency"]["suggested_action_id"])
+
+    def test_duplicate_run_with_action_id_replays_result_without_rerun(self) -> None:
+        geant4_api.handle_geant4_post("/api/geant4/apply", {"patch": _runtime_patch()})
+        geant4_api.handle_geant4_post("/api/geant4/initialize", {})
+        server = geant4_api.get_geant4_server()
+
+        with mock.patch.object(server, "call_tool", wraps=server.call_tool) as call_tool:
+            first_status, first_body = geant4_api.handle_geant4_post(
+                "/api/geant4/run",
+                {"events": 3, "action_id": "run-action-001"},
+            )
+            second_status, second_body = geant4_api.handle_geant4_post(
+                "/api/geant4/run",
+                {"events": 3, "action_id": "run-action-001"},
+            )
+
+        self.assertEqual(first_status, 200)
+        self.assertEqual(second_status, 200)
+        self.assertEqual(call_tool.call_count, 1)
+        self.assertEqual(second_body["idempotency"]["decision"], "replay_result")
+        self.assertEqual(second_body["runtime_smoke_report"]["events_completed"], 3)
+        self.assertEqual(second_body["runtime_smoke_report"], first_body["runtime_smoke_report"])
+
+    def test_reusing_run_action_id_for_different_events_is_rejected(self) -> None:
+        geant4_api.handle_geant4_post("/api/geant4/apply", {"patch": _runtime_patch()})
+        geant4_api.handle_geant4_post("/api/geant4/initialize", {})
+        geant4_api.handle_geant4_post("/api/geant4/run", {"events": 3, "action_id": "run-action-002"})
+
+        status, body = geant4_api.handle_geant4_post(
+            "/api/geant4/run",
+            {"events": 4, "action_id": "run-action-002"},
+        )
+
+        self.assertEqual(status, 409)
+        self.assertEqual(body["status"], "rejected")
+        self.assertEqual(body["idempotency"]["decision"], "conflict")
+
+    def test_duplicate_viewer_action_id_is_rejected_without_relaunch(self) -> None:
+        adapter = LocalProcessGeant4Adapter(
+            [sys.executable, "-c", "print('viewer_pid=1234')"],
+            geant4_root="F:\\Geant4Test",
+            working_dir="F:\\geant4agent",
+        )
+        geant4_api._GEANT4_SERVER = Geant4McpServer(adapter=adapter)
+
+        first_status, first_body = geant4_api.handle_geant4_post(
+            "/api/geant4/viewer/open",
+            {"patch": _complete_runtime_patch(), "events": 2, "action_id": "viewer-action-001"},
+        )
+        second_status, second_body = geant4_api.handle_geant4_post(
+            "/api/geant4/viewer/open",
+            {"patch": _complete_runtime_patch(), "events": 2, "action_id": "viewer-action-001"},
+        )
+
+        self.assertEqual(first_status, 200)
+        self.assertEqual(first_body["payload"]["viewer_pid"], 1234)
+        self.assertEqual(second_status, 409)
+        self.assertEqual(second_body["status"], "rejected")
+        self.assertEqual(second_body["idempotency"]["decision"], "reject_duplicate")
 
 
 class RuntimeResultFrontendStaticTest(unittest.TestCase):

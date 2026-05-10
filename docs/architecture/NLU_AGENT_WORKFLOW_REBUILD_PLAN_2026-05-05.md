@@ -676,7 +676,9 @@ Status as of 2026-05-10:
 - defined replay classes for read-only queries, deterministic validation, config
   mutation, reusable runtime runs, never-replay viewer launch, and external side
   effects
-- first step is policy-only; it does not yet wrap Geant4 web/runtime handlers
+- Geant4 web run/viewer endpoints now use optional `action_id` idempotency:
+  duplicate `run_beam` replays the existing result, duplicate viewer launch is
+  rejected, and missing `action_id` stays backward-compatible with a suggested id
 
 Tasks:
 

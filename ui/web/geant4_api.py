@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from core.agent.idempotency import IdempotencyDecision, IdempotencyReplayPolicy, build_action_id
 from core.runtime.types import ActionSafetyClass, ToolCallRequest
 from core.simulation import build_runtime_smoke_report
 from mcp.geant4.adapter import LocalProcessGeant4Adapter, build_geant4_adapter_from_env
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 _GEANT4_SERVER: Geant4McpServer | None = None
 _LAST_VIEWER_PID: int | None = None
+_IDEMPOTENCY_POLICY = IdempotencyReplayPolicy()
 
 
 def _build_server() -> Geant4McpServer:
@@ -79,6 +81,39 @@ def _result_explanation(report: dict[str, Any], payload: dict[str, Any]) -> dict
     )
 
 
+def _idempotency_metadata(action_name: str, action_payload: dict[str, Any], *, action_id: str = "") -> dict[str, Any]:
+    return {
+        "action_name": action_name,
+        "action_id": str(action_id or "").strip(),
+        "suggested_action_id": build_action_id(action_name, action_payload),
+        "enabled": bool(str(action_id or "").strip()),
+    }
+
+
+def _idempotency_replay_body(decision) -> tuple[int, dict[str, Any]] | None:
+    if decision.decision == IdempotencyDecision.REPLAY_RESULT and decision.record is not None:
+        body = dict(decision.record.result)
+        body["idempotency"] = decision.to_dict()
+        return 200, body
+    if decision.decision == IdempotencyDecision.REJECT_DUPLICATE:
+        return 409, {
+            "status": "rejected",
+            "message": "Duplicate side-effect action rejected by idempotency policy.",
+            "errors": [decision.reason],
+            "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
+            "idempotency": decision.to_dict(),
+        }
+    if decision.decision == IdempotencyDecision.CONFLICT:
+        return 409, {
+            "status": "rejected",
+            "message": "action_id was reused for a different request.",
+            "errors": [decision.reason],
+            "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
+            "idempotency": decision.to_dict(),
+        }
+    return None
+
+
 def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     global _LAST_VIEWER_PID
     server = get_geant4_server()
@@ -86,6 +121,13 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
     if path == "/api/geant4/viewer/open":
         patch = dict(payload.get("patch", {}))
         viewer_events = max(1, int(payload.get("events", 12)))
+        action_payload = {"events": viewer_events, "patch": patch}
+        action_id = str(payload.get("action_id", "")).strip()
+        if action_id:
+            decision = _IDEMPOTENCY_POLICY.check_before_execute("viewer_open", action_payload, action_id=action_id)
+            replay = _idempotency_replay_body(decision)
+            if replay is not None:
+                return replay
         adapter = server._adapter  # type: ignore[attr-defined]
         if not isinstance(adapter, LocalProcessGeant4Adapter):
             return 400, {
@@ -94,6 +136,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                 "errors": ["local_process_required", "missing_runtime_command"],
                 "runtime_phase": adapter.snapshot().runtime_phase.value,
                 "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
+                "idempotency": _idempotency_metadata("viewer_open", action_payload, action_id=action_id),
             }
         if not adapter.snapshot().connected:
             return 400, {
@@ -102,6 +145,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                 "errors": ["missing_runtime_command"],
                 "runtime_phase": adapter.snapshot().runtime_phase.value,
                 "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
+                "idempotency": _idempotency_metadata("viewer_open", action_payload, action_id=action_id),
             }
 
         runtime_payload = build_runtime_payload(patch)
@@ -142,9 +186,7 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                 except ValueError:
                     pid = None
         _LAST_VIEWER_PID = pid
-        return (
-            200 if completed.returncode == 0 else 400,
-            {
+        body = {
                 "status": "completed" if completed.returncode == 0 else "failed",
                 "message": (
                     f"Geant4 viewer launched with {viewer_events} events."
@@ -159,8 +201,11 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
                 },
                 "runtime_phase": adapter.snapshot().runtime_phase.value,
                 "action_safety_class": ActionSafetyClass.EXPENSIVE_RUNTIME.value,
-            },
-        )
+        }
+        if action_id:
+            _IDEMPOTENCY_POLICY.record_result("viewer_open", action_payload, body, action_id=action_id)
+        body["idempotency"] = _idempotency_metadata("viewer_open", action_payload, action_id=action_id)
+        return (200 if completed.returncode == 0 else 400, body)
     elif path == "/api/geant4/intent":
         classification = classify_user_runtime_intent(
             str(payload.get("text", "")),
@@ -192,6 +237,13 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
         obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
     elif path == "/api/geant4/run":
         events = int(payload.get("events", 1))
+        action_payload = {"events": events}
+        action_id = str(payload.get("action_id", "")).strip()
+        if action_id:
+            decision = _IDEMPOTENCY_POLICY.check_before_execute("run_beam", action_payload, action_id=action_id)
+            replay = _idempotency_replay_body(decision)
+            if replay is not None:
+                return replay
         obs = server.call_tool(
             ToolCallRequest(tool_name="run_beam", arguments={"events": events})
         )
@@ -201,7 +253,11 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
             report = build_runtime_smoke_report(events=events, run_payload=obs.payload)
             body["runtime_smoke_report"] = report
             body["runtime_result_explanation"] = _result_explanation(report, payload)
-        return (200 if obs.status.value in {"completed", "accepted"} else 400), body
+        status_code = 200 if obs.status.value in {"completed", "accepted"} else 400
+        if action_id and status_code == 200:
+            _IDEMPOTENCY_POLICY.record_result("run_beam", action_payload, body, action_id=action_id)
+        body["idempotency"] = _idempotency_metadata("run_beam", action_payload, action_id=action_id)
+        return status_code, body
     elif path == "/api/geant4/summary":
         obs = server.call_tool(ToolCallRequest(tool_name="summarize_last_result", arguments={}))
         body = _observation_body(obs)
