@@ -62,6 +62,7 @@ from core.orchestrator.candidate_pipeline import (
 )
 from core.orchestrator.confirmation_policy import (
     build_candidate_from_pending_confirmation,
+    build_confirmation_payload,
     build_pending_confirmation_item,
     evaluate_confirmation_requirements,
     has_pending_confirmation_path,
@@ -1443,6 +1444,10 @@ def process_turn(
     )
     final_missing_paths = _dedupe_paths(final_report.missing_required_paths + list(semantic_missing_paths))
     pending_overwrite_required = bool(staged_pending_overwrite and (not applying_pending_overwrite or confirm_apply_failed))
+    confirmation_payload = build_confirmation_payload(
+        staged_pending_overwrite if pending_overwrite_required else [],
+        lang=lang,
+    )
     is_complete = bool(final_report.ok and not final_missing_paths and not pending_overwrite_required and not confirm_apply_failed)
     dialogue_pending_preview = list(staged_pending_overwrite) if pending_overwrite_required else []
     if is_complete:
@@ -1646,6 +1651,7 @@ def process_turn(
         "validation": {
             "is_complete": is_complete,
             "pending_overwrite_required": pending_overwrite_required,
+            "confirmation": confirmation_payload,
             "missing_fields": list(final_missing_paths),
             "schema_missing_fields": list(final_report.missing_required_paths),
             "semantic_missing_fields": list(semantic_missing_paths),
@@ -1673,6 +1679,7 @@ def process_turn(
         "raw_dialogue": raw_dialogue,
         "is_complete": is_complete,
         "pending_overwrite_required": pending_overwrite_required,
+        "confirmation": confirmation_payload,
         "assistant_message": question,
         "missing_fields": final_missing_paths,
         "answered_this_turn": answered_this_turn,
@@ -1735,6 +1742,7 @@ def get_session_config_summary(session_id: str, *, lang: str = "zh") -> dict[str
         config = deep_copy(state.config)
         phase = state.phase.value
         pending_overwrite = [dict(item) for item in state.pending_overwrite]
+        confirmation_payload = build_confirmation_payload(pending_overwrite, lang=lang)
         semantic_missing = list(state.semantic_missing_paths)
         dialogue_summary = dict(state.dialogue_summary or {})
         last_asked_paths = list(state.last_asked_paths)
@@ -1789,6 +1797,7 @@ def get_session_config_summary(session_id: str, *, lang: str = "zh") -> dict[str
         "last_asked_paths": last_asked_paths,
         "last_asked_fields_friendly": asked_labels,
         "pending_overwrite": pending_overwrite,
+        "confirmation": confirmation_payload,
         "dialogue_summary": dialogue_summary,
         "config": config,
     }

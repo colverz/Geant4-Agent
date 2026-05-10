@@ -4,8 +4,11 @@ import unittest
 from types import SimpleNamespace
 
 from core.orchestrator.confirmation_policy import (
+    ConfirmationReason,
+    ConfirmationResponse,
     ConfirmationPolicyResult,
     build_candidate_from_pending_confirmation,
+    build_confirmation_payload,
     has_pending_confirmation_path,
     is_unset_for_confirmation,
     merge_pending_confirmations,
@@ -63,7 +66,7 @@ class ConfirmationPolicyPublicApiTest(unittest.TestCase):
 
         self.assertTrue(result.requires_confirmation)
         self.assertEqual(result.filtered_candidates, [])
-        self.assertEqual(result.pending[0]["reason"], "low_confidence")
+        self.assertEqual(result.pending[0]["reason"], ConfirmationReason.LOW_CONFIDENCE)
         self.assertEqual(result.pending[0]["confidence"], 0.42)
 
     def test_public_api_stages_remove_update(self) -> None:
@@ -73,7 +76,7 @@ class ConfirmationPolicyPublicApiTest(unittest.TestCase):
         result = evaluate_confirmation_requirements(state_like, candidate, [candidate], lang="en", min_confidence=0.6)
 
         self.assertTrue(result.requires_confirmation)
-        self.assertEqual(result.pending[0]["reason"], "remove")
+        self.assertEqual(result.pending[0]["reason"], ConfirmationReason.REMOVE)
         self.assertEqual(result.pending[0]["op"], "remove")
 
     def test_public_api_can_enforce_no_implicit_overwrite(self) -> None:
@@ -108,7 +111,7 @@ class ConfirmationPolicyPublicApiTest(unittest.TestCase):
         )
 
         self.assertTrue(result.requires_confirmation)
-        self.assertEqual(result.pending[0]["reason"], "overwrite")
+        self.assertEqual(result.pending[0]["reason"], ConfirmationReason.OVERWRITE)
         self.assertEqual(result.pending[0]["old"], 1.0)
         self.assertEqual(result.pending[0]["new"], 10.0)
 
@@ -171,6 +174,50 @@ class ConfirmationPolicyPublicApiTest(unittest.TestCase):
         self.assertTrue(is_unset_for_confirmation(None))
         self.assertTrue(is_unset_for_confirmation({}))
         self.assertFalse(is_unset_for_confirmation("gamma"))
+
+    def test_public_reason_constants_are_stable_wire_values(self) -> None:
+        self.assertEqual(ConfirmationReason.OVERWRITE, "overwrite")
+        self.assertEqual(ConfirmationReason.REMOVE, "remove")
+        self.assertEqual(ConfirmationReason.LOW_CONFIDENCE, "low_confidence")
+
+    def test_public_api_builds_user_visible_confirmation_payload(self) -> None:
+        payload = build_confirmation_payload(
+            [
+                {
+                    "path": "source.energy",
+                    "field": "source energy",
+                    "old": 1.0,
+                    "new": 10.0,
+                    "producer": "llm_semantic_frame",
+                    "reason": ConfirmationReason.OVERWRITE,
+                    "confidence": 0.72,
+                }
+            ],
+            lang="en",
+        )
+
+        self.assertTrue(payload["required"])
+        self.assertEqual(payload["status"], "waiting_confirmation")
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["items"][0]["path"], "source.energy")
+        self.assertEqual(payload["items"][0]["reason"], ConfirmationReason.OVERWRITE)
+        self.assertEqual(payload["items"][0]["confidence"], 0.72)
+        self.assertEqual(
+            payload["available_responses"],
+            [
+                ConfirmationResponse.CONFIRM,
+                ConfirmationResponse.REJECT,
+                ConfirmationResponse.KEEP_ORIGINAL,
+            ],
+        )
+
+    def test_public_api_builds_empty_confirmation_payload(self) -> None:
+        payload = build_confirmation_payload([], lang="en")
+
+        self.assertFalse(payload["required"])
+        self.assertEqual(payload["status"], "none")
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["items"], [])
 
 
 if __name__ == "__main__":

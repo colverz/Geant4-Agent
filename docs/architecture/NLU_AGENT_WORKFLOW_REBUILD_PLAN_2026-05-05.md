@@ -595,6 +595,10 @@ Status as of 2026-05-10:
 
 - added public `ConfirmationPolicyResult`
 - added public `evaluate_confirmation_requirements()`
+- added public `ConfirmationReason` constants for stable pending-confirmation
+  wire values
+- added public confirmation payload builder with stable `required`, `status`,
+  `count`, `items`, and `available_responses` fields
 - added public pending confirmation helpers for confirm-candidate construction,
   pending merge/path checks, unset checks, and pending item construction
 - candidate patch preview now depends on the public API instead of private

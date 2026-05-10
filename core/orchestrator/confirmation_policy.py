@@ -14,6 +14,18 @@ _EXPLICIT_TARGET_DEPENDENCIES = {
 }
 
 
+class ConfirmationReason:
+    OVERWRITE = "overwrite"
+    REMOVE = "remove"
+    LOW_CONFIDENCE = "low_confidence"
+
+
+class ConfirmationResponse:
+    CONFIRM = "confirm"
+    REJECT = "reject"
+    KEEP_ORIGINAL = "keep_original"
+
+
 @dataclass(frozen=True)
 class ConfirmationPolicyResult:
     filtered_candidates: list[CandidateUpdate]
@@ -106,7 +118,7 @@ def build_pending_confirmation_item(
     draft: Any,
     lang: str,
     producer: str,
-    reason: str = "overwrite",
+    reason: str = ConfirmationReason.OVERWRITE,
     confidence: float | None = None,
 ) -> dict[str, Any]:
     return _pending_item_from_update(
@@ -117,6 +129,38 @@ def build_pending_confirmation_item(
         reason=reason,
         confidence=confidence,
     )
+
+
+def build_confirmation_payload(items: list[dict[str, Any]], *, lang: str = "zh") -> dict[str, Any]:
+    normalized_items = [_public_pending_item(item, lang=lang) for item in items]
+    return {
+        "required": bool(normalized_items),
+        "status": "waiting_confirmation" if normalized_items else "none",
+        "count": len(normalized_items),
+        "items": normalized_items,
+        "available_responses": [
+            ConfirmationResponse.CONFIRM,
+            ConfirmationResponse.REJECT,
+            ConfirmationResponse.KEEP_ORIGINAL,
+        ],
+    }
+
+
+def _public_pending_item(item: dict[str, Any], *, lang: str) -> dict[str, Any]:
+    path = str(item.get("path", "")).strip()
+    op = "remove" if str(item.get("op") or "").strip() == "remove" else "set"
+    public_item = {
+        "path": path,
+        "op": op,
+        "field": str(item.get("field") or friendly_label(path, lang)),
+        "old": item.get("old"),
+        "new": item.get("new"),
+        "producer": str(item.get("producer") or ""),
+        "reason": str(item.get("reason") or ConfirmationReason.OVERWRITE),
+    }
+    if "confidence" in item:
+        public_item["confidence"] = item.get("confidence")
+    return public_item
 
 
 def _path_explicitly_requested(user_candidate: CandidateUpdate, path: str) -> bool:
@@ -208,7 +252,7 @@ def _extract_pending_overwrites(
                         draft=state_like,
                         lang=lang,
                         producer=candidate.producer.value,
-                        reason="remove",
+                        reason=ConfirmationReason.REMOVE,
                     )
                 )
                 continue
@@ -222,7 +266,7 @@ def _extract_pending_overwrites(
                         draft=state_like,
                         lang=lang,
                         producer=candidate.producer.value,
-                        reason="overwrite",
+                        reason=ConfirmationReason.OVERWRITE,
                     )
                 )
                 continue
@@ -283,7 +327,7 @@ def _extract_low_confidence_updates(
                         draft=state_like,
                         lang=lang,
                         producer=candidate.producer.value,
-                        reason="low_confidence",
+                        reason=ConfirmationReason.LOW_CONFIDENCE,
                         confidence=effective_confidence,
                     )
                 )
@@ -361,7 +405,7 @@ def _pending_item_from_update(
     draft: Any,
     lang: str,
     producer: str,
-    reason: str = "overwrite",
+    reason: str = ConfirmationReason.OVERWRITE,
     confidence: float | None = None,
 ) -> dict[str, Any]:
     return {
