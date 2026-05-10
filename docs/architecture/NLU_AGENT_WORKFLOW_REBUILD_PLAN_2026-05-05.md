@@ -632,6 +632,16 @@ Tests:
 
 Goal: treat confirmation as a structured paused workflow.
 
+Execution note as of 2026-05-10:
+
+- started P5.1 with standalone `StagedPatch`, `StagedPatchStore`, and
+  `InterruptResumeController`
+- start with an independent staged-patch boundary; do not replace
+  `SessionState.pending_overwrite` in the first P5.1 step
+- use the staged-patch boundary to prove exact patch hash, stale turn/config
+  rejection, approve, and reject behavior
+- only connect it to session mutation after the standalone contract is stable
+
 Tasks:
 
 - add `core/agent/staged_patch.py`
