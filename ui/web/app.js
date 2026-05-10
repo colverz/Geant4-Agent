@@ -1095,6 +1095,19 @@ async function validateGeant4Config(events = 1, options = {}) {
   return { ok, data };
 }
 
+function stableActionToken(value) {
+  const text = JSON.stringify(value || {});
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function runtimeActionId(actionName, payload = {}) {
+  return `${actionName}:${stableActionToken(payload)}`;
+}
+
 async function syncGeant4Config() {
   const patch = currentConfigPatch();
   const preflight = await validateGeant4Config(1, { patch });
@@ -1126,10 +1139,11 @@ async function openGeant4Viewer() {
   const patch = currentConfigPatch();
   const preflight = await validateGeant4Config(12, { patch });
   if (!preflight.ok) return;
+  const actionId = runtimeActionId("viewer_open", { patch, events: 12 });
   const res = await fetch("/api/geant4/viewer/open", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch, events: 12 }),
+    body: JSON.stringify({ patch, events: 12, action_id: actionId }),
   });
   const data = await res.json();
   await refreshGeant4State();
@@ -1150,11 +1164,13 @@ async function openGeant4Viewer() {
 async function runGeant4(events) {
   const preflight = await validateGeant4Config(events);
   if (!preflight.ok) return;
+  const actionId = runtimeActionId("run_beam", { events });
   const res = await fetch("/api/geant4/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       events,
+      action_id: actionId,
       lang: state.lang,
       llm_result_summary: $("llm-question")?.checked === true,
       ollama_config_path: state.ollamaConfigPath,

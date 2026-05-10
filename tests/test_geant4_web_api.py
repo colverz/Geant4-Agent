@@ -316,6 +316,9 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         self.assertIn("runtimePreflightMessage", app_js)
         self.assertIn("/api/geant4/validate", app_js)
         self.assertIn("metadata.adapter", app_js)
+        self.assertIn("runtimeActionId", app_js)
+        self.assertIn("stableActionToken", app_js)
+        self.assertIn("action_id: actionId", app_js)
 
     def test_frontend_runtime_result_question_uses_summary_not_run(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
@@ -386,6 +389,8 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         ]
 
         self.assertIn("validateGeant4Config", branch)
+        self.assertIn("runtimeActionId", branch)
+        self.assertIn("action_id: actionId", branch)
         self.assertIn("return;", branch)
         self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/viewer/open"'))
 
@@ -396,6 +401,8 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         ]
 
         self.assertIn("validateGeant4Config", branch)
+        self.assertIn("runtimeActionId", branch)
+        self.assertIn("action_id: actionId", branch)
         self.assertIn("return;", branch)
         self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/run"'))
 

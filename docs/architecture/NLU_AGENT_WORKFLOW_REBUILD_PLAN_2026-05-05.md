@@ -679,6 +679,8 @@ Status as of 2026-05-10:
 - Geant4 web run/viewer endpoints now use optional `action_id` idempotency:
   duplicate `run_beam` replays the existing result, duplicate viewer launch is
   rejected, and missing `action_id` stays backward-compatible with a suggested id
+- frontend runtime controls now send stable `action_id` values for run/viewer
+  actions, so the backend idempotency guard is exercised in normal UI use
 
 Tasks:
 
