@@ -6,7 +6,16 @@ from dataclasses import asdict, dataclass
 
 _MUTATION_PATTERN = re.compile(
     r"\b(change|set|modify|update|use|add|remove|delete|configure|build|create)\b|"
-    r"(\u4fee\u6539|\u8bbe\u7f6e|\u6539\u6210|\u66f4\u65b0|\u6dfb\u52a0|\u5220\u9664|\u914d\u7f6e|\u6784\u5efa|\u5efa\u7acb)",
+    r"(\u4fee\u6539|\u8bbe\u7f6e|\u6539\u6210|\u66f4\u65b0|\u6dfb\u52a0|\u5220\u9664|"
+    r"(?<!\u5f53\u524d)\u914d\u7f6e(?!\u91cc|\u7684|\u4e2d|\u4e0a|\u662f)|"
+    r"\u6784\u5efa|\u5efa\u7acb)",
+    flags=re.IGNORECASE,
+)
+_NEGATED_MUTATION_PHRASE_PATTERN = re.compile(
+    r"\b(?:do\s+not|don't|dont|without|never)\s+"
+    r"(?:change|modify|update|edit|alter|delete|remove|configure|set|apply)\b(?:\s+\w+){0,6}|"
+    r"(?:\u4e0d\u8981|\u522b|\u4e0d\u9700\u8981|\u65e0\u9700|\u4e0d\u7528).{0,8}"
+    r"(?:\u4fee\u6539|\u66f4\u6539|\u6539\u53d8|\u5220\u9664|\u914d\u7f6e|\u8bbe\u7f6e|\u5e94\u7528)",
     flags=re.IGNORECASE,
 )
 _RUNTIME_PATTERN = re.compile(
@@ -36,7 +45,8 @@ class CompositeIntent:
 
 def detect_composite_intent(text: str) -> CompositeIntent:
     raw = str(text or "")
-    has_config_mutation = bool(_MUTATION_PATTERN.search(raw))
+    mutation_scan_text = _NEGATED_MUTATION_PHRASE_PATTERN.sub(" ", raw)
+    has_config_mutation = bool(_MUTATION_PATTERN.search(mutation_scan_text))
     has_runtime_request = bool(_RUNTIME_PATTERN.search(raw))
     has_viewer_request = bool(_VIEWER_PATTERN.search(raw))
     return CompositeIntent(

@@ -10,11 +10,12 @@
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
       "must_not_require_confirmation": true,
+      "must_not_detect_config_mutation": true,
       "must_block_tools": []
     }
   },
   {
-    "id": "ask-result-readonly",
+    "id": "query-result-readonly",
     "text": "What happened in the latest Geant4 run?",
     "lang": "en",
     "expected_intent": "read_summary",
@@ -24,6 +25,22 @@
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
       "must_not_require_confirmation": true,
+      "must_not_detect_config_mutation": true,
+      "must_block_tools": []
+    }
+  },
+  {
+    "id": "query-dose-result-readonly",
+    "text": "What dose did the last run report?",
+    "lang": "en",
+    "expected_intent": "read_summary",
+    "expected_safety": "read_only",
+    "expected_terminal": "read_only_answer",
+    "expected_trace": {
+      "must_not_apply_session": true,
+      "must_not_call_runtime": true,
+      "must_not_require_confirmation": true,
+      "must_not_detect_config_mutation": true,
       "must_block_tools": []
     }
   },
@@ -38,8 +55,37 @@
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
       "must_not_require_confirmation": false,
+      "must_detect_runtime_request": true,
       "must_include_nodes": ["runtime_guard"],
       "must_block_tools": ["run_beam"]
+    }
+  },
+  {
+    "id": "mixed-language-source-mutation",
+    "text": "Change source energy to 2 MeV but keep direction +z.",
+    "lang": "en",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation",
+    "expected_terminal": "mutation_applied",
+    "expected_trace": {
+      "must_detect_config_mutation": true,
+      "must_not_call_runtime": true,
+      "must_include_nodes": ["validate", "apply_session"],
+      "must_block_tools": []
+    }
+  },
+  {
+    "id": "delete-scoring-config-mutation",
+    "text": "Delete the scoring plane from the configuration.",
+    "lang": "en",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation",
+    "expected_terminal": "mutation_applied",
+    "expected_trace": {
+      "must_detect_config_mutation": true,
+      "must_not_call_runtime": true,
+      "must_include_nodes": ["validate", "apply_session"],
+      "must_block_tools": []
     }
   },
   {
@@ -50,9 +96,56 @@
     "expected_safety": "config_mutation",
     "expected_terminal": "waiting_confirmation",
     "expected_trace": {
+      "must_detect_config_mutation": true,
+      "must_detect_runtime_request": true,
       "must_not_call_runtime": true,
       "must_include_nodes": ["validate", "wait_confirmation"],
       "must_block_tools": ["run_beam"]
+    }
+  },
+  {
+    "id": "mutation-plus-viewer-staged",
+    "text": "Change geometry to a cylinder and open the viewer.",
+    "lang": "en",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation",
+    "expected_terminal": "waiting_confirmation",
+    "expected_trace": {
+      "must_detect_config_mutation": true,
+      "must_detect_viewer_request": true,
+      "must_not_call_runtime": true,
+      "must_include_nodes": ["validate", "wait_confirmation"],
+      "must_block_tools": ["viewer_open"]
+    }
+  },
+  {
+    "id": "negated-mutation-read-config",
+    "text": "Show the current source direction and do not modify it.",
+    "lang": "en",
+    "expected_intent": "read_config",
+    "expected_safety": "read_only",
+    "expected_terminal": "read_only_answer",
+    "expected_trace": {
+      "must_not_apply_session": true,
+      "must_not_call_runtime": true,
+      "must_not_require_confirmation": true,
+      "must_not_detect_config_mutation": true,
+      "must_block_tools": []
+    }
+  },
+  {
+    "id": "normal-chat-no-op",
+    "text": "thanks, that helps",
+    "lang": "en",
+    "expected_intent": "normal_chat",
+    "expected_safety": "read_only",
+    "expected_terminal": "read_only_answer",
+    "expected_trace": {
+      "must_not_apply_session": true,
+      "must_not_call_runtime": true,
+      "must_not_require_confirmation": true,
+      "must_not_detect_config_mutation": true,
+      "must_block_tools": []
     }
   },
   {
@@ -66,13 +159,15 @@
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
       "must_require_kb": true,
+      "must_detect_config_mutation": true,
+      "must_detect_runtime_request": true,
       "must_include_nodes": ["validate", "wait_confirmation"],
       "must_block_tools": ["run_beam"]
     }
   },
   {
     "id": "viewer-request-guarded",
-    "text": "打开 Geant4 viewer 看一下几何",
+    "text": "\u6253\u5f00 Geant4 viewer \u770b\u4e00\u4e0b\u51e0\u4f55",
     "lang": "zh",
     "expected_intent": "viewer_requested",
     "expected_safety": "expensive_runtime",
@@ -80,7 +175,53 @@
     "expected_trace": {
       "must_not_apply_session": true,
       "must_not_call_runtime": true,
+      "must_detect_viewer_request": true,
       "must_include_nodes": ["runtime_guard"],
+      "must_block_tools": ["viewer_open"]
+    }
+  },
+  {
+    "id": "zh-negated-mutation-read-config",
+    "text": "\u663e\u793a\u5f53\u524d\u914d\u7f6e\u91cc\u7684\u6e90\u65b9\u5411\uff0c\u4e0d\u8981\u4fee\u6539",
+    "lang": "zh",
+    "expected_intent": "read_config",
+    "expected_safety": "read_only",
+    "expected_terminal": "read_only_answer",
+    "expected_trace": {
+      "must_not_apply_session": true,
+      "must_not_call_runtime": true,
+      "must_not_require_confirmation": true,
+      "must_not_detect_config_mutation": true,
+      "must_block_tools": []
+    }
+  },
+  {
+    "id": "zh-mutation-plus-runtime-staged",
+    "text": "\u628a\u6e90\u80fd\u91cf\u6539\u6210 10 MeV \u7136\u540e\u8fd0\u884c 10 \u4e2a\u4e8b\u4ef6",
+    "lang": "zh",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation",
+    "expected_terminal": "waiting_confirmation",
+    "expected_trace": {
+      "must_detect_config_mutation": true,
+      "must_detect_runtime_request": true,
+      "must_not_call_runtime": true,
+      "must_include_nodes": ["validate", "wait_confirmation"],
+      "must_block_tools": ["run_beam"]
+    }
+  },
+  {
+    "id": "zh-delete-scorer-plus-viewer-staged",
+    "text": "\u8bf7\u5220\u9664 scorer\uff0c\u7136\u540e\u6253\u5f00 viewer",
+    "lang": "zh",
+    "expected_intent": "config_mutation",
+    "expected_safety": "config_mutation",
+    "expected_terminal": "waiting_confirmation",
+    "expected_trace": {
+      "must_detect_config_mutation": true,
+      "must_detect_viewer_request": true,
+      "must_not_call_runtime": true,
+      "must_include_nodes": ["validate", "wait_confirmation"],
       "must_block_tools": ["viewer_open"]
     }
   }

@@ -433,6 +433,18 @@ def evaluate_agentic_behavior(path: Path) -> dict[str, Any]:
             errors["requires_kb"] = {"expected": True, "actual": decision.requires_kb}
         if trace_expect.get("must_not_require_confirmation") and waiting_confirmation:
             errors["confirmation"] = "unexpected_waiting_confirmation"
+        if trace_expect.get("must_detect_config_mutation") and not composite.has_config_mutation:
+            errors["composite_config_mutation"] = {"expected": True, "actual": composite.has_config_mutation}
+        if trace_expect.get("must_not_detect_config_mutation") and composite.has_config_mutation:
+            errors["composite_config_mutation"] = {"expected": False, "actual": composite.has_config_mutation}
+        if trace_expect.get("must_detect_runtime_request") and not composite.has_runtime_request:
+            errors["composite_runtime_request"] = {"expected": True, "actual": composite.has_runtime_request}
+        if trace_expect.get("must_not_detect_runtime_request") and composite.has_runtime_request:
+            errors["composite_runtime_request"] = {"expected": False, "actual": composite.has_runtime_request}
+        if trace_expect.get("must_detect_viewer_request") and not composite.has_viewer_request:
+            errors["composite_viewer_request"] = {"expected": True, "actual": composite.has_viewer_request}
+        if trace_expect.get("must_not_detect_viewer_request") and composite.has_viewer_request:
+            errors["composite_viewer_request"] = {"expected": False, "actual": composite.has_viewer_request}
         mutation_applied = effective_intent == "config_mutation" and not waiting_confirmation
         path_nodes = graph_path_for_intent(
             effective_intent,

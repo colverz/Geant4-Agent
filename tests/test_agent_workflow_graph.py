@@ -63,6 +63,23 @@ class AgentWorkflowGraphTest(unittest.TestCase):
         self.assertTrue(composite.has_runtime_request)
         self.assertTrue(composite.requires_staged_runtime_guard)
 
+    def test_composite_intent_ignores_negated_mutation_phrases(self) -> None:
+        for text in (
+            "Show the current source direction and do not modify it.",
+            "\u663e\u793a\u5f53\u524d\u914d\u7f6e\u91cc\u7684\u6e90\u65b9\u5411\uff0c\u4e0d\u8981\u4fee\u6539",
+        ):
+            with self.subTest(text=text):
+                composite = detect_composite_intent(text)
+
+                self.assertFalse(composite.has_config_mutation)
+                self.assertFalse(composite.requires_staged_runtime_guard)
+
+    def test_composite_intent_keeps_positive_mutation_with_local_negation(self) -> None:
+        composite = detect_composite_intent("Change source energy to 2 MeV but do not change direction.")
+
+        self.assertTrue(composite.has_config_mutation)
+        self.assertFalse(composite.requires_staged_runtime_guard)
+
     def test_process_turn_exposes_nlu_turn_trace_without_changing_behavior(self) -> None:
         session_id = "agent-workflow-trace"
         reset_session(session_id)
