@@ -651,6 +651,8 @@ Current V1 checkpoint:
 Implemented so far:
 
 - shape validation for the initial implementation subset
+- deterministic dry-run grading through `process_turn`, `nlu_turn_trace`, and
+  runtime payload generation
 - strict rejection of unsupported fields
 - suite/difficulty/capability summary counts
 - optional live LLM benchmark quality review
@@ -660,10 +662,12 @@ Implemented so far:
 - DeepSeek review feedback was used as a design signal to add multi-turn shape
   coverage and invalid-input coverage. Real runtime execution remains a later
   opt-in suite, not a V1 shape gate requirement.
+- Dry-run grading caught and fixed a mainline trace attribution issue where a
+  post-configuration runtime request was being reported as `config_mutation`
+  because of historical slot memory.
 
 Not implemented yet:
 
-- process-turn dry-run grading
 - config delta grading
 - result answer grading
 - live LLM execution

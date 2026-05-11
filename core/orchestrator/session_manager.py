@@ -1591,11 +1591,11 @@ def process_turn(
     candidate_patch_paths = _dedupe_paths([update.path for candidate in candidates for update in candidate.updates])
     applied_paths = _dedupe_paths([update.path for update in committed_updates])
     rejected_paths = _dedupe_paths([str(item.get("path", "")) for item in rejected_updates if str(item.get("path", ""))])
-    trace_intent = (
-        "config_mutation"
-        if (candidate_patch_paths or applied_paths or pending_overwrite_required or composite_intent.requires_staged_runtime_guard)
-        else intent_decision.intent
-    )
+    trace_intent = intent_decision.intent
+    if composite_intent.requires_staged_runtime_guard:
+        trace_intent = "config_mutation"
+    elif intent_decision.intent == "config_mutation" or applied_paths or pending_overwrite_required:
+        trace_intent = "config_mutation"
     trace_safety = intent_decision.safety_class
     if trace_intent == "config_mutation":
         trace_safety = ActionSafetyClass.CONFIG_MUTATION

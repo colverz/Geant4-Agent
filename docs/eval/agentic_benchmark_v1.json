@@ -206,7 +206,7 @@
     "requires_real_runtime": false,
     "turns": [
       {
-        "text": "Create a copper box target with size -10 mm x 20 mm x 30 mm and a 1 MeV gamma source.",
+        "text": "Create a box target with size -10 mm x 20 mm x 30 mm.",
         "expected_trace": {
           "intent": "config_mutation",
           "action_safety_class": "config_mutation",

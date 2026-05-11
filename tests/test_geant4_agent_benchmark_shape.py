@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.evaluate_geant4_agent_benchmark import validate_benchmark_shape
+from tools.evaluate_geant4_agent_benchmark import evaluate_benchmark_dry_run, validate_benchmark_shape
 
 
 class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
@@ -16,6 +16,12 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertGreaterEqual(report["total"], 5)
         self.assertIn("tool_guard", report["suite_counts"])
         self.assertIn("workflow_trace", report["capability_counts"])
+
+    def test_agentic_benchmark_v1_dry_run_passes(self) -> None:
+        report = evaluate_benchmark_dry_run(Path("docs/eval/agentic_benchmark_v1.json"))
+
+        self.assertEqual(report["failed"], 0)
+        self.assertEqual(report["passed"], report["total"])
 
     def test_unknown_fields_are_rejected(self) -> None:
         cases = [

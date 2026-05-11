@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from core.orchestrator.session_manager import process_turn, reset_session
+from mcp.geant4.runtime_payload import build_runtime_payload
+
 
 DEFAULT_BENCHMARK_PATH = Path("docs/eval/agentic_benchmark_v1.json")
 
@@ -299,13 +302,208 @@ def _validate_runtime(failures: list[dict[str, Any]], *, case_id: str, runtime: 
         failures.append({"id": case_id, "section": "expected_runtime", "error": "expected_payload_values_not_object"})
 
 
+def _float_equal(left: Any, right: Any, *, tolerance: float = 1e-6) -> bool:
+    try:
+        return abs(float(left) - float(right)) <= tolerance
+    except (TypeError, ValueError):
+        return False
+
+
+def _values_equal(left: Any, right: Any) -> bool:
+    if isinstance(right, float):
+        return _float_equal(left, right)
+    return left == right
+
+
+def _runtime_payload_ready(payload: dict[str, Any], required_keys: list[str] | None = None) -> bool:
+    required = required_keys or ["structure", "material", "source_type", "particle", "energy", "physics_list"]
+    return all(payload.get(key) not in {None, ""} for key in required)
+
+
+def _trace_errors(expected: dict[str, Any], actual: dict[str, Any], *, case_id: str, turn_index: int) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    section = f"turns[{turn_index}].expected_trace"
+    if "intent" in expected and actual.get("intent") != expected["intent"]:
+        failures.append({"id": case_id, "section": section, "error": f"intent:expected={expected['intent']}:actual={actual.get('intent')}"})
+    if "action_safety_class" in expected and actual.get("action_safety_class") != expected["action_safety_class"]:
+        failures.append(
+            {
+                "id": case_id,
+                "section": section,
+                "error": f"action_safety_class:expected={expected['action_safety_class']}:actual={actual.get('action_safety_class')}",
+            }
+        )
+    if "terminal_state" in expected and actual.get("terminal_state") != expected["terminal_state"]:
+        failures.append(
+            {
+                "id": case_id,
+                "section": section,
+                "error": f"terminal_state:expected={expected['terminal_state']}:actual={actual.get('terminal_state')}",
+            }
+        )
+
+    nodes = set(actual.get("node_sequence") or [])
+    for node in expected.get("must_include_nodes", []) or []:
+        if node not in nodes:
+            failures.append({"id": case_id, "section": section, "error": f"missing_node:{node}"})
+    for node in expected.get("must_not_include_nodes", []) or []:
+        if node in nodes:
+            failures.append({"id": case_id, "section": section, "error": f"forbidden_node:{node}"})
+
+    blocked = set(actual.get("tool_calls_blocked") or [])
+    for tool_name in expected.get("must_block_tools", []) or []:
+        if tool_name not in blocked:
+            failures.append({"id": case_id, "section": section, "error": f"missing_blocked_tool:{tool_name}"})
+    if "guarded_runtime_intent_pending" in expected and bool(actual.get("guarded_runtime_intent_pending")) != bool(
+        expected["guarded_runtime_intent_pending"]
+    ):
+        failures.append(
+            {
+                "id": case_id,
+                "section": section,
+                "error": (
+                    "guarded_runtime_intent_pending:"
+                    f"expected={bool(expected['guarded_runtime_intent_pending'])}:actual={bool(actual.get('guarded_runtime_intent_pending'))}"
+                ),
+            }
+        )
+    if expected.get("must_not_apply_session"):
+        if "apply_session" in nodes:
+            failures.append({"id": case_id, "section": section, "error": "forbidden_apply_session_node"})
+        if actual.get("applied_paths"):
+            failures.append({"id": case_id, "section": section, "error": f"forbidden_applied_paths:{actual.get('applied_paths')}"})
+    if expected.get("must_not_call_runtime"):
+        allowed = set(actual.get("tool_calls_allowed") or [])
+        runtime_allowed = sorted(allowed & VALID_TOOLS)
+        if runtime_allowed:
+            failures.append({"id": case_id, "section": section, "error": f"runtime_tool_allowed:{runtime_allowed}"})
+    return failures
+
+
+def _runtime_errors(expected: dict[str, Any], payload: dict[str, Any], *, case_id: str) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    required_keys = list(expected.get("required_payload_keys") or [])
+    if expected.get("must_have_runtime_payload") and not _runtime_payload_ready(payload, required_keys or None):
+        failures.append({"id": case_id, "section": "expected_runtime", "error": "runtime_payload_not_ready"})
+    for key in required_keys:
+        if payload.get(key) in {None, ""}:
+            failures.append({"id": case_id, "section": "expected_runtime", "error": f"missing_payload_key:{key}"})
+    expected_values = expected.get("expected_payload_values") or {}
+    if isinstance(expected_values, dict):
+        for key, value in expected_values.items():
+            actual = payload.get(key)
+            if not _values_equal(actual, value):
+                failures.append({"id": case_id, "section": "expected_runtime", "error": f"payload_value:{key}:expected={value!r}:actual={actual!r}"})
+    return failures
+
+
+def _forbidden_errors(case: dict[str, Any], outputs: list[dict[str, Any]], *, case_id: str) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    forbidden = case.get("forbidden") if isinstance(case.get("forbidden"), dict) else {}
+    if forbidden.get("runtime_side_effects"):
+        for index, out in enumerate(outputs):
+            trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
+            allowed = set(trace.get("tool_calls_allowed") or [])
+            if allowed & VALID_TOOLS:
+                failures.append({"id": case_id, "section": f"turns[{index}].forbidden", "error": f"runtime_side_effect_allowed:{sorted(allowed & VALID_TOOLS)}"})
+    if forbidden.get("session_mutation"):
+        for index, out in enumerate(outputs):
+            trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
+            if trace.get("applied_paths"):
+                failures.append({"id": case_id, "section": f"turns[{index}].forbidden", "error": f"session_mutation:{trace.get('applied_paths')}"})
+    if forbidden.get("unsupported_capability_as_supported"):
+        for index, out in enumerate(outputs):
+            trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
+            if trace.get("runtime_payload_ready"):
+                failures.append({"id": case_id, "section": f"turns[{index}].forbidden", "error": "unsupported_capability_runtime_ready"})
+    return failures
+
+
+def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, Any]:
+    shape_report = validate_benchmark_shape(path)
+    if shape_report["failed"]:
+        return {
+            "name": "geant4_agent_benchmark_dry_run",
+            "total": 0,
+            "failed": 1,
+            "failures": [{"id": "<shape>", "section": "shape", "error": "shape_validation_failed"}],
+            "shape_report": shape_report,
+        }
+
+    cases = _load_json(path)
+    failures: list[dict[str, Any]] = []
+    passed = 0
+    for case_index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            continue
+        case_id = str(case.get("id") or f"case-{case_index}")
+        session_id = f"geant4-agent-benchmark-{case_id}"
+        reset_session(session_id)
+        outputs: list[dict[str, Any]] = []
+        case_failures: list[dict[str, Any]] = []
+        try:
+            for turn_index, turn in enumerate(case.get("turns") or []):
+                if not isinstance(turn, dict):
+                    continue
+                out = process_turn(
+                    {
+                        "session_id": session_id,
+                        "text": str(turn.get("text") or ""),
+                        "llm_router": False,
+                        "llm_question": False,
+                        "normalize_input": True,
+                        "geometry_pipeline": "v2",
+                        "source_pipeline": "v2",
+                        "enable_compare": False,
+                        "autofix": True,
+                    },
+                    ollama_config_path="",
+                    lang=str(turn.get("lang") or case.get("lang") or "en"),
+                )
+                outputs.append(out)
+                trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
+                expected_trace = turn.get("expected_trace") if isinstance(turn.get("expected_trace"), dict) else {}
+                case_failures.extend(_trace_errors(expected_trace, trace, case_id=case_id, turn_index=turn_index))
+
+            final_config = outputs[-1].get("config", {}) if outputs else {}
+            runtime_payload = build_runtime_payload(final_config)
+            expected_runtime = case.get("expected_runtime") if isinstance(case.get("expected_runtime"), dict) else {}
+            if expected_runtime:
+                case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
+            case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
+        finally:
+            reset_session(session_id)
+
+        if case_failures:
+            failures.append(
+                {
+                    "id": case_id,
+                    "errors": case_failures,
+                    "last_trace": (outputs[-1].get("nlu_turn_trace") if outputs and isinstance(outputs[-1], dict) else {}),
+                }
+            )
+        else:
+            passed += 1
+
+    total = len(cases) if isinstance(cases, list) else 0
+    return {
+        "name": "geant4_agent_benchmark_dry_run",
+        "total": total,
+        "passed": passed,
+        "failed": len(failures),
+        "failures": failures,
+        "shape_report": shape_report,
+    }
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate Geant4Agent benchmark v1 shape.")
+    parser = argparse.ArgumentParser(description="Validate or dry-run Geant4Agent benchmark v1.")
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_BENCHMARK_PATH)
+    parser.add_argument("--dry-run", action="store_true", help="Execute deterministic process_turn/runtime-payload grading.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    report = validate_benchmark_shape(args.benchmark)
+    report = evaluate_benchmark_dry_run(args.benchmark) if args.dry_run else validate_benchmark_shape(args.benchmark)
     output = {"ok": report["failed"] == 0, "report": report}
     if args.json:
         print(json.dumps(output, ensure_ascii=False, indent=2))

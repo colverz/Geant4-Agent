@@ -148,6 +148,53 @@ class AgentWorkflowGraphTest(unittest.TestCase):
         finally:
             reset_session(session_id)
 
+    def test_runtime_request_after_config_stays_runtime_guarded(self) -> None:
+        session_id = "agent-workflow-runtime-after-config"
+        reset_session(session_id)
+        try:
+            process_turn(
+                {
+                    "session_id": session_id,
+                    "text": (
+                        "10 mm x 20 mm x 30 mm copper box target; "
+                        "gamma point source 1 MeV at (0,0,-20) mm along +z; "
+                        "physics FTFP_BERT; output json."
+                    ),
+                    "llm_router": False,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                },
+                ollama_config_path="",
+                lang="en",
+            )
+            out = process_turn(
+                {
+                    "session_id": session_id,
+                    "text": "Now run 10 events.",
+                    "llm_router": False,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                },
+                ollama_config_path="",
+                lang="en",
+            )
+
+            trace = out["nlu_turn_trace"]
+            self.assertEqual(trace["intent"], "run_requested")
+            self.assertEqual(trace["action_safety_class"], "expensive_runtime")
+            self.assertEqual(trace["terminal_state"], "runtime_action_guarded")
+            self.assertIn("runtime_guard", trace["node_sequence"])
+            self.assertNotIn("apply_session", trace["node_sequence"])
+            self.assertIn("run_beam", trace["tool_calls_blocked"])
+        finally:
+            reset_session(session_id)
+
 
 if __name__ == "__main__":
     unittest.main()
