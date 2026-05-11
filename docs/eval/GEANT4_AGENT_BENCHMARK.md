@@ -671,19 +671,18 @@ Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 12
-  hand-designed cases, including allowed session mutation, confirmation policy,
-  and two result Q&A states.
+- Standard progression checkpoint: started. The benchmark now includes 14
+  hand-designed cases, including allowed session mutation, confirmation accept
+  and reject policy, result metric Q&A, and result artifact-path Q&A.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: allowed session mutation, more result Q&A states,
-  confirmation policy, live LLM reliability, model routing dry-run, and future
-  opt-in runtime execution.
+- Highest-value next additions: model routing dry-run, live LLM reliability,
+  more grounded result explanations, and future opt-in runtime execution.
 
 Not implemented yet:
 
 - config delta grading
-- result answer grading
+- result answer grading for artifact and metric questions
 - live LLM execution
 - model routing dry-run
 - real Geant4 execution

@@ -1594,7 +1594,7 @@ def process_turn(
     trace_intent = intent_decision.intent
     if composite_intent.requires_staged_runtime_guard:
         trace_intent = "config_mutation"
-    elif intent_decision.intent == "config_mutation" or applied_paths or pending_overwrite_required:
+    elif intent_decision.intent == "config_mutation" or applied_paths or pending_overwrite_required or rejected_overwrite_preview:
         trace_intent = "config_mutation"
     trace_safety = intent_decision.safety_class
     if trace_intent == "config_mutation":

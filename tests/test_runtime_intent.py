@@ -20,6 +20,12 @@ class RuntimeIntentTest(unittest.TestCase):
         self.assertEqual(result.intent, RuntimeIntent.READ_SUMMARY)
         self.assertEqual(result.action_safety_class, ActionSafetyClass.READ_ONLY)
 
+    def test_result_artifact_path_question_is_read_only(self) -> None:
+        result = classify_user_runtime_intent("Where is the run_summary file?", "en")
+
+        self.assertEqual(result.intent, RuntimeIntent.READ_SUMMARY)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.READ_ONLY)
+
     def test_run_request_is_expensive_runtime(self) -> None:
         result = classify_user_runtime_intent("run 10 events now", "en")
 

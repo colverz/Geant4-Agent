@@ -167,6 +167,47 @@
     ]
   },
   {
+    "id": "standard-overwrite-reject-keeps-original",
+    "suite": "trajectory",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["confirmation_policy", "workflow_trace", "config_extraction"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate", "apply_session"],
+          "must_not_call_runtime": true
+        }
+      },
+      {
+        "text": "change source energy to 2 MeV",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "terminal_state": "waiting_confirmation",
+          "must_include_nodes": ["validate", "wait_confirmation"],
+          "must_not_call_runtime": true
+        }
+      },
+      {
+        "text": "keep existing",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "terminal_state": "rejected",
+          "must_include_nodes": ["validate"],
+          "must_not_include_nodes": ["apply_session"],
+          "must_not_call_runtime": true
+        }
+      }
+    ]
+  },
+  {
     "id": "adversarial-unsupported-ct-scanner",
     "suite": "grounding",
     "difficulty": "adversarial",
@@ -253,6 +294,37 @@
       "question": "What was the plane crossing count?",
       "must_include": ["plane_crossing_count is 0"],
       "must_not_include": ["detector_crossing_count"],
+      "must_remain_read_only": true
+    }
+  },
+  {
+    "id": "standard-result-artifact-path-readonly",
+    "suite": "result_qa",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["result_grounding", "intent_routing", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Where is the run_summary file?",
+        "expected_trace": {
+          "intent": "read_summary",
+          "action_safety_class": "read_only",
+          "terminal_state": "read_only_answer",
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "runtime_side_effects": true,
+      "session_mutation": true
+    },
+    "expected_result_answer": {
+      "question": "Where is the run_summary file?",
+      "must_include": ["F:/tmp/run_summary.json", "artifact_dir=F:/tmp/artifacts"],
+      "must_not_include": ["not provided"],
       "must_remain_read_only": true
     }
   },

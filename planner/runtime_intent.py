@@ -54,6 +54,11 @@ _RESULT_METRIC_PATTERN = re.compile(
     r"\b(dose|edep|energy deposition|crossing count|hit events?|target hits?)\b",
     flags=re.IGNORECASE,
 )
+_RESULT_ARTIFACT_PATTERN = re.compile(
+    r"\b(run_summary|artifact(?:s)?|result\s+(?:file|path)|output\s+file)\b|"
+    r"\bwhere\b.*\b(run_summary|result|artifact(?:s)?)\b.*\b(file|path|saved|stored)\b",
+    flags=re.IGNORECASE,
+)
 _RUN_REQUEST_PATTERN = re.compile(
     r"\b(run|rerun|execute|start)\b.*\b(geant4|simulation|events?|beam)\b|\brun\s+\d+\s+events?\b",
     flags=re.IGNORECASE,
@@ -129,7 +134,7 @@ def _classify_english_rule(raw: str) -> RuntimeIntent:
         return RuntimeIntent.VIEWER_REQUESTED
     if _RUN_REQUEST_PATTERN.search(raw):
         return RuntimeIntent.RUN_REQUESTED
-    if _RESULT_READ_PATTERN.search(raw) or _RESULT_METRIC_PATTERN.search(raw):
+    if _RESULT_READ_PATTERN.search(raw) or _RESULT_METRIC_PATTERN.search(raw) or _RESULT_ARTIFACT_PATTERN.search(raw):
         return RuntimeIntent.READ_SUMMARY
     if _CONFIG_READ_PATTERN.search(raw):
         return RuntimeIntent.READ_CONFIG
