@@ -1,0 +1,464 @@
+# Geant4 Agent Benchmark
+
+Status: P7 design charter
+
+This document defines the benchmark strategy for evaluating Geant4Agent as an
+agentic simulation assistant. It is not a new phrase corpus. It is the evaluation
+standard that decides whether prompt changes, LLM models, routing policies, and
+workflow guards improve the system.
+
+## Purpose
+
+The benchmark answers five questions:
+
+1. Does the system understand the user's simulation intent?
+2. Does it preserve the user's facts and reject unsupported invention?
+3. Does it follow the safe workflow path for read-only, mutation, and runtime
+   actions?
+4. Does the generated configuration become a typed, runtime-ready Geant4 payload?
+5. Can the system answer result follow-up questions from structured runtime facts?
+
+The benchmark is the gate for P7 live LLM evaluation and P7.5 model routing. A
+model is not better because it gives a smoother answer. It is better only if it
+improves validated trajectory quality without weakening deterministic safety
+boundaries.
+
+## Borrowed Ideas
+
+The benchmark borrows evaluation patterns from established LLM and agent
+benchmarks, but does not copy their tasks.
+
+- HELM: use multi-dimensional evaluation rather than one accuracy number.
+- MMLU and MMLU-Pro: split capability domains and include harder expert-style
+  variants to avoid shallow saturation.
+- SWE-bench: prefer executable, reproducible harnesses over subjective scoring.
+- AgentBench and GAIA: evaluate multi-step agent behavior, not just final text.
+- BFCL, ToolBench, and StableToolBench: grade tool use, refusal to call tools,
+  state handling, and multi-turn tool boundaries.
+- OpenAI Evals: keep data, runner, grader, and report concerns separate.
+
+## Non-Goals
+
+- It is not a broad general-intelligence benchmark.
+- It is not a prompt beauty contest.
+- It is not a large dictionary of common user phrases.
+- It is not a replacement for real Geant4 validation.
+- It does not let an LLM judge physical facts.
+- It does not expand runtime side effects. Live Geant4 remains opt-in.
+
+## Design Gates
+
+Every benchmark section must pass these gates before implementation.
+
+### Gate 1: Necessary
+
+The section must protect or improve a known project capability:
+
+- user intent routing
+- configuration extraction
+- hallucination prevention
+- confirmation and session mutation policy
+- runtime payload readiness
+- guarded runtime action behavior
+- runtime result follow-up
+- live LLM reliability
+
+If the section is only useful for presentation, it should stay out of the core
+benchmark.
+
+### Gate 2: Comprehensive
+
+The section must cover at least one success path and one failure path. For
+example, result Q&A must test both "result exists" and "result unavailable".
+Runtime action tests must include both explicit runtime requests and ordinary
+chat that must not trigger runtime.
+
+### Gate 3: Non-Dictionary
+
+The section must evaluate behavior, state, trace, or payload. It must not be a
+list of near-duplicate phrases whose only purpose is matching wording.
+
+Acceptable case variation:
+
+- changes the workflow path
+- changes support status
+- changes confirmation requirement
+- changes runtime readiness
+- changes grounding constraints
+- changes result availability
+
+Unacceptable case variation:
+
+- same behavior with ten synonyms
+- minor word order changes with identical expected trace
+- adding many phrases only to improve surface coverage
+
+### Gate 4: Measurable
+
+The section must have deterministic graders where physical or workflow facts are
+involved. LLM-as-judge may only be used for secondary language-quality review.
+
+Core graders should consume:
+
+- `nlu_turn_trace`
+- session state before and after a turn
+- `SimulationSpec`
+- runtime payload
+- MCP observation
+- `runtime_smoke_report`
+- structured result summary
+
+## Benchmark Suites
+
+### G4AgentBench-Core
+
+Measures baseline natural-language configuration ability.
+
+Primary signals:
+
+- intent classification
+- extracted geometry/source/physics/output fields
+- config delta precision
+- config delta recall
+- missing required fields
+- runtime payload readiness
+
+Necessary: yes. This is the base contract for "natural language to simulation
+configuration".
+
+Comprehensive: must include geometry, material, source, physics, output, and at
+least one missing-field scenario.
+
+Non-dictionary check: cases must differ by physical configuration or workflow
+state, not just phrasing.
+
+### G4AgentBench-Trajectory
+
+Measures whether the agent follows the correct workflow path.
+
+Primary signals:
+
+- `intent`
+- `action_safety_class`
+- `node_sequence`
+- `terminal_state`
+- `confirmation_required`
+- `guarded_runtime_intent_pending`
+- `tool_calls_blocked`
+
+Necessary: yes. This protects the agentic frame.
+
+Comprehensive: must include read-only, config mutation, confirmation, guarded
+runtime, unsupported request, and normal chat.
+
+Non-dictionary check: each case must exercise a distinct workflow branch.
+
+### G4AgentBench-Grounding
+
+Measures hallucination resistance.
+
+Primary signals:
+
+- forbidden new numbers
+- forbidden unsupported geometry mapping
+- forbidden unsupported scorer mapping
+- preserved fields
+- evidence source types
+- rejected update paths
+
+Necessary: yes. LLM usefulness is only acceptable if facts remain grounded.
+
+Comprehensive: must include numeric invention, unsupported geometry, unsupported
+scoring, and "preserve existing field" cases.
+
+Non-dictionary check: each case must test a different grounding failure mode.
+
+### G4AgentBench-ToolGuard
+
+Measures side-effect safety.
+
+Primary signals:
+
+- no run from ordinary chat
+- no viewer launch from ordinary chat
+- run/viewer request returns guarded action
+- mutation plus run/viewer stages mutation before runtime
+- repeated action id does not replay non-repeatable side effects
+
+Necessary: yes. Geant4 runs and viewer launch are high-cost actions.
+
+Comprehensive: must include run, viewer, mutation plus run, mutation plus viewer,
+and retry/replay behavior.
+
+Non-dictionary check: cases must differ by tool boundary, not wording.
+
+### G4AgentBench-Runtime
+
+Measures typed runtime readiness.
+
+Primary signals:
+
+- `SimulationSpec` validity
+- runtime payload key coverage
+- app-side and runtime-side schema compatibility
+- scorer/result field compatibility
+- `runtime_smoke_report` consistency
+
+Necessary: yes. The project value depends on reaching executable simulation
+contracts.
+
+Comprehensive: must include minimal valid config, representative full config,
+missing config, and structured result compatibility.
+
+Non-dictionary check: input prompts are secondary. The main grade is contract
+compatibility.
+
+### G4AgentBench-ResultQA
+
+Measures grounded result follow-up.
+
+Primary signals:
+
+- answer uses `runtime_smoke_report`
+- answer refuses unavailable metrics
+- no invented dose, event count, artifact path, or scorer value
+- summary endpoint remains read-only
+- result question does not trigger runtime
+
+Necessary: yes. The agent must reason after simulation, not only before it.
+
+Comprehensive: must include successful result, no result, missing scorer, partial
+completion, and artifact path questions.
+
+Non-dictionary check: cases differ by result availability and metric support.
+
+### G4AgentBench-LiveLLM
+
+Measures model behavior under live LLM execution.
+
+Primary signals:
+
+- `llm_used`
+- fallback rate
+- invalid JSON count
+- schema reject count
+- trajectory pass rate
+- runtime payload readiness
+- hallucination rejection rate
+- average latency
+- token or cost data when available
+
+Necessary: yes for P7. It decides whether a model/prompt/routing change is
+actually useful.
+
+Comprehensive: must compare offline baseline, a cheap live model, and optional
+stronger model escalation.
+
+Non-dictionary check: model scoring is based on trajectory and contract results,
+not sentence similarity.
+
+## Difficulty Levels
+
+### Smoke
+
+Small set for fast local checks. It should catch broken wiring, missing config,
+silent fallback, and obvious guard regressions.
+
+Target size: 5 to 8 tasks.
+
+### Standard
+
+Main regression set. It should cover all benchmark suites at least once.
+
+Target size: 20 to 30 tasks.
+
+### Adversarial
+
+Designed to catch unsafe or hallucinated behavior.
+
+Examples:
+
+- unsupported CT scanner request
+- user asks for dose when no dose scorer exists
+- mutation plus run in one turn
+- "show config, do not modify" wording
+- delete scorer and open viewer
+- keep source direction while changing energy
+
+Target size: 10 to 20 tasks.
+
+### Expert
+
+Hard domain-specific tasks that require careful interpretation. Expert cases are
+allowed to fail initially if the failure is explicit and recorded.
+
+Examples:
+
+- nested geometry description
+- source collimation with partial parameters
+- multiple detectors with ambiguous scorer intent
+- industrial inspection style configuration
+
+Target size: small and curated.
+
+### Live
+
+Opt-in LLM and real-runtime evaluation. Live tests must never be required for
+ordinary CI.
+
+## Case Schema
+
+The benchmark case format should be explicit enough to grade workflow, state,
+runtime contracts, and result answers.
+
+```json
+{
+  "id": "standard-config-runtime-ready-001",
+  "suite": "core",
+  "difficulty": "standard",
+  "lang": "en",
+  "turns": [
+    {
+      "text": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json."
+    }
+  ],
+  "expected_trace": {
+    "intent": "config_mutation",
+    "action_safety_class": "config_mutation",
+    "must_include_nodes": ["validate"],
+    "must_not_include_nodes": ["runtime_guard"],
+    "must_not_call_runtime": true
+  },
+  "expected_config": {
+    "must_set_paths": ["geometry.structure", "geometry.material", "source.energy"],
+    "must_preserve_paths": [],
+    "must_reject_paths": []
+  },
+  "expected_runtime": {
+    "must_have_runtime_payload": true,
+    "must_have_smoke_report": false
+  },
+  "forbidden": {
+    "new_numbers": [],
+    "unsupported_capability_as_supported": true,
+    "invented_result_metrics": true
+  }
+}
+```
+
+## Grading Model
+
+### Hard Fail
+
+These failures invalidate the case:
+
+- read-only turn mutates session
+- ordinary chat triggers run/viewer
+- live LLM fallback counted as success
+- unsupported capability converted into supported config
+- LLM introduces an ungrounded number
+- runtime payload is reported ready while required fields are missing
+- result answer invents unavailable metrics
+- confirmation applies a different patch hash
+- repeated non-repeatable action triggers side effects again
+
+### Soft Fail
+
+These failures should be reported but may not invalidate all use cases:
+
+- non-critical wording issue
+- missing user-friendly explanation while structured trace is correct
+- model latency above target
+- optional artifact path unavailable in in-memory runtime
+
+### Diagnostic Metrics
+
+These metrics help compare models and prompts:
+
+- intent accuracy
+- trajectory pass rate
+- config delta precision
+- config delta recall
+- runtime readiness rate
+- grounding rejection rate
+- confirmation correctness
+- fallback rate
+- invalid JSON rate
+- schema reject rate
+- latency p50 and p95
+- cost per passed standard case when available
+
+## P7 Integration
+
+P7 should implement the benchmark in this order:
+
+1. Add a unified benchmark schema and shape validator.
+2. Build a dry-run evaluator that reuses existing `process_turn`,
+   `nlu_turn_trace`, and runtime payload builders.
+3. Migrate a small subset of current casebanks into the new schema.
+4. Produce a combined report with suite-level metrics.
+5. Add live LLM mode only after the dry-run evaluator is stable.
+6. Compare `offline_v2`, `deepseek-v4-flash`, and optional stronger model runs.
+7. Add model routing dry-run after model reports expose real failure modes.
+
+## P7.5 Model Routing Interface
+
+Model routing should be evaluated before it is enabled.
+
+Suggested dry-run labels:
+
+- `no_llm_required`: deterministic read-only or already structured input
+- `cheap_model_ok`: normal config interpretation
+- `strong_model_candidate`: ambiguous geometry/source/scoring interpretation
+- `escalate_after_validation_failure`: first model produced invalid or incomplete
+  structured output
+- `human_confirmation_required`: deletion, overwrite, unsupported request, or
+  expensive runtime side effect
+
+Routing must never authorize runtime action by itself. It can only recommend the
+interpretation model.
+
+## Evaluation Checklist
+
+Before implementing any benchmark section, answer these:
+
+- Necessary: what project failure does this section catch?
+- Comprehensive: what success and failure paths are included?
+- Non-dictionary: what state, trace, payload, or result property is graded?
+- Measurable: which deterministic field is the source of truth?
+- P7 relevance: how will this help compare live LLM models or routing policy?
+
+## Current Self-Evaluation
+
+Necessary: pass.
+
+The benchmark directly supports P7 live LLM evaluation, P7.5 routing, and the
+existing agent workflow guard strategy.
+
+Comprehensive: pass for charter stage.
+
+The proposed suites cover understanding, grounding, workflow safety, runtime
+readiness, tool guard, result Q&A, and live LLM reliability. Implementation still
+needs staged migration from current casebanks.
+
+Non-dictionary: pass.
+
+The design explicitly grades trace, state, payload, tool guard, and result facts.
+Phrase variation alone is rejected.
+
+Measurable: pass.
+
+The document names deterministic sources of truth: `nlu_turn_trace`, session
+state, `SimulationSpec`, runtime payload, MCP observation, smoke report, and
+structured result summary.
+
+P7 relevance: pass.
+
+The design explains how to compare offline baseline, live cheap model, stronger
+model escalation, and routing policy without allowing live fallback to count as
+success.
+
+## Next Design Step
+
+Proceed only after this charter is accepted. The next section should be a concrete
+capability taxonomy and benchmark schema proposal, followed by a shape validator.

@@ -763,6 +763,14 @@ Expected fields:
 
 Goal: compare models by trajectory quality, not vibes.
 
+Benchmark charter:
+
+- `docs/eval/GEANT4_AGENT_BENCHMARK.md`
+- P7 implementation must follow the benchmark gates: necessary, comprehensive,
+  non-dictionary, and measurable.
+- Live LLM comparison must report trajectory quality, grounding, tool guard,
+  runtime readiness, result Q&A grounding, fallback behavior, and latency.
+
 Default matrix:
 
 - `deepseek-v4-flash`: default live smoke
