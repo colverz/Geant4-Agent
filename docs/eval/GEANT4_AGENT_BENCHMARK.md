@@ -665,14 +665,17 @@ Implemented so far:
 - Dry-run grading caught and fixed a mainline trace attribution issue where a
   post-configuration runtime request was being reported as `config_mutation`
   because of historical slot memory.
+- Dry-run probing caught and fixed a partial complex-geometry mutation risk
+  where unresolved detector geometry could still write an isolated material.
 
 Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 14
+- Standard progression checkpoint: started. The benchmark now includes 15
   hand-designed cases, including allowed session mutation, confirmation accept
-  and reject policy, result metric Q&A, and result artifact-path Q&A.
+  and reject policy, result metric Q&A, result artifact-path Q&A, and partial
+  complex-geometry mutation blocking.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: live LLM reliability, stronger-model candidate

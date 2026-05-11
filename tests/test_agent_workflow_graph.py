@@ -195,6 +195,35 @@ class AgentWorkflowGraphTest(unittest.TestCase):
         finally:
             reset_session(session_id)
 
+    def test_unresolved_complex_geometry_does_not_apply_partial_material_update(self) -> None:
+        session_id = "agent-workflow-complex-geometry-partial-guard"
+        reset_session(session_id)
+        out = process_turn(
+            {
+                "session_id": session_id,
+                "text": "Create a nested detector with alternating tungsten absorber plates and silicon sensor gaps around a gamma source.",
+                "llm_router": False,
+                "llm_question": False,
+                "normalize_input": True,
+                "geometry_pipeline": "v2",
+                "source_pipeline": "v2",
+                "enable_compare": False,
+            },
+            ollama_config_path="",
+            lang="en",
+        )
+        try:
+            trace = out["nlu_turn_trace"]
+            self.assertEqual(trace["intent"], "config_mutation")
+            self.assertEqual(trace["terminal_state"], "unsupported")
+            self.assertIn("validate", trace["node_sequence"])
+            self.assertNotIn("apply_session", trace["node_sequence"])
+            self.assertEqual(trace["applied_paths"], [])
+            self.assertEqual(out.get("config", {}).get("materials", {}).get("selected_materials"), [])
+            self.assertIn("geometry.structure", out.get("missing_fields", []))
+        finally:
+            reset_session(session_id)
+
 
 if __name__ == "__main__":
     unittest.main()

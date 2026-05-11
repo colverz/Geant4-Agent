@@ -910,6 +910,27 @@ def _semantic_missing_from_debug(debug: dict[str, Any]) -> list[str]:
     if not isinstance(graph_choice, dict):
         return []
     return _dedupe_paths(list(graph_choice.get("dialogue_missing_paths", []) or []))
+
+
+_COMPLEX_GEOMETRY_REQUEST_PATTERN = re.compile(
+    r"\b(create|build|construct|design|model|make)\b.*"
+    r"\b(geometry|detector|target|phantom|gantry|absorber|sensor|plate|plates|layer|layers|nested|stack|array|grid|ring|shell)\b|"
+    r"\b(nested|alternating|absorber|sensor|gantry|rotating|composite|assembly)\b.*"
+    r"\b(geometry|detector|target|source|plates?|layers?|gaps?)\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _should_guard_partial_geometry_mutation(text: str, accepted_updates: list[UpdateOp]) -> bool:
+    if not accepted_updates:
+        return False
+    if any(update.path.startswith("geometry.") for update in accepted_updates):
+        return False
+    if not _COMPLEX_GEOMETRY_REQUEST_PATTERN.search(text or ""):
+        return False
+    return any(update.path.startswith(("materials.", "source.", "detector.")) for update in accepted_updates)
+
+
 def _progress(progress_cb, stage: str, label: str, detail: str | None = None) -> None:
     if progress_cb:
         progress_cb(stage, label, detail)
@@ -1416,6 +1437,19 @@ def process_turn(
     rejected_updates = pending_conflict_rejected + policy_rejected + rejected_updates
     if staged_pending_overwrite and not applying_pending_overwrite:
         applied_rules = [{"rule": "pending_overwrite_confirmation_required", "count": len(staged_pending_overwrite)}] + applied_rules
+    partial_geometry_guard_triggered = _should_guard_partial_geometry_mutation(text, accepted_updates)
+    if partial_geometry_guard_triggered:
+        rejected_updates.extend(
+            {
+                "path": update.path,
+                "producer": update.producer.value,
+                "reason_code": E_CANDIDATE_REJECTED_BY_GATE,
+                "detail": "blocked partial mutation for unresolved complex geometry request",
+            }
+            for update in accepted_updates
+        )
+        accepted_updates = []
+        applied_rules = [{"rule": "partial_complex_geometry_mutation_guard", "count": 1}] + applied_rules
     committed_updates = list(accepted_updates)
 
     working = deep_copy(draft.config)
@@ -1468,6 +1502,8 @@ def process_turn(
         user_candidate=user_candidate,
     ):
         semantic_missing_paths = _semantic_missing_from_debug(debug)
+    elif partial_geometry_guard_triggered:
+        semantic_missing_paths = ["geometry.structure"]
     semantic_missing_paths = merge_v2_missing_paths(
         list(semantic_missing_paths),
         slot_debug,
@@ -1604,14 +1640,14 @@ def process_turn(
         mutation_applied=bool(applied_paths),
         waiting_confirmation=pending_overwrite_required,
         rejected=bool(rejected_overwrite_preview and not applied_paths),
-        unsupported=bool(hard_errors and not applied_paths),
+        unsupported=bool((hard_errors and not applied_paths) or partial_geometry_guard_triggered),
     )
     trace_nodes = graph_path_for_intent(
         trace_intent,
         mutation_applied=bool(applied_paths),
         waiting_confirmation=pending_overwrite_required,
         rejected=bool(rejected_overwrite_preview and not applied_paths),
-        unsupported=bool(hard_errors and not applied_paths),
+        unsupported=bool((hard_errors and not applied_paths) or partial_geometry_guard_triggered),
     )
     trace_blocked_tools: list[str] = []
     if trace_safety == ActionSafetyClass.CONFIG_MUTATION or composite_intent.requires_staged_runtime_guard:

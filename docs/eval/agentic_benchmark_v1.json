@@ -448,6 +448,45 @@
     }
   },
   {
+    "id": "adversarial-complex-geometry-no-partial-material-write",
+    "suite": "grounding",
+    "difficulty": "adversarial",
+    "lang": "en",
+    "capabilities": ["grounding", "workflow_trace", "config_extraction", "model_routing"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Create a nested detector with alternating tungsten absorber plates and silicon sensor gaps around a gamma source.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "terminal_state": "unsupported",
+          "must_include_nodes": ["validate"],
+          "must_not_include_nodes": ["apply_session"],
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "expected_config_delta": {
+      "must_not_apply_paths": ["materials.selected_materials", "source.particle"],
+      "forbidden_final_values": {
+        "materials.selected_materials": ["G4_W"],
+        "source.particle": "gamma"
+      }
+    },
+    "forbidden": {
+      "session_mutation": true,
+      "unsupported_capability_as_supported": true
+    },
+    "expected_model_route": {
+      "label": "escalate_after_validation_failure",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["validation failure"]
+    }
+  },
+  {
     "id": "zh-viewer-request-guarded",
     "suite": "tool_guard",
     "difficulty": "smoke",
