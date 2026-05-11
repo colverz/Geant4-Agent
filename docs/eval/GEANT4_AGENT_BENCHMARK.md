@@ -652,6 +652,8 @@ Implemented so far:
 - deterministic config delta grading for applied paths and final config values
 - config delta summary metrics for expected-value accuracy and mutation guard
   rates
+- suite, difficulty, and capability pass-rate summaries for comparing
+  benchmark runs
 - deterministic result answer grading for grounded metric and artifact questions
 - model routing dry-run labels for no-LLM, cheap model, guarded human
   confirmation, and validation escalation paths

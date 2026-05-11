@@ -652,6 +652,32 @@ def _finalize_config_delta_summary(summary: dict[str, Any]) -> dict[str, Any]:
     return finalized
 
 
+def _record_bucket(summary: dict[str, dict[str, int]], key: str, *, passed: bool) -> None:
+    if not key:
+        return
+    bucket = summary.setdefault(key, {"total": 0, "passed": 0, "failed": 0})
+    bucket["total"] += 1
+    if passed:
+        bucket["passed"] += 1
+    else:
+        bucket["failed"] += 1
+
+
+def _finalize_bucket_summary(summary: dict[str, dict[str, int]]) -> dict[str, dict[str, Any]]:
+    finalized: dict[str, dict[str, Any]] = {}
+    for key, bucket in sorted(summary.items()):
+        total = int(bucket.get("total", 0))
+        passed = int(bucket.get("passed", 0))
+        failed = int(bucket.get("failed", 0))
+        finalized[key] = {
+            "total": total,
+            "passed": passed,
+            "failed": failed,
+            "pass_rate": _ratio(passed, total),
+        }
+    return finalized
+
+
 def _forbidden_errors(case: dict[str, Any], outputs: list[dict[str, Any]], *, case_id: str) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
     forbidden = case.get("forbidden") if isinstance(case.get("forbidden"), dict) else {}
@@ -800,6 +826,9 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
     failures: list[dict[str, Any]] = []
     passed = 0
     config_delta_summary = _new_config_delta_summary()
+    suite_summary: dict[str, dict[str, int]] = {}
+    difficulty_summary: dict[str, dict[str, int]] = {}
+    capability_summary: dict[str, dict[str, int]] = {}
     for case_index, case in enumerate(cases):
         if not isinstance(case, dict):
             continue
@@ -847,6 +876,13 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
         finally:
             reset_session(session_id)
 
+        case_passed = not case_failures
+        _record_bucket(suite_summary, str(case.get("suite") or ""), passed=case_passed)
+        _record_bucket(difficulty_summary, str(case.get("difficulty") or ""), passed=case_passed)
+        for capability in case.get("capabilities") or []:
+            if isinstance(capability, str):
+                _record_bucket(capability_summary, capability, passed=case_passed)
+
         if case_failures:
             failures.append(
                 {
@@ -867,6 +903,9 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
         "failures": failures,
         "shape_report": shape_report,
         "config_delta_summary": _finalize_config_delta_summary(config_delta_summary),
+        "suite_summary": _finalize_bucket_summary(suite_summary),
+        "difficulty_summary": _finalize_bucket_summary(difficulty_summary),
+        "capability_summary": _finalize_bucket_summary(capability_summary),
     }
 
 
