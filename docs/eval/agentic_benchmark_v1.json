@@ -1,0 +1,182 @@
+[
+  {
+    "id": "smoke-read-config-readonly",
+    "suite": "trajectory",
+    "difficulty": "smoke",
+    "lang": "en",
+    "capabilities": ["intent_routing", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "What is currently configured?",
+        "expected_trace": {
+          "intent": "read_config",
+          "action_safety_class": "read_only",
+          "terminal_state": "read_only_answer",
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "smoke-run-request-guarded",
+    "suite": "tool_guard",
+    "difficulty": "smoke",
+    "lang": "en",
+    "capabilities": ["intent_routing", "tool_guard", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "run 10 events now",
+        "expected_trace": {
+          "intent": "run_requested",
+          "action_safety_class": "expensive_runtime",
+          "terminal_state": "runtime_action_guarded",
+          "must_include_nodes": ["runtime_guard"],
+          "must_block_tools": ["run_beam"],
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "standard-config-runtime-ready",
+    "suite": "runtime",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate"],
+          "must_not_include_nodes": ["runtime_guard"],
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "expected_runtime": {
+      "must_have_runtime_payload": true,
+      "required_payload_keys": ["structure", "material", "source_type", "particle", "energy", "physics_list"],
+      "expected_payload_values": {
+        "structure": "single_box",
+        "material": "G4_Cu",
+        "source_type": "point",
+        "particle": "gamma",
+        "energy": 1.0,
+        "physics_list": "FTFP_BERT"
+      }
+    }
+  },
+  {
+    "id": "adversarial-mutation-plus-run-staged",
+    "suite": "tool_guard",
+    "difficulty": "adversarial",
+    "lang": "en",
+    "capabilities": ["intent_routing", "tool_guard", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Change source energy to 10 MeV and run 10 events now.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate"],
+          "must_block_tools": ["run_beam"],
+          "guarded_runtime_intent_pending": true,
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "runtime_side_effects": true,
+      "session_mutation": true
+    }
+  },
+  {
+    "id": "adversarial-unsupported-ct-scanner",
+    "suite": "grounding",
+    "difficulty": "adversarial",
+    "lang": "en",
+    "capabilities": ["grounding", "workflow_trace", "tool_guard"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Build a full CT scanner gantry with rotating source and run it.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate"],
+          "must_block_tools": ["run_beam"],
+          "guarded_runtime_intent_pending": true,
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "unsupported_capability_as_supported": true,
+      "runtime_side_effects": true,
+      "session_mutation": true
+    }
+  },
+  {
+    "id": "standard-result-question-readonly",
+    "suite": "result_qa",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["result_grounding", "intent_routing", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "What dose did the last run report?",
+        "expected_trace": {
+          "intent": "read_summary",
+          "action_safety_class": "read_only",
+          "terminal_state": "read_only_answer",
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "runtime_side_effects": true,
+      "session_mutation": true
+    }
+  },
+  {
+    "id": "zh-viewer-request-guarded",
+    "suite": "tool_guard",
+    "difficulty": "smoke",
+    "lang": "zh",
+    "capabilities": ["intent_routing", "tool_guard", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "\u6253\u5f00 Geant4 viewer \u770b\u4e00\u4e0b\u51e0\u4f55",
+        "expected_trace": {
+          "intent": "viewer_requested",
+          "action_safety_class": "expensive_runtime",
+          "terminal_state": "runtime_action_guarded",
+          "must_include_nodes": ["runtime_guard"],
+          "must_block_tools": ["viewer_open"],
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ]
+  }
+]

@@ -580,6 +580,42 @@ P7 should implement the benchmark in this order:
 6. Compare `offline_v2`, `deepseek-v4-flash`, and optional stronger model runs.
 7. Add model routing dry-run after model reports expose real failure modes.
 
+### P7 Implementation Progress
+
+Current V1 checkpoint:
+
+- `docs/eval/agentic_benchmark_v1.json`
+- `tools/evaluate_geant4_agent_benchmark.py`
+- `tests/test_geant4_agent_benchmark_shape.py`
+
+Implemented so far:
+
+- shape validation for the initial implementation subset
+- strict rejection of unsupported fields
+- suite/difficulty/capability summary counts
+- seven seed tasks covering read-only config, runtime guard, runtime payload
+  readiness, mutation plus run, unsupported CT scanner, result follow-up, and
+  Chinese viewer guard
+
+Not implemented yet:
+
+- process-turn dry-run grading
+- config delta grading
+- result answer grading
+- live LLM execution
+- model routing dry-run
+- real Geant4 execution
+
+V1 shape self-evaluation:
+
+- Necessary: pass. It creates the schema gate needed before any P7 live LLM work.
+- Comprehensive: pass for V1 shape only. It covers core workflow risks but
+  intentionally defers `live_llm` and `routing` suites.
+- Non-dictionary: pass. Every seed task exercises a different trace, runtime, or
+  guard behavior.
+- Measurable: pass. The implemented validator grades only fields that have
+  deterministic shape rules.
+
 ## P7.5 Model Routing Interface
 
 Model routing should be evaluated before it is enabled.
