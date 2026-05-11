@@ -580,22 +580,86 @@ P7 should implement the benchmark in this order:
 6. Compare `offline_v2`, `deepseek-v4-flash`, and optional stronger model runs.
 7. Add model routing dry-run after model reports expose real failure modes.
 
+## LLM Benchmark Review
+
+Benchmark cases should be hand-designed. LLMs may review benchmark quality, but
+must not automatically generate or mutate the accepted benchmark.
+
+The reviewer role is:
+
+- check whether the benchmark is necessary, comprehensive, non-dictionary, and
+  measurable
+- identify missing capabilities and weak cases
+- recommend revisions with reasons
+- compare review feedback across models when useful
+
+The reviewer role is not:
+
+- deciding physical correctness
+- authorizing runtime behavior
+- replacing deterministic graders
+- bulk-generating cases directly into the benchmark
+
+For V1, reviewers must distinguish runtime payload readiness from real runtime
+execution. A case can require `must_have_runtime_payload=true` and
+`must_not_call_runtime=true` at the same time. That means the agent should prepare
+a typed, executable payload but must not launch Geant4 from ordinary chat.
+
+Implementation:
+
+- `tools/review_geant4_agent_benchmark.py`
+- default mode is dry-run and does not call an API
+- live mode requires `--live-llm` and `--llm-config`
+- model overrides use repeated `--model`, for example `--model deepseek-v4-flash`
+
+Suggested live review:
+
+```powershell
+.venv\Scripts\python.exe tools\review_geant4_agent_benchmark.py `
+  --benchmark docs\eval\agentic_benchmark_v1.json `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --model deepseek-v4-flash `
+  --live-llm `
+  --json
+```
+
+For multi-model review:
+
+```powershell
+.venv\Scripts\python.exe tools\review_geant4_agent_benchmark.py `
+  --benchmark docs\eval\agentic_benchmark_v1.json `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --model deepseek-v4-flash `
+  --model deepseek-v4-pro `
+  --live-llm `
+  --json
+```
+
+Review feedback should be treated as a design signal. A human or deterministic
+rule must still decide whether to revise the benchmark.
+
 ### P7 Implementation Progress
 
 Current V1 checkpoint:
 
 - `docs/eval/agentic_benchmark_v1.json`
 - `tools/evaluate_geant4_agent_benchmark.py`
+- `tools/review_geant4_agent_benchmark.py`
 - `tests/test_geant4_agent_benchmark_shape.py`
+- `tests/test_geant4_agent_benchmark_review.py`
 
 Implemented so far:
 
 - shape validation for the initial implementation subset
 - strict rejection of unsupported fields
 - suite/difficulty/capability summary counts
+- optional live LLM benchmark quality review
 - seven seed tasks covering read-only config, runtime guard, runtime payload
   readiness, mutation plus run, unsupported CT scanner, result follow-up, and
   Chinese viewer guard
+- DeepSeek review feedback was used as a design signal to add multi-turn shape
+  coverage and invalid-input coverage. Real runtime execution remains a later
+  opt-in suite, not a V1 shape gate requirement.
 
 Not implemented yet:
 

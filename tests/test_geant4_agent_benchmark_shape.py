@@ -47,6 +47,40 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertIn("unsupported_key:expected_config", errors)
         self.assertIn("unsupported_key:unsupported_future_field", errors)
 
+    def test_multi_turn_shape_is_allowed(self) -> None:
+        cases = [
+            {
+                "id": "multi-turn-probe",
+                "suite": "trajectory",
+                "difficulty": "standard",
+                "lang": "en",
+                "capabilities": ["intent_routing", "workflow_trace"],
+                "turns": [
+                    {
+                        "text": "What is configured?",
+                        "expected_trace": {
+                            "intent": "read_config",
+                            "action_safety_class": "read_only",
+                        },
+                    },
+                    {
+                        "text": "run 10 events",
+                        "expected_trace": {
+                            "intent": "run_requested",
+                            "action_safety_class": "expensive_runtime",
+                            "must_block_tools": ["run_beam"],
+                        },
+                    },
+                ],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "benchmark.json"
+            path.write_text(json.dumps(cases), encoding="utf-8")
+            report = validate_benchmark_shape(path)
+
+        self.assertEqual(report["failed"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

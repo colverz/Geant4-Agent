@@ -193,23 +193,23 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
         turns = item.get("turns")
         if not isinstance(turns, list) or not turns:
             failures.append({"id": case_id, "section": "turns", "error": "turns_empty_or_not_list"})
-        elif len(turns) > 1:
-            failures.append({"id": case_id, "section": "turns", "error": "multi_turn_not_supported_in_v1_shape"})
-        elif isinstance(turns[0], dict):
-            turn = turns[0]
-            _add_unknown_key_errors(failures, case_id=case_id, section="turns[0]", payload=turn, allowed=TURN_KEYS)
-            if not str(turn.get("text") or "").strip():
-                failures.append({"id": case_id, "section": "turns[0]", "error": "missing_text"})
-            if "lang" in turn and turn["lang"] not in VALID_LANGS:
-                failures.append({"id": case_id, "section": "turns[0]", "error": f"invalid_lang:{turn['lang']}"})
-            expected_trace = turn.get("expected_trace")
-            if expected_trace is not None:
-                if not isinstance(expected_trace, dict):
-                    failures.append({"id": case_id, "section": "turns[0].expected_trace", "error": "not_object"})
-                else:
-                    _validate_trace(failures, case_id=case_id, trace=expected_trace)
         elif turns:
-            failures.append({"id": case_id, "section": "turns[0]", "error": "not_object"})
+            for turn_index, turn in enumerate(turns):
+                section = f"turns[{turn_index}]"
+                if not isinstance(turn, dict):
+                    failures.append({"id": case_id, "section": section, "error": "not_object"})
+                    continue
+                _add_unknown_key_errors(failures, case_id=case_id, section=section, payload=turn, allowed=TURN_KEYS)
+                if not str(turn.get("text") or "").strip():
+                    failures.append({"id": case_id, "section": section, "error": "missing_text"})
+                if "lang" in turn and turn["lang"] not in VALID_LANGS:
+                    failures.append({"id": case_id, "section": section, "error": f"invalid_lang:{turn['lang']}"})
+                expected_trace = turn.get("expected_trace")
+                if expected_trace is not None:
+                    if not isinstance(expected_trace, dict):
+                        failures.append({"id": case_id, "section": f"{section}.expected_trace", "error": "not_object"})
+                    else:
+                        _validate_trace(failures, case_id=case_id, trace=expected_trace)
 
         if "expected_runtime" in item:
             expected_runtime = item["expected_runtime"]

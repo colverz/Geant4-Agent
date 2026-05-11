@@ -157,6 +157,71 @@
     }
   },
   {
+    "id": "standard-multiturn-config-then-run-guarded",
+    "suite": "trajectory",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["intent_routing", "workflow_trace", "tool_guard", "runtime_readiness"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate"],
+          "must_not_include_nodes": ["runtime_guard"],
+          "must_not_call_runtime": true
+        }
+      },
+      {
+        "text": "Now run 10 events.",
+        "expected_trace": {
+          "intent": "run_requested",
+          "action_safety_class": "expensive_runtime",
+          "terminal_state": "runtime_action_guarded",
+          "must_include_nodes": ["runtime_guard"],
+          "must_block_tools": ["run_beam"],
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "expected_runtime": {
+      "must_have_runtime_payload": true,
+      "required_payload_keys": ["structure", "material", "source_type", "particle", "energy", "physics_list"]
+    },
+    "forbidden": {
+      "runtime_side_effects": true
+    }
+  },
+  {
+    "id": "adversarial-invalid-negative-size",
+    "suite": "grounding",
+    "difficulty": "adversarial",
+    "lang": "en",
+    "capabilities": ["grounding", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Create a copper box target with size -10 mm x 20 mm x 30 mm and a 1 MeV gamma source.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate"],
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "session_mutation": true,
+      "unsupported_capability_as_supported": true
+    }
+  },
+  {
     "id": "zh-viewer-request-guarded",
     "suite": "tool_guard",
     "difficulty": "smoke",
