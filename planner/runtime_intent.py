@@ -49,6 +49,11 @@ _RESULT_READ_PATTERN = re.compile(
     r"\b(last|latest|previous|current)\b.*\b(result|simulation|run|scoring|score|edep|hit|crossing)\b|\bwhat happened\b.*\b(run|simulation)\b|\bhow did\b.*\b(run|simulation)\b",
     flags=re.IGNORECASE,
 )
+_RESULT_METRIC_PATTERN = re.compile(
+    r"\b(plane|detector|target|source)\b.*\b(crossing|count|hit|edep|energy deposition|dose|metric|score)\b|"
+    r"\b(dose|edep|energy deposition|crossing count|hit events?|target hits?)\b",
+    flags=re.IGNORECASE,
+)
 _RUN_REQUEST_PATTERN = re.compile(
     r"\b(run|rerun|execute|start)\b.*\b(geant4|simulation|events?|beam)\b|\brun\s+\d+\s+events?\b",
     flags=re.IGNORECASE,
@@ -124,7 +129,7 @@ def _classify_english_rule(raw: str) -> RuntimeIntent:
         return RuntimeIntent.VIEWER_REQUESTED
     if _RUN_REQUEST_PATTERN.search(raw):
         return RuntimeIntent.RUN_REQUESTED
-    if _RESULT_READ_PATTERN.search(raw):
+    if _RESULT_READ_PATTERN.search(raw) or _RESULT_METRIC_PATTERN.search(raw):
         return RuntimeIntent.READ_SUMMARY
     if _CONFIG_READ_PATTERN.search(raw):
         return RuntimeIntent.READ_CONFIG

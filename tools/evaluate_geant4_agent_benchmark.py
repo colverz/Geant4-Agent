@@ -7,6 +7,7 @@ from typing import Any
 
 from core.orchestrator.session_manager import process_turn, reset_session
 from mcp.geant4.runtime_payload import build_runtime_payload
+from planner.runtime_result import build_runtime_result_question_answer
 
 
 DEFAULT_BENCHMARK_PATH = Path("docs/eval/agentic_benchmark_v1.json")
@@ -64,6 +65,7 @@ TOP_LEVEL_KEYS = {
     "requires_live_llm",
     "requires_real_runtime",
     "expected_runtime",
+    "expected_result_answer",
     "forbidden",
 }
 TURN_KEYS = {"text", "lang", "expected_trace"}
@@ -79,9 +81,11 @@ TRACE_KEYS = {
     "must_not_call_runtime",
 }
 RUNTIME_KEYS = {"must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
+RESULT_ANSWER_KEYS = {"question", "must_include", "must_not_include", "must_remain_read_only"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
 MIN_V1_SUITE_COUNTS = {
+    "core": 1,
     "grounding": 1,
     "result_qa": 1,
     "runtime": 1,
@@ -96,6 +100,7 @@ MIN_V1_CAPABILITY_COUNTS = {
     "runtime_readiness": 1,
     "grounding": 1,
     "result_grounding": 1,
+    "confirmation_policy": 1,
 }
 
 
@@ -237,6 +242,13 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
             else:
                 _validate_runtime(failures, case_id=case_id, runtime=expected_runtime)
 
+        if "expected_result_answer" in item:
+            expected_result_answer = item["expected_result_answer"]
+            if not isinstance(expected_result_answer, dict):
+                failures.append({"id": case_id, "section": "expected_result_answer", "error": "not_object"})
+            else:
+                _validate_result_answer(failures, case_id=case_id, expected=expected_result_answer)
+
         if "forbidden" in item:
             forbidden = item["forbidden"]
             if not isinstance(forbidden, dict):
@@ -356,6 +368,23 @@ def _validate_runtime(failures: list[dict[str, Any]], *, case_id: str, runtime: 
         failures.append({"id": case_id, "section": "expected_runtime", "error": "expected_payload_values_not_object"})
 
 
+def _validate_result_answer(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
+    _add_unknown_key_errors(failures, case_id=case_id, section="expected_result_answer", payload=expected, allowed=RESULT_ANSWER_KEYS)
+    if "question" in expected and not isinstance(expected["question"], str):
+        failures.append({"id": case_id, "section": "expected_result_answer", "error": "question_not_string"})
+    for field in ("must_include", "must_not_include"):
+        if field in expected:
+            _validate_string_list(
+                failures,
+                case_id=case_id,
+                section="expected_result_answer",
+                field=field,
+                value=expected[field],
+            )
+    if "must_remain_read_only" in expected and not isinstance(expected["must_remain_read_only"], bool):
+        failures.append({"id": case_id, "section": "expected_result_answer", "error": "must_remain_read_only_not_bool"})
+
+
 def _float_equal(left: Any, right: Any, *, tolerance: float = 1e-6) -> bool:
     try:
         return abs(float(left) - float(right)) <= tolerance
@@ -473,6 +502,52 @@ def _forbidden_errors(case: dict[str, Any], outputs: list[dict[str, Any]], *, ca
     return failures
 
 
+def _sample_runtime_report() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "events_requested": 4,
+        "events_completed": 4,
+        "completion_fraction": 1.0,
+        "configuration": {
+            "geometry_structure": "single_box",
+            "material": "G4_Cu",
+            "particle": "gamma",
+            "physics_list": "FTFP_BERT",
+        },
+        "key_metrics": {
+            "target_edep_total_mev": 1.5,
+            "target_hit_events": 2,
+            "detector_crossing_count": 1,
+            "plane_crossing_count": 0,
+        },
+        "artifact_dir": "F:/tmp/artifacts",
+        "run_summary_path": "F:/tmp/run_summary.json",
+        "result_summary": {
+            "source": {
+                "primary_count": 4,
+                "sampled_position_mean_mm": [0.0, 0.0, -20.0],
+                "sampled_direction_mean": [0.0, 0.0, 1.0],
+            }
+        },
+    }
+
+
+def _result_answer_errors(case: dict[str, Any], *, case_id: str, lang: str) -> list[dict[str, Any]]:
+    expected = case.get("expected_result_answer") if isinstance(case.get("expected_result_answer"), dict) else {}
+    if not expected:
+        return []
+    question = str(expected.get("question") or "")
+    answer = build_runtime_result_question_answer(question, _sample_runtime_report(), lang=lang)
+    failures: list[dict[str, Any]] = []
+    for expected_text in expected.get("must_include", []) or []:
+        if expected_text not in answer:
+            failures.append({"id": case_id, "section": "expected_result_answer", "error": f"missing_answer_text:{expected_text}"})
+    for forbidden_text in expected.get("must_not_include", []) or []:
+        if forbidden_text in answer:
+            failures.append({"id": case_id, "section": "expected_result_answer", "error": f"forbidden_answer_text:{forbidden_text}"})
+    return failures
+
+
 def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, Any]:
     shape_report = validate_benchmark_shape(path)
     if shape_report["failed"]:
@@ -525,6 +600,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
             if expected_runtime:
                 case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
             case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
+            case_failures.extend(_result_answer_errors(case, case_id=case_id, lang=str(case.get("lang") or "en")))
         finally:
             reset_session(session_id)
 

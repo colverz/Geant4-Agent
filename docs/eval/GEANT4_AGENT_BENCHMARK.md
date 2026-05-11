@@ -671,7 +671,10 @@ Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- P7 standard benchmark: not enough yet. The standard target remains 20 to 30
+- Standard progression checkpoint: started. The benchmark now includes 12
+  hand-designed cases, including allowed session mutation, confirmation policy,
+  and two result Q&A states.
+- P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: allowed session mutation, more result Q&A states,
   confirmation policy, live LLM reliability, model routing dry-run, and future
