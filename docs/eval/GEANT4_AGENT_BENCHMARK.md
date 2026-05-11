@@ -108,6 +108,47 @@ Core graders should consume:
 - `runtime_smoke_report`
 - structured result summary
 
+## Capability Taxonomy
+
+The benchmark taxonomy is intentionally capability-based rather than
+phrase-based. A task belongs in the benchmark only if it exercises at least one
+capability below.
+
+| Capability | What It Measures | Deterministic Source Of Truth | Must Include |
+| --- | --- | --- | --- |
+| `intent_routing` | Whether the system chooses read, mutate, result, run, viewer, or chat path | `nlu_turn_trace.intent`, `action_safety_class` | read-only, mutation, result Q&A, run/viewer, normal chat |
+| `config_extraction` | Whether user facts become the right config delta | session config before/after, `candidate_patch_paths`, `applied_paths` | geometry, material, source, physics, output |
+| `grounding` | Whether the system avoids ungrounded values or unsupported mappings | rejected paths, context pack, forbidden values, runtime payload | numeric invention, unsupported geometry, unsupported scorer |
+| `confirmation_policy` | Whether risky mutation pauses for user confirmation | `confirmation_required`, confirmation payload, patch hash | overwrite, delete, low-confidence, stale confirmation |
+| `workflow_trace` | Whether the agent path is correct and inspectable | `node_sequence`, `terminal_state`, `interrupt_status` | validate before apply, read-only no apply, runtime guard |
+| `tool_guard` | Whether high-cost actions are blocked unless explicitly triggered | `tool_calls_allowed`, `tool_calls_blocked`, API action | run, viewer, mutation plus run/viewer, replay |
+| `runtime_readiness` | Whether a valid app-side config becomes executable payload | `SimulationSpec`, runtime payload, schema compatibility | minimal valid, full representative, missing required field |
+| `result_grounding` | Whether result follow-up uses structured result facts | `runtime_smoke_report`, result summary, answer text | no result, partial result, missing metric, artifact path |
+| `llm_reliability` | Whether live LLM improves trajectory without hidden fallback | `llm_used`, `fallback_reason`, validation errors, latency | live used, fallback rejected, invalid JSON, schema reject |
+| `model_routing` | Whether the proposed model choice is justified before execution | routing decision report, case difficulty, failure reason | no-LLM, cheap model, escalation, human confirmation |
+
+### Taxonomy Self-Evaluation
+
+Necessary: pass.
+
+Each capability maps to a failure that has already appeared in the project or is
+an obvious production risk: silent fallback, dictionary-like evaluation,
+runtime side effects, unsupported hallucination, or ungrounded result answers.
+
+Comprehensive: pass for design stage.
+
+The taxonomy spans pre-runtime interpretation, session mutation, runtime bridge,
+post-runtime result Q&A, and live model evaluation.
+
+Non-dictionary: pass.
+
+No capability is defined by wording coverage. Each one is tied to state, trace,
+payload, result, or model execution metadata.
+
+Measurable: pass.
+
+Every capability names at least one deterministic source of truth.
+
 ## Benchmark Suites
 
 ### G4AgentBench-Core
@@ -311,6 +352,10 @@ ordinary CI.
 The benchmark case format should be explicit enough to grade workflow, state,
 runtime contracts, and result answers.
 
+The schema is intentionally broad, but most cases should use only the sections
+they need. Empty sections are allowed in data files only if the shape validator
+accepts them explicitly.
+
 ```json
 {
   "id": "standard-config-runtime-ready-001",
@@ -345,6 +390,140 @@ runtime contracts, and result answers.
   }
 }
 ```
+
+### Schema V1 Field Contract
+
+Required top-level fields:
+
+- `id`: stable unique identifier.
+- `suite`: one of `core`, `trajectory`, `grounding`, `tool_guard`, `runtime`,
+  `result_qa`, `live_llm`, or `routing`.
+- `difficulty`: one of `smoke`, `standard`, `adversarial`, `expert`, or `live`.
+- `lang`: `en` or `zh` for now.
+- `turns`: ordered user turns. Multi-turn cases must preserve session state.
+
+Optional top-level fields:
+
+- `description`: human-readable reason for the case.
+- `capabilities`: explicit capability labels from the taxonomy.
+- `tags`: non-grading metadata such as `mixed_language`, `source`, `viewer`,
+  `unsupported`, or `result_missing_metric`.
+- `requires_live_llm`: true only for opt-in live model cases.
+- `requires_real_runtime`: true only for opt-in real Geant4 cases.
+- `known_gaps`: documented expected failures that should not silently disappear.
+
+`turns[]` fields:
+
+- `text`: user message.
+- `lang`: optional per-turn language override.
+- `preload_config`: optional config state before this turn.
+- `preload_result_summary`: optional structured result state before this turn.
+- `expected_trace`: optional per-turn trace contract.
+- `expected_response`: optional user-visible response contract.
+
+`expected_trace` fields:
+
+- `intent`
+- `action_safety_class`
+- `terminal_state`
+- `must_include_nodes`
+- `must_not_include_nodes`
+- `must_block_tools`
+- `must_allow_tools`
+- `confirmation_required`
+- `guarded_runtime_intent_pending`
+- `must_not_apply_session`
+- `must_not_call_runtime`
+- `must_use_llm`
+- `forbid_fallback`
+
+`expected_config` fields:
+
+- `must_set_paths`
+- `must_preserve_paths`
+- `must_reject_paths`
+- `must_not_set_paths`
+- `expected_values`
+- `forbidden_values`
+
+`expected_runtime` fields:
+
+- `must_have_simulation_spec`
+- `must_have_runtime_payload`
+- `required_payload_keys`
+- `expected_payload_values`
+- `must_have_smoke_report`
+- `expected_smoke_report_values`
+
+`expected_result_answer` fields:
+
+- `must_include`
+- `must_not_include`
+- `must_refuse_unavailable_metric`
+- `must_use_result_summary`
+- `must_remain_read_only`
+
+`expected_model` fields:
+
+- `allowed_model_classes`
+- `expected_routing_label`
+- `must_escalate`
+- `must_not_escalate`
+- `max_latency_ms`
+- `fallback_allowed`
+
+`forbidden` fields:
+
+- `new_numbers`
+- `new_materials`
+- `new_particles`
+- `unsupported_capability_as_supported`
+- `invented_result_metrics`
+- `runtime_side_effects`
+- `session_mutation`
+
+### Schema Self-Evaluation
+
+Necessary: pass.
+
+The schema unifies existing P6 trajectory checks, simulation scenario runtime
+contracts, result Q&A grounding, and future live LLM metrics.
+
+Comprehensive: pass with implementation caveat.
+
+The schema covers single-turn, multi-turn, preloaded state, runtime payload,
+result summary, and model routing. The first implementation should support a
+strict subset rather than all fields at once.
+
+Non-dictionary: pass.
+
+Expected fields describe trace, state, payload, and result properties rather than
+surface text matching.
+
+Measurable: pass.
+
+Most fields map directly to existing outputs. Fields not yet supported by code
+must be rejected or marked as unsupported by the shape validator.
+
+### Initial Implementation Subset
+
+The first evaluator should support only these fields:
+
+- top-level: `id`, `suite`, `difficulty`, `lang`, `turns`, `capabilities`,
+  `requires_live_llm`, `requires_real_runtime`
+- per-turn: `text`, `lang`, `expected_trace`
+- trace: `intent`, `action_safety_class`, `terminal_state`,
+  `must_include_nodes`, `must_not_include_nodes`, `must_block_tools`,
+  `guarded_runtime_intent_pending`, `must_not_apply_session`,
+  `must_not_call_runtime`
+- runtime: `must_have_runtime_payload`, `required_payload_keys`,
+  `expected_payload_values`
+- forbidden: `runtime_side_effects`, `session_mutation`,
+  `unsupported_capability_as_supported`
+
+Fields outside this subset should be accepted only by documentation, not by the
+first shape validator. This keeps P7 grounded in the current system instead of
+building a large evaluator before the signals are proven useful.
 
 ## Grading Model
 
@@ -460,5 +639,6 @@ success.
 
 ## Next Design Step
 
-Proceed only after this charter is accepted. The next section should be a concrete
-capability taxonomy and benchmark schema proposal, followed by a shape validator.
+Proceed only after this taxonomy and schema proposal are accepted. The next step
+should be a small `agentic_benchmark_v1.json` plus a shape validator that supports
+only the initial implementation subset above.
