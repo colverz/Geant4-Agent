@@ -1015,6 +1015,7 @@ def process_turn(
             text,
             context_summary=context_summary,
             config_path=ollama_config_path,
+            lang=lang,
         )
         if slot_result.ok and slot_result.frame:
             if explicit_controls.get("strict_targets"):

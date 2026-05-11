@@ -63,6 +63,40 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertEqual(report["accuracy"], 0.0)
         self.assertFalse(report["meets_threshold"])
         self.assertEqual(report["failures"][0]["errors"], ["live_llm_not_used:fallback='E_LLM_FRAME_CALL_FAILED'"])
+        self.assertEqual(report["live_summary"]["fallback_count"], 1)
+        self.assertEqual(report["live_summary"]["llm_used_count"], 0)
+
+    def test_live_llm_mode_rejects_slot_profile_language_mismatch(self) -> None:
+        casebank = [
+            {
+                "id": "zh_profile_probe",
+                "prompt": "\u8bf7\u914d\u7f6e\u4e00\u4e2a\u94dc\u76d2\u9776\u3002",
+                "parser_expected": {"is_complete": True},
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "casebank.json"
+            path.write_text(json.dumps(casebank), encoding="utf-8")
+            with patch(
+                "tools.evaluate_llm_scenario_parsing.process_turn",
+                return_value={
+                    "is_complete": True,
+                    "config": {},
+                    "llm_used": True,
+                    "fallback_reason": None,
+                    "slot_debug": {"prompt_profile_id": "slot_extract_en_strict_slot_v2"},
+                    "nlu_turn_trace": {"node_sequence": [], "applied_paths": []},
+                },
+            ):
+                report = evaluate_llm_scenario_parsing(path, live_llm=True, llm_config_path="dummy.json")
+
+        self.assertEqual(report["failed"], 1)
+        self.assertEqual(report["results"][0]["lang"], "zh")
+        self.assertEqual(report["live_summary"]["profile_mismatch_count"], 1)
+        self.assertIn(
+            "agent.slot_prompt_profile_language:expected=zh:actual='slot_extract_en_strict_slot_v2'",
+            report["failures"][0]["errors"],
+        )
 
     def test_max_cases_limits_low_cost_live_smoke_scope(self) -> None:
         report = evaluate_llm_scenario_parsing(max_cases=2)
@@ -71,6 +105,7 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertEqual(report["total"], 2)
         self.assertEqual(report["passed"], 2)
         self.assertEqual(report["accuracy"], 1.0)
+        self.assertIn("live_summary", report)
 
     def test_min_accuracy_gate_fails_when_threshold_is_not_met(self) -> None:
         casebank = [

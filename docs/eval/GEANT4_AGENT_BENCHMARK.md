@@ -678,6 +678,12 @@ Implemented so far:
   the runtime payload.
 - Live LLM review feedback added standard coverage for invalid physics-list
   grounding and English viewer tool guard symmetry.
+- Live LLM scenario smoke is now opt-in but executable. A 5-case
+  `deepseek-v4-flash` run passed with `llm_used_count=5`, `fallback_count=0`,
+  `profile_mismatch_count=0`, and correct EN/ZH slot prompt profile routing.
+- The live scenario evaluator now reports language counts, slot/semantic prompt
+  profile usage, fallback count, and profile mismatch count so hidden fallback
+  or prompt-profile contamination cannot be counted as success.
 
 Current quantity assessment:
 
@@ -690,14 +696,14 @@ Current quantity assessment:
   bilingual viewer guarding. Result Q&A now also covers the no-history path.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: live LLM reliability, stronger-model candidate
-  cases, config delta precision/recall over larger suites, and future opt-in
-  runtime execution.
+- Highest-value next additions: stronger-model candidate cases, config delta
+  precision/recall over larger suites, broader live LLM reliability runs, and
+  future opt-in runtime execution.
 
 Not implemented yet:
 
 - config delta precision/recall over larger suites
-- live LLM execution
+- broader live LLM execution beyond the current opt-in smoke set
 - stronger-model candidate cases
 - real Geant4 execution
 

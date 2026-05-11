@@ -134,10 +134,10 @@ def _clean_response(raw: str) -> str:
     return text
 
 
-def _build_prompt(user_text: str, context_summary: str) -> PromptBuildResult:
+def _build_prompt(user_text: str, context_summary: str, *, lang: str = "en") -> PromptBuildResult:
     return build_prompt(
         PromptTask.SLOT_EXTRACT,
-        "en",
+        lang,
         {"user_text": user_text, "context_summary": context_summary},
     )
 
@@ -1873,8 +1873,9 @@ def build_llm_slot_frame(
     *,
     context_summary: str,
     config_path: str,
+    lang: str = "en",
 ) -> LlmSlotBuildResult:
-    prompt_build = _build_prompt(user_text, context_summary)
+    prompt_build = _build_prompt(user_text, context_summary, lang=lang)
     prompt = prompt_build.prompt
     llm_raw = ""
     stage_trace: dict[str, Any] = {
@@ -1925,7 +1926,7 @@ def build_llm_slot_frame(
         )
 
     stage_trace["llm_json_parsed"] = True
-    prompt_validation = validate_prompt_output(PromptTask.SLOT_EXTRACT, "en", payload)
+    prompt_validation = validate_prompt_output(PromptTask.SLOT_EXTRACT, lang, payload)
     stage_trace["prompt_validation"] = {
         "ok": prompt_validation.ok,
         "validator_name": prompt_validation.validator_name,

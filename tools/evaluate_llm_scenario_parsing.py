@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
 from core.orchestrator.session_manager import process_turn, reset_session
 from mcp.geant4.runtime_payload import build_runtime_payload
 from tools.evaluate_simulation_scenarios import DEFAULT_SCENARIO_CASEBANK
+
+_CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 
 
 def _load_json(path: Path) -> Any:
@@ -50,6 +53,20 @@ def _compare_expected(expected: Any, actual: Any, path: str, errors: list[str]) 
 def _runtime_payload_ready(runtime_payload: dict[str, Any]) -> bool:
     required = ["structure", "material", "source_type", "particle", "energy", "physics_list"]
     return all(runtime_payload.get(key) not in {None, ""} for key in required)
+
+
+def _case_lang(case: dict[str, Any]) -> str:
+    explicit = str(case.get("lang") or "").strip().lower()
+    if explicit in {"zh", "en"}:
+        return explicit
+    prompt = str(case.get("prompt") or "")
+    return "zh" if _CJK_PATTERN.search(prompt) else "en"
+
+
+def _profile_matches_lang(profile_id: Any, lang: str) -> bool:
+    if not profile_id:
+        return False
+    return f"_{lang}_" in str(profile_id)
 
 
 def _trajectory_from_output(out: dict[str, Any], runtime_payload: dict[str, Any]) -> dict[str, Any]:
@@ -111,6 +128,7 @@ def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], 
 def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str) -> dict[str, Any]:
     case_id = str(case.get("id") or "unknown")
     prompt = str(case.get("prompt") or "").strip()
+    lang = _case_lang(case)
     parser_expected = case.get("parser_expected", {}) if isinstance(case.get("parser_expected"), dict) else {}
     errors: list[str] = []
     if not prompt:
@@ -132,7 +150,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
                 "autofix": True,
             },
             ollama_config_path=llm_config_path,
-            lang="en",
+            lang=lang,
         )
         if out.get("error"):
             errors.append(f"process_turn_error:{out['error']}")
@@ -149,6 +167,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
         trajectory = _trajectory_from_output(out, runtime_payload)
         trajectory.update(
             {
+                "lang": lang,
                 "node_sequence": list(turn_trace.get("node_sequence") or []),
                 "terminal_state": turn_trace.get("terminal_state"),
                 "action_safety_class": turn_trace.get("action_safety_class"),
@@ -175,11 +194,16 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
         agent_expected = case.get("agent_expected")
         if isinstance(agent_expected, dict):
             _check_agent_expected(agent_expected, trajectory, errors)
+        if live_llm and llm_used:
+            slot_profile = trajectory.get("slot_prompt_profile_id")
+            if not _profile_matches_lang(slot_profile, lang):
+                errors.append(f"agent.slot_prompt_profile_language:expected={lang}:actual={slot_profile!r}")
 
         return {
             "id": case_id,
             "errors": errors,
             "known_gaps": parser_expected.get("known_gaps", []),
+            "lang": lang,
             "llm_used": llm_used,
             "fallback_reason": out.get("fallback_reason"),
             "trajectory": trajectory,
@@ -229,6 +253,29 @@ def evaluate_llm_scenario_parsing(
     passed = total - failed
     accuracy = (passed / total) if total else 0.0
     known_gap_count = sum(len(result.get("known_gaps") or []) for result in results)
+    slot_profiles: dict[str, int] = {}
+    semantic_profiles: dict[str, int] = {}
+    lang_counts: dict[str, int] = {}
+    profile_mismatch_count = 0
+    fallback_count = 0
+    llm_used_count = 0
+    for result in results:
+        lang = str(result.get("lang") or "")
+        if lang:
+            lang_counts[lang] = lang_counts.get(lang, 0) + 1
+        if result.get("llm_used"):
+            llm_used_count += 1
+        if result.get("fallback_reason"):
+            fallback_count += 1
+        trajectory = result.get("trajectory") if isinstance(result.get("trajectory"), dict) else {}
+        slot_profile = str(trajectory.get("slot_prompt_profile_id") or "")
+        semantic_profile = str(trajectory.get("semantic_prompt_profile_id") or "")
+        if slot_profile:
+            slot_profiles[slot_profile] = slot_profiles.get(slot_profile, 0) + 1
+            if lang and not _profile_matches_lang(slot_profile, lang):
+                profile_mismatch_count += 1
+        if semantic_profile:
+            semantic_profiles[semantic_profile] = semantic_profiles.get(semantic_profile, 0) + 1
     return {
         "name": "llm_scenario_parsing",
         "mode": "live_llm" if live_llm else "offline_v2",
@@ -241,6 +288,14 @@ def evaluate_llm_scenario_parsing(
         "model_override": model_override or os.environ.get("GEANT4_LLM_MODEL_OVERRIDE", ""),
         "failures": failures,
         "known_gap_count": known_gap_count,
+        "live_summary": {
+            "llm_used_count": llm_used_count,
+            "fallback_count": fallback_count,
+            "profile_mismatch_count": profile_mismatch_count,
+            "lang_counts": dict(sorted(lang_counts.items())),
+            "slot_prompt_profiles": dict(sorted(slot_profiles.items())),
+            "semantic_prompt_profiles": dict(sorted(semantic_profiles.items())),
+        },
         "results": results,
     }
 

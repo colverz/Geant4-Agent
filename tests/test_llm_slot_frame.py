@@ -943,6 +943,7 @@ class LlmSlotFrameTest(unittest.TestCase):
                 "\u6211\u60f3\u505a\u4e00\u4e2a10\u5398\u7c73\u89c1\u65b9\u7684\u94dc\u7acb\u65b9\u4f53\u9776\uff0c\u75281MeV gamma\u7167\u5c04\u3002",
                 context_summary="phase=geometry",
                 config_path="",
+                lang="zh",
             )
         self.assertTrue(result.ok)
         assert result.frame is not None
@@ -950,6 +951,7 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertEqual(result.frame.geometry.size_triplet_mm, [100.0, 100.0, 100.0])
         self.assertEqual(result.frame.materials.primary, "G4_Cu")
         self.assertIn("geometry.kind", result.stage_trace.get("raw_text_backfill_fields", []))
+        self.assertEqual(result.stage_trace.get("prompt_profile_id"), "slot_extract_zh_strict_slot_v2")
 
     def test_build_llm_slot_frame_recovers_from_malformed_slot_payload(self) -> None:
         llm_payload = {
