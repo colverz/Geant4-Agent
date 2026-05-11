@@ -81,6 +81,22 @@ TRACE_KEYS = {
 RUNTIME_KEYS = {"must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
+MIN_V1_SUITE_COUNTS = {
+    "grounding": 1,
+    "result_qa": 1,
+    "runtime": 1,
+    "tool_guard": 2,
+    "trajectory": 1,
+}
+MIN_V1_DIFFICULTY_COUNTS = {"smoke": 2, "standard": 2, "adversarial": 2}
+MIN_V1_CAPABILITY_COUNTS = {
+    "intent_routing": 3,
+    "workflow_trace": 5,
+    "tool_guard": 2,
+    "runtime_readiness": 1,
+    "grounding": 1,
+    "result_grounding": 1,
+}
 
 
 def _load_json(path: Path) -> Any:
@@ -245,6 +261,44 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
         "suite_counts": dict(sorted(suite_counts.items())),
         "difficulty_counts": dict(sorted(difficulty_counts.items())),
         "capability_counts": dict(sorted(capability_counts.items())),
+    }
+
+
+def validate_benchmark_coverage(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, Any]:
+    shape_report = validate_benchmark_shape(path)
+    failures: list[dict[str, Any]] = []
+    if shape_report["failed"]:
+        failures.append({"section": "shape", "error": "shape_validation_failed"})
+
+    for suite, minimum in MIN_V1_SUITE_COUNTS.items():
+        actual = int(shape_report["suite_counts"].get(suite, 0))
+        if actual < minimum:
+            failures.append({"section": "suite_counts", "error": f"{suite}:min={minimum}:actual={actual}"})
+    for difficulty, minimum in MIN_V1_DIFFICULTY_COUNTS.items():
+        actual = int(shape_report["difficulty_counts"].get(difficulty, 0))
+        if actual < minimum:
+            failures.append({"section": "difficulty_counts", "error": f"{difficulty}:min={minimum}:actual={actual}"})
+    for capability, minimum in MIN_V1_CAPABILITY_COUNTS.items():
+        actual = int(shape_report["capability_counts"].get(capability, 0))
+        if actual < minimum:
+            failures.append({"section": "capability_counts", "error": f"{capability}:min={minimum}:actual={actual}"})
+
+    return {
+        "name": "geant4_agent_benchmark_coverage",
+        "total": (
+            len(MIN_V1_SUITE_COUNTS)
+            + len(MIN_V1_DIFFICULTY_COUNTS)
+            + len(MIN_V1_CAPABILITY_COUNTS)
+            + 1
+        ),
+        "failed": len(failures),
+        "failures": failures,
+        "minimums": {
+            "suite_counts": MIN_V1_SUITE_COUNTS,
+            "difficulty_counts": MIN_V1_DIFFICULTY_COUNTS,
+            "capability_counts": MIN_V1_CAPABILITY_COUNTS,
+        },
+        "shape_report": shape_report,
     }
 
 
@@ -499,11 +553,17 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate or dry-run Geant4Agent benchmark v1.")
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_BENCHMARK_PATH)
+    parser.add_argument("--coverage", action="store_true", help="Check minimum V1 suite/difficulty/capability coverage.")
     parser.add_argument("--dry-run", action="store_true", help="Execute deterministic process_turn/runtime-payload grading.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    report = evaluate_benchmark_dry_run(args.benchmark) if args.dry_run else validate_benchmark_shape(args.benchmark)
+    if args.dry_run:
+        report = evaluate_benchmark_dry_run(args.benchmark)
+    elif args.coverage:
+        report = validate_benchmark_coverage(args.benchmark)
+    else:
+        report = validate_benchmark_shape(args.benchmark)
     output = {"ok": report["failed"] == 0, "report": report}
     if args.json:
         print(json.dumps(output, ensure_ascii=False, indent=2))

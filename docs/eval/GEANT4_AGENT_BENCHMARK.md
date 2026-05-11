@@ -651,6 +651,7 @@ Current V1 checkpoint:
 Implemented so far:
 
 - shape validation for the initial implementation subset
+- V1 coverage validation for minimum suite, difficulty, and capability counts
 - deterministic dry-run grading through `process_turn`, `nlu_turn_trace`, and
   runtime payload generation
 - strict rejection of unsupported fields
@@ -665,6 +666,16 @@ Implemented so far:
 - Dry-run grading caught and fixed a mainline trace attribution issue where a
   post-configuration runtime request was being reported as `config_mutation`
   because of historical slot memory.
+
+Current quantity assessment:
+
+- V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
+  dry-run checks.
+- P7 standard benchmark: not enough yet. The standard target remains 20 to 30
+  tasks and should add capability coverage, not near-duplicate phrasing.
+- Highest-value next additions: allowed session mutation, more result Q&A states,
+  confirmation policy, live LLM reliability, model routing dry-run, and future
+  opt-in runtime execution.
 
 Not implemented yet:
 
