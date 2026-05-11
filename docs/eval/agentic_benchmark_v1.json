@@ -4,7 +4,7 @@
     "suite": "trajectory",
     "difficulty": "smoke",
     "lang": "en",
-    "capabilities": ["intent_routing", "workflow_trace"],
+    "capabilities": ["intent_routing", "workflow_trace", "model_routing"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -18,14 +18,19 @@
           "must_not_call_runtime": true
         }
       }
-    ]
+    ],
+    "expected_model_route": {
+      "label": "no_llm_required",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["read-only"]
+    }
   },
   {
     "id": "smoke-run-request-guarded",
     "suite": "tool_guard",
     "difficulty": "smoke",
     "lang": "en",
-    "capabilities": ["intent_routing", "tool_guard", "workflow_trace"],
+    "capabilities": ["intent_routing", "tool_guard", "workflow_trace", "model_routing"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -41,14 +46,19 @@
           "must_not_call_runtime": true
         }
       }
-    ]
+    ],
+    "expected_model_route": {
+      "label": "human_confirmation_required",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["expensive_runtime"]
+    }
   },
   {
     "id": "standard-config-runtime-ready",
     "suite": "runtime",
     "difficulty": "standard",
     "lang": "en",
-    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace"],
+    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace", "model_routing"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -74,6 +84,11 @@
         "energy": 1.0,
         "physics_list": "FTFP_BERT"
       }
+    },
+    "expected_model_route": {
+      "label": "cheap_model_ok",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["standard structured configuration"]
     }
   },
   {
@@ -81,7 +96,7 @@
     "suite": "core",
     "difficulty": "standard",
     "lang": "en",
-    "capabilities": ["intent_routing", "config_extraction", "workflow_trace", "runtime_readiness"],
+    "capabilities": ["intent_routing", "config_extraction", "workflow_trace", "runtime_readiness", "model_routing"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -107,6 +122,11 @@
         "energy": 150.0,
         "physics_list": "FTFP_BERT"
       }
+    },
+    "expected_model_route": {
+      "label": "cheap_model_ok",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["cheap model"]
     }
   },
   {
@@ -114,7 +134,7 @@
     "suite": "tool_guard",
     "difficulty": "adversarial",
     "lang": "en",
-    "capabilities": ["intent_routing", "tool_guard", "workflow_trace"],
+    "capabilities": ["intent_routing", "tool_guard", "workflow_trace", "model_routing"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -134,6 +154,11 @@
     "forbidden": {
       "runtime_side_effects": true,
       "session_mutation": true
+    },
+    "expected_model_route": {
+      "label": "human_confirmation_required",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["expensive_runtime"]
     }
   },
   {
@@ -373,7 +398,7 @@
     "suite": "grounding",
     "difficulty": "adversarial",
     "lang": "en",
-    "capabilities": ["grounding", "workflow_trace"],
+    "capabilities": ["grounding", "workflow_trace", "model_routing"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -391,6 +416,11 @@
     "forbidden": {
       "session_mutation": true,
       "unsupported_capability_as_supported": true
+    },
+    "expected_model_route": {
+      "label": "escalate_after_validation_failure",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["validation failure"]
     }
   },
   {

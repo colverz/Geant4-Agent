@@ -97,6 +97,33 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
 
         self.assertEqual(report["failed"], 0)
 
+    def test_invalid_model_route_shape_is_rejected(self) -> None:
+        cases = [
+            {
+                "id": "bad-routing",
+                "suite": "routing",
+                "difficulty": "standard",
+                "lang": "en",
+                "capabilities": ["model_routing"],
+                "turns": [{"text": "What is configured?"}],
+                "expected_model_route": {
+                    "label": "auto_run_everything",
+                    "must_not_allow_runtime": "yes",
+                    "unsupported_field": True,
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "benchmark.json"
+            path.write_text(json.dumps(cases), encoding="utf-8")
+            report = validate_benchmark_shape(path)
+
+        self.assertGreater(report["failed"], 0)
+        errors = [failure["error"] for failure in report["failures"]]
+        self.assertIn("invalid_label:auto_run_everything", errors)
+        self.assertIn("must_not_allow_runtime_not_bool", errors)
+        self.assertIn("unsupported_key:unsupported_field", errors)
+
 
 if __name__ == "__main__":
     unittest.main()

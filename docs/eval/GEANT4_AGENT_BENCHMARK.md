@@ -463,14 +463,11 @@ Optional top-level fields:
 - `must_use_result_summary`
 - `must_remain_read_only`
 
-`expected_model` fields:
+`expected_model_route` fields:
 
-- `allowed_model_classes`
-- `expected_routing_label`
-- `must_escalate`
-- `must_not_escalate`
-- `max_latency_ms`
-- `fallback_allowed`
+- `label`
+- `must_not_allow_runtime`
+- `rationale_contains`
 
 `forbidden` fields:
 
@@ -576,9 +573,9 @@ P7 should implement the benchmark in this order:
    `nlu_turn_trace`, and runtime payload builders.
 3. Migrate a small subset of current casebanks into the new schema.
 4. Produce a combined report with suite-level metrics.
-5. Add live LLM mode only after the dry-run evaluator is stable.
-6. Compare `offline_v2`, `deepseek-v4-flash`, and optional stronger model runs.
-7. Add model routing dry-run after model reports expose real failure modes.
+5. Add model routing dry-run before enabling runtime model selection.
+6. Add live LLM mode only after the dry-run evaluator is stable.
+7. Compare `offline_v2`, `deepseek-v4-flash`, and optional stronger model runs.
 
 ## LLM Benchmark Review
 
@@ -654,6 +651,9 @@ Implemented so far:
 - V1 coverage validation for minimum suite, difficulty, and capability counts
 - deterministic dry-run grading through `process_turn`, `nlu_turn_trace`, and
   runtime payload generation
+- deterministic result answer grading for grounded metric and artifact questions
+- model routing dry-run labels for no-LLM, cheap model, guarded human
+  confirmation, and validation escalation paths
 - strict rejection of unsupported fields
 - suite/difficulty/capability summary counts
 - optional live LLM benchmark quality review
@@ -676,15 +676,14 @@ Current quantity assessment:
   and reject policy, result metric Q&A, and result artifact-path Q&A.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: model routing dry-run, live LLM reliability,
-  more grounded result explanations, and future opt-in runtime execution.
+- Highest-value next additions: live LLM reliability, config delta grading,
+  stronger-model candidate cases, and future opt-in runtime execution.
 
 Not implemented yet:
 
 - config delta grading
-- result answer grading for artifact and metric questions
 - live LLM execution
-- model routing dry-run
+- stronger-model candidate cases
 - real Geant4 execution
 
 V1 shape self-evaluation:

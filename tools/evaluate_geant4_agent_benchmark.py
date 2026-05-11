@@ -54,6 +54,13 @@ VALID_NODES = {
     "end",
 }
 VALID_TOOLS = {"run_beam", "viewer_open"}
+VALID_MODEL_ROUTE_LABELS = {
+    "no_llm_required",
+    "cheap_model_ok",
+    "strong_model_candidate",
+    "escalate_after_validation_failure",
+    "human_confirmation_required",
+}
 
 TOP_LEVEL_KEYS = {
     "id",
@@ -66,6 +73,7 @@ TOP_LEVEL_KEYS = {
     "requires_real_runtime",
     "expected_runtime",
     "expected_result_answer",
+    "expected_model_route",
     "forbidden",
 }
 TURN_KEYS = {"text", "lang", "expected_trace"}
@@ -82,6 +90,7 @@ TRACE_KEYS = {
 }
 RUNTIME_KEYS = {"must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
 RESULT_ANSWER_KEYS = {"question", "must_include", "must_not_include", "must_remain_read_only"}
+MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
 MIN_V1_SUITE_COUNTS = {
@@ -249,6 +258,13 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
             else:
                 _validate_result_answer(failures, case_id=case_id, expected=expected_result_answer)
 
+        if "expected_model_route" in item:
+            expected_model_route = item["expected_model_route"]
+            if not isinstance(expected_model_route, dict):
+                failures.append({"id": case_id, "section": "expected_model_route", "error": "not_object"})
+            else:
+                _validate_model_route(failures, case_id=case_id, expected=expected_model_route)
+
         if "forbidden" in item:
             forbidden = item["forbidden"]
             if not isinstance(forbidden, dict):
@@ -383,6 +399,23 @@ def _validate_result_answer(failures: list[dict[str, Any]], *, case_id: str, exp
             )
     if "must_remain_read_only" in expected and not isinstance(expected["must_remain_read_only"], bool):
         failures.append({"id": case_id, "section": "expected_result_answer", "error": "must_remain_read_only_not_bool"})
+
+
+def _validate_model_route(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
+    _add_unknown_key_errors(failures, case_id=case_id, section="expected_model_route", payload=expected, allowed=MODEL_ROUTE_KEYS)
+    label = expected.get("label")
+    if label not in VALID_MODEL_ROUTE_LABELS:
+        failures.append({"id": case_id, "section": "expected_model_route", "error": f"invalid_label:{label}"})
+    if "must_not_allow_runtime" in expected and not isinstance(expected["must_not_allow_runtime"], bool):
+        failures.append({"id": case_id, "section": "expected_model_route", "error": "must_not_allow_runtime_not_bool"})
+    if "rationale_contains" in expected:
+        _validate_string_list(
+            failures,
+            case_id=case_id,
+            section="expected_model_route",
+            field="rationale_contains",
+            value=expected["rationale_contains"],
+        )
 
 
 def _float_equal(left: Any, right: Any, *, tolerance: float = 1e-6) -> bool:
@@ -548,6 +581,71 @@ def _result_answer_errors(case: dict[str, Any], *, case_id: str, lang: str) -> l
     return failures
 
 
+def _model_route_decision(case: dict[str, Any], outputs: list[dict[str, Any]]) -> dict[str, Any]:
+    traces = [out.get("nlu_turn_trace") for out in outputs if isinstance(out.get("nlu_turn_trace"), dict)]
+    terminals = {str(trace.get("terminal_state") or "") for trace in traces}
+    intents = {str(trace.get("intent") or "") for trace in traces}
+    safety_classes = {str(trace.get("action_safety_class") or "") for trace in traces}
+    has_guarded_runtime_pending = any(bool(trace.get("guarded_runtime_intent_pending")) for trace in traces)
+    capabilities = {str(capability) for capability in case.get("capabilities", []) if isinstance(capability, str)}
+    difficulty = str(case.get("difficulty") or "")
+
+    label = "no_llm_required"
+    rationale = "read-only or deterministic guarded action does not require model interpretation"
+
+    if "runtime_action_guarded" in terminals or "expensive_runtime" in safety_classes or has_guarded_runtime_pending:
+        label = "human_confirmation_required"
+        rationale = "expensive_runtime action is guarded and must not be authorized by model routing"
+    elif terminals.intersection({"waiting_confirmation", "rejected"}):
+        label = "human_confirmation_required"
+        rationale = "confirmation_policy requires explicit user confirmation before mutation is applied"
+    elif terminals.intersection({"unsupported", "error"}):
+        label = "escalate_after_validation_failure"
+        rationale = "validation failure requires escalation instead of silent model fallback"
+    elif "config_mutation" in intents:
+        if not any(trace.get("applied_paths") for trace in traces):
+            label = "escalate_after_validation_failure"
+            rationale = "validation failure produced no applied configuration paths and requires escalation"
+            return {"label": label, "runtime_allowed": False, "rationale": rationale}
+        if difficulty in {"expert", "live"} or "llm_reliability" in capabilities:
+            label = "strong_model_candidate"
+            rationale = "higher difficulty interpretation should be routed to a stronger model candidate"
+        else:
+            label = "cheap_model_ok"
+            rationale = "standard structured configuration can use a cheap model before validation"
+
+    return {"label": label, "runtime_allowed": False, "rationale": rationale}
+
+
+def _model_route_errors(case: dict[str, Any], outputs: list[dict[str, Any]], *, case_id: str) -> list[dict[str, Any]]:
+    expected = case.get("expected_model_route") if isinstance(case.get("expected_model_route"), dict) else {}
+    if not expected:
+        return []
+    actual = _model_route_decision(case, outputs)
+    failures: list[dict[str, Any]] = []
+    if actual["label"] != expected.get("label"):
+        failures.append(
+            {
+                "id": case_id,
+                "section": "expected_model_route",
+                "error": f"label:expected={expected.get('label')}:actual={actual['label']}",
+            }
+        )
+    if expected.get("must_not_allow_runtime") is True and actual["runtime_allowed"]:
+        failures.append({"id": case_id, "section": "expected_model_route", "error": "runtime_was_allowed"})
+    rationale = str(actual.get("rationale") or "")
+    for expected_text in expected.get("rationale_contains", []) or []:
+        if expected_text not in rationale:
+            failures.append(
+                {
+                    "id": case_id,
+                    "section": "expected_model_route",
+                    "error": f"missing_rationale_text:{expected_text}",
+                }
+            )
+    return failures
+
+
 def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, Any]:
     shape_report = validate_benchmark_shape(path)
     if shape_report["failed"]:
@@ -601,6 +699,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
                 case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
             case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
             case_failures.extend(_result_answer_errors(case, case_id=case_id, lang=str(case.get("lang") or "en")))
+            case_failures.extend(_model_route_errors(case, outputs, case_id=case_id))
         finally:
             reset_session(session_id)
 
