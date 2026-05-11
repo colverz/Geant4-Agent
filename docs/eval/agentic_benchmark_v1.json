@@ -488,6 +488,71 @@
     }
   },
   {
+    "id": "standard-invalid-physics-list-keeps-runtime-not-ready",
+    "suite": "grounding",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["grounding", "workflow_trace", "config_extraction", "runtime_readiness"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERTT; output json.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "terminal_state": "mutation_applied",
+          "must_include_nodes": ["validate", "apply_session"],
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "expected_config_delta": {
+      "must_apply_paths": ["geometry.structure", "source.energy", "materials.selected_materials"],
+      "must_not_apply_paths": ["physics.physics_list"],
+      "expected_final_values": {
+        "geometry.structure": "single_box",
+        "source.energy": 1.0,
+        "physics.physics_list": null
+      },
+      "forbidden_final_values": {
+        "physics.physics_list": "FTFP_BERTT"
+      }
+    },
+    "expected_runtime": {
+      "after_turn_index": 0,
+      "must_have_runtime_payload": false
+    }
+  },
+  {
+    "id": "en-viewer-request-guarded",
+    "suite": "tool_guard",
+    "difficulty": "smoke",
+    "lang": "en",
+    "capabilities": ["intent_routing", "tool_guard", "workflow_trace", "model_routing"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Open the Geant4 viewer and show the geometry.",
+        "expected_trace": {
+          "intent": "viewer_requested",
+          "action_safety_class": "expensive_runtime",
+          "terminal_state": "runtime_action_guarded",
+          "must_include_nodes": ["runtime_guard"],
+          "must_block_tools": ["viewer_open"],
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "expected_model_route": {
+      "label": "human_confirmation_required",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["expensive_runtime"]
+    }
+  },
+  {
     "id": "zh-viewer-request-guarded",
     "suite": "tool_guard",
     "difficulty": "smoke",

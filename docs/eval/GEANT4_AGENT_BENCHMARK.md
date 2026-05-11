@@ -675,15 +675,18 @@ Implemented so far:
 - Live LLM benchmark review identified ambiguous multi-turn runtime semantics;
   `expected_runtime.after_turn_index` now pins the turn whose config must produce
   the runtime payload.
+- Live LLM review feedback added standard coverage for invalid physics-list
+  grounding and English viewer tool guard symmetry.
 
 Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 15
+- Standard progression checkpoint: started. The benchmark now includes 17
   hand-designed cases, including allowed session mutation, confirmation accept
   and reject policy, result metric Q&A, result artifact-path Q&A, and partial
-  complex-geometry mutation blocking.
+  complex-geometry mutation blocking, invalid physics-list grounding, and
+  bilingual viewer guarding.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: live LLM reliability, stronger-model candidate
