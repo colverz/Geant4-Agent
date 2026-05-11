@@ -124,6 +124,33 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertIn("must_not_allow_runtime_not_bool", errors)
         self.assertIn("unsupported_key:unsupported_field", errors)
 
+    def test_invalid_config_delta_shape_is_rejected(self) -> None:
+        cases = [
+            {
+                "id": "bad-config-delta",
+                "suite": "core",
+                "difficulty": "standard",
+                "lang": "en",
+                "capabilities": ["config_extraction"],
+                "turns": [{"text": "Set source energy to 1 MeV."}],
+                "expected_config_delta": {
+                    "must_apply_paths": "source.energy",
+                    "expected_final_values": ["source.energy", 1.0],
+                    "unsupported_field": True,
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "benchmark.json"
+            path.write_text(json.dumps(cases), encoding="utf-8")
+            report = validate_benchmark_shape(path)
+
+        self.assertGreater(report["failed"], 0)
+        errors = [failure["error"] for failure in report["failures"]]
+        self.assertIn("must_apply_paths_not_list", errors)
+        self.assertIn("expected_final_values_not_object", errors)
+        self.assertIn("unsupported_key:unsupported_field", errors)
+
 
 if __name__ == "__main__":
     unittest.main()

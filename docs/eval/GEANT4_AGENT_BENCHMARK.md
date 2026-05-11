@@ -437,14 +437,12 @@ Optional top-level fields:
 - `must_use_llm`
 - `forbid_fallback`
 
-`expected_config` fields:
+`expected_config_delta` fields:
 
-- `must_set_paths`
-- `must_preserve_paths`
-- `must_reject_paths`
-- `must_not_set_paths`
-- `expected_values`
-- `forbidden_values`
+- `must_apply_paths`
+- `must_not_apply_paths`
+- `expected_final_values`
+- `forbidden_final_values`
 
 `expected_runtime` fields:
 
@@ -651,6 +649,7 @@ Implemented so far:
 - V1 coverage validation for minimum suite, difficulty, and capability counts
 - deterministic dry-run grading through `process_turn`, `nlu_turn_trace`, and
   runtime payload generation
+- deterministic config delta grading for applied paths and final config values
 - deterministic result answer grading for grounded metric and artifact questions
 - model routing dry-run labels for no-LLM, cheap model, guarded human
   confirmation, and validation escalation paths
@@ -676,12 +675,13 @@ Current quantity assessment:
   and reject policy, result metric Q&A, and result artifact-path Q&A.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: live LLM reliability, config delta grading,
-  stronger-model candidate cases, and future opt-in runtime execution.
+- Highest-value next additions: live LLM reliability, stronger-model candidate
+  cases, config delta precision/recall summaries, and future opt-in runtime
+  execution.
 
 Not implemented yet:
 
-- config delta grading
+- config delta precision/recall summary metrics
 - live LLM execution
 - stronger-model candidate cases
 - real Geant4 execution

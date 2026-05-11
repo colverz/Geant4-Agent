@@ -85,6 +85,14 @@
         "physics_list": "FTFP_BERT"
       }
     },
+    "expected_config_delta": {
+      "must_apply_paths": ["geometry.structure", "source.energy", "source.particle"],
+      "expected_final_values": {
+        "geometry.structure": "single_box",
+        "source.energy": 1.0,
+        "source.particle": "gamma"
+      }
+    },
     "expected_model_route": {
       "label": "cheap_model_ok",
       "must_not_allow_runtime": true,
@@ -189,7 +197,15 @@
           "must_not_call_runtime": true
         }
       }
-    ]
+    ],
+    "expected_config_delta": {
+      "expected_final_values": {
+        "source.energy": 1.0
+      },
+      "forbidden_final_values": {
+        "source.energy": 2.0
+      }
+    }
   },
   {
     "id": "standard-overwrite-reject-keeps-original",
@@ -230,7 +246,15 @@
           "must_not_call_runtime": true
         }
       }
-    ]
+    ],
+    "expected_config_delta": {
+      "expected_final_values": {
+        "source.energy": 1.0
+      },
+      "forbidden_final_values": {
+        "source.energy": 2.0
+      }
+    }
   },
   {
     "id": "adversarial-unsupported-ct-scanner",

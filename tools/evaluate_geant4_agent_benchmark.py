@@ -71,6 +71,7 @@ TOP_LEVEL_KEYS = {
     "capabilities",
     "requires_live_llm",
     "requires_real_runtime",
+    "expected_config_delta",
     "expected_runtime",
     "expected_result_answer",
     "expected_model_route",
@@ -89,6 +90,7 @@ TRACE_KEYS = {
     "must_not_call_runtime",
 }
 RUNTIME_KEYS = {"must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
+CONFIG_DELTA_KEYS = {"must_apply_paths", "must_not_apply_paths", "expected_final_values", "forbidden_final_values"}
 RESULT_ANSWER_KEYS = {"question", "must_include", "must_not_include", "must_remain_read_only"}
 MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
@@ -244,6 +246,13 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
                     else:
                         _validate_trace(failures, case_id=case_id, trace=expected_trace)
 
+        if "expected_config_delta" in item:
+            expected_config_delta = item["expected_config_delta"]
+            if not isinstance(expected_config_delta, dict):
+                failures.append({"id": case_id, "section": "expected_config_delta", "error": "not_object"})
+            else:
+                _validate_config_delta(failures, case_id=case_id, expected=expected_config_delta)
+
         if "expected_runtime" in item:
             expected_runtime = item["expected_runtime"]
             if not isinstance(expected_runtime, dict):
@@ -384,6 +393,22 @@ def _validate_runtime(failures: list[dict[str, Any]], *, case_id: str, runtime: 
         failures.append({"id": case_id, "section": "expected_runtime", "error": "expected_payload_values_not_object"})
 
 
+def _validate_config_delta(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
+    _add_unknown_key_errors(failures, case_id=case_id, section="expected_config_delta", payload=expected, allowed=CONFIG_DELTA_KEYS)
+    for field in ("must_apply_paths", "must_not_apply_paths"):
+        if field in expected:
+            _validate_string_list(
+                failures,
+                case_id=case_id,
+                section="expected_config_delta",
+                field=field,
+                value=expected[field],
+            )
+    for field in ("expected_final_values", "forbidden_final_values"):
+        if field in expected and not isinstance(expected[field], dict):
+            failures.append({"id": case_id, "section": "expected_config_delta", "error": f"{field}_not_object"})
+
+
 def _validate_result_answer(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
     _add_unknown_key_errors(failures, case_id=case_id, section="expected_result_answer", payload=expected, allowed=RESULT_ANSWER_KEYS)
     if "question" in expected and not isinstance(expected["question"], str):
@@ -429,6 +454,15 @@ def _values_equal(left: Any, right: Any) -> bool:
     if isinstance(right, float):
         return _float_equal(left, right)
     return left == right
+
+
+def _get_path(payload: dict[str, Any], path: str) -> Any:
+    current: Any = payload
+    for part in str(path).split("."):
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
 
 
 def _runtime_payload_ready(payload: dict[str, Any], required_keys: list[str] | None = None) -> bool:
@@ -510,6 +544,40 @@ def _runtime_errors(expected: dict[str, Any], payload: dict[str, Any], *, case_i
             actual = payload.get(key)
             if not _values_equal(actual, value):
                 failures.append({"id": case_id, "section": "expected_runtime", "error": f"payload_value:{key}:expected={value!r}:actual={actual!r}"})
+    return failures
+
+
+def _config_delta_errors(
+    expected: dict[str, Any],
+    final_config: dict[str, Any],
+    outputs: list[dict[str, Any]],
+    *,
+    case_id: str,
+) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    applied_paths = {
+        str(path)
+        for out in outputs
+        for path in ((out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}).get("applied_paths") or [])
+    }
+    for path in expected.get("must_apply_paths", []) or []:
+        if path not in applied_paths:
+            failures.append({"id": case_id, "section": "expected_config_delta", "error": f"missing_applied_path:{path}"})
+    for path in expected.get("must_not_apply_paths", []) or []:
+        if path in applied_paths:
+            failures.append({"id": case_id, "section": "expected_config_delta", "error": f"forbidden_applied_path:{path}"})
+    expected_values = expected.get("expected_final_values") or {}
+    if isinstance(expected_values, dict):
+        for path, value in expected_values.items():
+            actual = _get_path(final_config, str(path))
+            if not _values_equal(actual, value):
+                failures.append({"id": case_id, "section": "expected_config_delta", "error": f"final_value:{path}:expected={value!r}:actual={actual!r}"})
+    forbidden_values = expected.get("forbidden_final_values") or {}
+    if isinstance(forbidden_values, dict):
+        for path, value in forbidden_values.items():
+            actual = _get_path(final_config, str(path))
+            if _values_equal(actual, value):
+                failures.append({"id": case_id, "section": "expected_config_delta", "error": f"forbidden_final_value:{path}:actual={actual!r}"})
     return failures
 
 
@@ -694,6 +762,9 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
 
             final_config = outputs[-1].get("config", {}) if outputs else {}
             runtime_payload = build_runtime_payload(final_config)
+            expected_config_delta = case.get("expected_config_delta") if isinstance(case.get("expected_config_delta"), dict) else {}
+            if expected_config_delta:
+                case_failures.extend(_config_delta_errors(expected_config_delta, final_config, outputs, case_id=case_id))
             expected_runtime = case.get("expected_runtime") if isinstance(case.get("expected_runtime"), dict) else {}
             if expected_runtime:
                 case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
