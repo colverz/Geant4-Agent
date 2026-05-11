@@ -32,11 +32,13 @@ def load_config(path: str | Path) -> OllamaConfig:
     model_override = os.getenv("GEANT4_LLM_MODEL_OVERRIDE", "").strip()
     if model_override:
         model = model_override
+    timeout_override = os.getenv("GEANT4_LLM_TIMEOUT_S", "").strip()
+    timeout_s = int(timeout_override) if timeout_override else int(payload.get("timeout_s", 60))
     return OllamaConfig(
         provider=provider,
         base_url=str(payload.get("base_url", "http://localhost:11434")),
         model=model,
-        timeout_s=int(payload.get("timeout_s", 60)),
+        timeout_s=timeout_s,
         headers=dict(payload.get("headers", {"Content-Type": "application/json"})),
         api_key=str(payload.get("api_key", "")).strip() or None,
         api_key_env=str(payload.get("api_key_env", "")).strip() or None,

@@ -53,18 +53,28 @@ class Geant4AgentBenchmarkReviewTest(unittest.TestCase):
             "case_feedback": [{"id": "smoke-read-config-readonly", "verdict": "keep", "reason": "clear read-only guard"}],
         }
         previous = os.environ.get("GEANT4_LLM_MODEL_OVERRIDE")
+        previous_timeout = os.environ.get("GEANT4_LLM_TIMEOUT_S")
+        seen_timeouts: list[str | None] = []
+
+        def fake_live_chat(*args, **kwargs):
+            seen_timeouts.append(os.environ.get("GEANT4_LLM_TIMEOUT_S"))
+            return {"response": json.dumps(response)}
+
         with mock.patch(
             "tools.review_geant4_agent_benchmark.chat",
-            return_value={"response": json.dumps(response)},
+            side_effect=fake_live_chat,
         ) as fake_chat:
             report = review_benchmark_with_llm(
                 benchmark_path=Path("docs/eval/agentic_benchmark_v1.json"),
                 llm_config_path="dummy.json",
                 models=["deepseek-v4-flash", "deepseek-v4-pro"],
                 live_llm=True,
+                timeout_s=123,
             )
 
         self.assertEqual(os.environ.get("GEANT4_LLM_MODEL_OVERRIDE"), previous)
+        self.assertEqual(os.environ.get("GEANT4_LLM_TIMEOUT_S"), previous_timeout)
+        self.assertEqual(seen_timeouts, ["123", "123"])
         self.assertTrue(report["ok"])
         self.assertEqual(len(report["reviews"]), 2)
         self.assertEqual(fake_chat.call_count, 2)

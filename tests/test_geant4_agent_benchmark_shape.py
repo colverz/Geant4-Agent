@@ -132,6 +132,29 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertIn("must_not_allow_runtime_not_bool", errors)
         self.assertIn("unsupported_key:unsupported_field", errors)
 
+    def test_invalid_runtime_turn_index_shape_is_rejected(self) -> None:
+        cases = [
+            {
+                "id": "bad-runtime-turn-index",
+                "suite": "runtime",
+                "difficulty": "standard",
+                "lang": "en",
+                "turns": [{"text": "configure a copper box"}],
+                "expected_runtime": {
+                    "after_turn_index": -1,
+                    "must_have_runtime_payload": True,
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "benchmark.json"
+            path.write_text(json.dumps(cases), encoding="utf-8")
+            report = validate_benchmark_shape(path)
+
+        self.assertGreater(report["failed"], 0)
+        errors = [failure["error"] for failure in report["failures"]]
+        self.assertIn("after_turn_index_not_non_negative_int", errors)
+
     def test_invalid_config_delta_shape_is_rejected(self) -> None:
         cases = [
             {

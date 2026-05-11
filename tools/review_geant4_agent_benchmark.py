@@ -135,12 +135,31 @@ def _with_model_override(model: str):
     return _ModelOverride()
 
 
+def _with_timeout_override(timeout_s: int | None):
+    class _TimeoutOverride:
+        def __enter__(self):
+            self.previous = os.environ.get("GEANT4_LLM_TIMEOUT_S")
+            if timeout_s is not None:
+                os.environ["GEANT4_LLM_TIMEOUT_S"] = str(int(timeout_s))
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            if timeout_s is not None:
+                if self.previous is None:
+                    os.environ.pop("GEANT4_LLM_TIMEOUT_S", None)
+                else:
+                    os.environ["GEANT4_LLM_TIMEOUT_S"] = self.previous
+
+    return _TimeoutOverride()
+
+
 def review_benchmark_with_llm(
     *,
     benchmark_path: Path = DEFAULT_BENCHMARK_PATH,
     llm_config_path: str,
     models: list[str],
     live_llm: bool = False,
+    timeout_s: int | None = None,
 ) -> dict[str, Any]:
     shape_report = validate_benchmark_shape(benchmark_path)
     if shape_report["failed"]:
@@ -182,13 +201,14 @@ def review_benchmark_with_llm(
     errors: list[str] = []
     for model in selected_models:
         with _with_model_override(model):
-            try:
-                response = chat(prompt, config_path=llm_config_path, temperature=0.0)
-                raw_text = str(response.get("response", ""))
-            except Exception as exc:  # pragma: no cover - live network path
-                reviews.append({"model": model, "ok": False, "errors": [f"llm_call_failed:{type(exc).__name__}"]})
-                errors.append(f"{model or '<config_model>'}:llm_call_failed")
-                continue
+            with _with_timeout_override(timeout_s):
+                try:
+                    response = chat(prompt, config_path=llm_config_path, temperature=0.0)
+                    raw_text = str(response.get("response", ""))
+                except Exception as exc:  # pragma: no cover - live network path
+                    reviews.append({"model": model, "ok": False, "errors": [f"llm_call_failed:{type(exc).__name__}"]})
+                    errors.append(f"{model or '<config_model>'}:llm_call_failed")
+                    continue
         parsed, parse_errors = _parse_review_response(raw_text)
         reviews.append(
             {
@@ -219,6 +239,7 @@ def main() -> int:
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_BENCHMARK_PATH)
     parser.add_argument("--llm-config", default=os.environ.get("GEANT4_LLM_CONFIG", ""))
     parser.add_argument("--model", action="append", default=[], help="Model override. Can be provided multiple times.")
+    parser.add_argument("--timeout-s", type=int, default=None, help="Optional live LLM request timeout override in seconds.")
     parser.add_argument("--live-llm", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -228,6 +249,7 @@ def main() -> int:
         llm_config_path=args.llm_config,
         models=list(args.model or []),
         live_llm=bool(args.live_llm),
+        timeout_s=args.timeout_s,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -410,6 +410,7 @@
       }
     ],
     "expected_runtime": {
+      "after_turn_index": 0,
       "must_have_runtime_payload": true,
       "required_payload_keys": ["structure", "material", "source_type", "particle", "energy", "physics_list"]
     },

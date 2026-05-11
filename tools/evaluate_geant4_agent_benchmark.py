@@ -89,7 +89,7 @@ TRACE_KEYS = {
     "must_not_apply_session",
     "must_not_call_runtime",
 }
-RUNTIME_KEYS = {"must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
+RUNTIME_KEYS = {"after_turn_index", "must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
 CONFIG_DELTA_KEYS = {"must_apply_paths", "must_not_apply_paths", "expected_final_values", "forbidden_final_values"}
 RESULT_ANSWER_KEYS = {"question", "must_include", "must_not_include", "must_remain_read_only"}
 MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
@@ -379,6 +379,8 @@ def _validate_trace(failures: list[dict[str, Any]], *, case_id: str, trace: dict
 
 def _validate_runtime(failures: list[dict[str, Any]], *, case_id: str, runtime: dict[str, Any]) -> None:
     _add_unknown_key_errors(failures, case_id=case_id, section="expected_runtime", payload=runtime, allowed=RUNTIME_KEYS)
+    if "after_turn_index" in runtime and (not isinstance(runtime["after_turn_index"], int) or runtime["after_turn_index"] < 0):
+        failures.append({"id": case_id, "section": "expected_runtime", "error": "after_turn_index_not_non_negative_int"})
     if "must_have_runtime_payload" in runtime and not isinstance(runtime["must_have_runtime_payload"], bool):
         failures.append({"id": case_id, "section": "expected_runtime", "error": "must_have_runtime_payload_not_bool"})
     if "required_payload_keys" in runtime:
@@ -862,13 +864,15 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
                 case_failures.extend(_trace_errors(expected_trace, trace, case_id=case_id, turn_index=turn_index))
 
             final_config = outputs[-1].get("config", {}) if outputs else {}
-            runtime_payload = build_runtime_payload(final_config)
             expected_config_delta = case.get("expected_config_delta") if isinstance(case.get("expected_config_delta"), dict) else {}
             if expected_config_delta:
                 _update_config_delta_summary(config_delta_summary, expected_config_delta, final_config, outputs)
                 case_failures.extend(_config_delta_errors(expected_config_delta, final_config, outputs, case_id=case_id))
             expected_runtime = case.get("expected_runtime") if isinstance(case.get("expected_runtime"), dict) else {}
             if expected_runtime:
+                runtime_output_index = int(expected_runtime.get("after_turn_index", len(outputs) - 1))
+                runtime_config = outputs[runtime_output_index].get("config", {}) if 0 <= runtime_output_index < len(outputs) else {}
+                runtime_payload = build_runtime_payload(runtime_config)
                 case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
             case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
             case_failures.extend(_result_answer_errors(case, case_id=case_id, lang=str(case.get("lang") or "en")))

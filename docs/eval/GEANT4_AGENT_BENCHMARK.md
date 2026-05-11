@@ -446,6 +446,7 @@ Optional top-level fields:
 
 `expected_runtime` fields:
 
+- `after_turn_index`
 - `must_have_simulation_spec`
 - `must_have_runtime_payload`
 - `required_payload_keys`
@@ -671,6 +672,9 @@ Implemented so far:
   because of historical slot memory.
 - Dry-run probing caught and fixed a partial complex-geometry mutation risk
   where unresolved detector geometry could still write an isolated material.
+- Live LLM benchmark review identified ambiguous multi-turn runtime semantics;
+  `expected_runtime.after_turn_index` now pins the turn whose config must produce
+  the runtime payload.
 
 Current quantity assessment:
 
