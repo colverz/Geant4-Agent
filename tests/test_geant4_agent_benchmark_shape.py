@@ -155,6 +155,29 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         errors = [failure["error"] for failure in report["failures"]]
         self.assertIn("after_turn_index_not_non_negative_int", errors)
 
+    def test_invalid_result_answer_sample_report_is_rejected(self) -> None:
+        cases = [
+            {
+                "id": "bad-result-sample",
+                "suite": "result_qa",
+                "difficulty": "standard",
+                "lang": "en",
+                "turns": [{"text": "What was the latest result?"}],
+                "expected_result_answer": {
+                    "question": "What was the latest result?",
+                    "sample_report": "invented",
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "benchmark.json"
+            path.write_text(json.dumps(cases), encoding="utf-8")
+            report = validate_benchmark_shape(path)
+
+        self.assertGreater(report["failed"], 0)
+        errors = [failure["error"] for failure in report["failures"]]
+        self.assertIn("invalid_sample_report:invented", errors)
+
     def test_invalid_config_delta_shape_is_rejected(self) -> None:
         cases = [
             {

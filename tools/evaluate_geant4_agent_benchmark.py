@@ -91,7 +91,7 @@ TRACE_KEYS = {
 }
 RUNTIME_KEYS = {"after_turn_index", "must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
 CONFIG_DELTA_KEYS = {"must_apply_paths", "must_not_apply_paths", "expected_final_values", "forbidden_final_values"}
-RESULT_ANSWER_KEYS = {"question", "must_include", "must_not_include", "must_remain_read_only"}
+RESULT_ANSWER_KEYS = {"question", "sample_report", "must_include", "must_not_include", "must_remain_read_only"}
 MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
@@ -415,6 +415,8 @@ def _validate_result_answer(failures: list[dict[str, Any]], *, case_id: str, exp
     _add_unknown_key_errors(failures, case_id=case_id, section="expected_result_answer", payload=expected, allowed=RESULT_ANSWER_KEYS)
     if "question" in expected and not isinstance(expected["question"], str):
         failures.append({"id": case_id, "section": "expected_result_answer", "error": "question_not_string"})
+    if "sample_report" in expected and expected["sample_report"] not in {"default", "none"}:
+        failures.append({"id": case_id, "section": "expected_result_answer", "error": f"invalid_sample_report:{expected['sample_report']}"})
     for field in ("must_include", "must_not_include"):
         if field in expected:
             _validate_string_list(
@@ -737,7 +739,8 @@ def _result_answer_errors(case: dict[str, Any], *, case_id: str, lang: str) -> l
     if not expected:
         return []
     question = str(expected.get("question") or "")
-    answer = build_runtime_result_question_answer(question, _sample_runtime_report(), lang=lang)
+    sample_report = None if expected.get("sample_report") == "none" else _sample_runtime_report()
+    answer = build_runtime_result_question_answer(question, sample_report, lang=lang)
     failures: list[dict[str, Any]] = []
     for expected_text in expected.get("must_include", []) or []:
         if expected_text not in answer:

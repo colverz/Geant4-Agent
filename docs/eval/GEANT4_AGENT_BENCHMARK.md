@@ -456,6 +456,7 @@ Optional top-level fields:
 
 `expected_result_answer` fields:
 
+- `sample_report`
 - `must_include`
 - `must_not_include`
 - `must_refuse_unavailable_metric`
@@ -682,11 +683,11 @@ Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 17
+- Standard progression checkpoint: started. The benchmark now includes 18
   hand-designed cases, including allowed session mutation, confirmation accept
   and reject policy, result metric Q&A, result artifact-path Q&A, and partial
   complex-geometry mutation blocking, invalid physics-list grounding, and
-  bilingual viewer guarding.
+  bilingual viewer guarding. Result Q&A now also covers the no-history path.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: live LLM reliability, stronger-model candidate

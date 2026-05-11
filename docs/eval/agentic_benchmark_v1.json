@@ -378,6 +378,38 @@
     }
   },
   {
+    "id": "standard-result-question-without-history-readonly",
+    "suite": "result_qa",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["result_grounding", "intent_routing", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "What was the latest simulation result?",
+        "expected_trace": {
+          "intent": "read_summary",
+          "action_safety_class": "read_only",
+          "terminal_state": "read_only_answer",
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "runtime_side_effects": true,
+      "session_mutation": true
+    },
+    "expected_result_answer": {
+      "question": "What was the latest simulation result?",
+      "sample_report": "none",
+      "must_include": ["No runtime result is available yet."],
+      "must_not_include": ["target_edep_total_mev", "plane_crossing_count"],
+      "must_remain_read_only": true
+    }
+  },
+  {
     "id": "standard-multiturn-config-then-run-guarded",
     "suite": "trajectory",
     "difficulty": "standard",
