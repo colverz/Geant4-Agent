@@ -650,6 +650,8 @@ Implemented so far:
 - deterministic dry-run grading through `process_turn`, `nlu_turn_trace`, and
   runtime payload generation
 - deterministic config delta grading for applied paths and final config values
+- config delta summary metrics for expected-value accuracy and mutation guard
+  rates
 - deterministic result answer grading for grounded metric and artifact questions
 - model routing dry-run labels for no-LLM, cheap model, guarded human
   confirmation, and validation escalation paths
@@ -679,12 +681,12 @@ Current quantity assessment:
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: live LLM reliability, stronger-model candidate
-  cases, config delta precision/recall summaries, and future opt-in runtime
-  execution.
+  cases, config delta precision/recall over larger suites, and future opt-in
+  runtime execution.
 
 Not implemented yet:
 
-- config delta precision/recall summary metrics
+- config delta precision/recall over larger suites
 - live LLM execution
 - stronger-model candidate cases
 - real Geant4 execution

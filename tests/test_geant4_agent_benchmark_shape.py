@@ -26,6 +26,11 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
 
         self.assertEqual(report["failed"], 0)
         self.assertEqual(report["passed"], report["total"])
+        summary = report["config_delta_summary"]
+        self.assertGreater(summary["cases"], 0)
+        self.assertGreater(summary["expected_final_values_total"], 0)
+        self.assertEqual(summary["expected_final_value_accuracy"], 1.0)
+        self.assertEqual(summary["forbidden_final_value_guard_rate"], 1.0)
 
     def test_agentic_benchmark_v1_coverage_passes(self) -> None:
         report = validate_benchmark_coverage(Path("docs/eval/agentic_benchmark_v1.json"))

@@ -581,6 +581,77 @@ def _config_delta_errors(
     return failures
 
 
+def _new_config_delta_summary() -> dict[str, Any]:
+    return {
+        "cases": 0,
+        "must_apply_paths_total": 0,
+        "must_apply_paths_passed": 0,
+        "must_not_apply_paths_total": 0,
+        "must_not_apply_paths_passed": 0,
+        "expected_final_values_total": 0,
+        "expected_final_values_passed": 0,
+        "forbidden_final_values_total": 0,
+        "forbidden_final_values_passed": 0,
+    }
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return round(float(numerator) / float(denominator), 6)
+
+
+def _update_config_delta_summary(
+    summary: dict[str, Any],
+    expected: dict[str, Any],
+    final_config: dict[str, Any],
+    outputs: list[dict[str, Any]],
+) -> None:
+    if not expected:
+        return
+    summary["cases"] += 1
+    applied_paths = {
+        str(path)
+        for out in outputs
+        for path in ((out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}).get("applied_paths") or [])
+    }
+    for path in expected.get("must_apply_paths", []) or []:
+        summary["must_apply_paths_total"] += 1
+        if path in applied_paths:
+            summary["must_apply_paths_passed"] += 1
+    for path in expected.get("must_not_apply_paths", []) or []:
+        summary["must_not_apply_paths_total"] += 1
+        if path not in applied_paths:
+            summary["must_not_apply_paths_passed"] += 1
+    expected_values = expected.get("expected_final_values") or {}
+    if isinstance(expected_values, dict):
+        for path, value in expected_values.items():
+            summary["expected_final_values_total"] += 1
+            if _values_equal(_get_path(final_config, str(path)), value):
+                summary["expected_final_values_passed"] += 1
+    forbidden_values = expected.get("forbidden_final_values") or {}
+    if isinstance(forbidden_values, dict):
+        for path, value in forbidden_values.items():
+            summary["forbidden_final_values_total"] += 1
+            if not _values_equal(_get_path(final_config, str(path)), value):
+                summary["forbidden_final_values_passed"] += 1
+
+
+def _finalize_config_delta_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    finalized = dict(summary)
+    finalized["must_apply_path_recall"] = _ratio(summary["must_apply_paths_passed"], summary["must_apply_paths_total"])
+    finalized["must_not_apply_path_guard_rate"] = _ratio(summary["must_not_apply_paths_passed"], summary["must_not_apply_paths_total"])
+    finalized["expected_final_value_accuracy"] = _ratio(
+        summary["expected_final_values_passed"],
+        summary["expected_final_values_total"],
+    )
+    finalized["forbidden_final_value_guard_rate"] = _ratio(
+        summary["forbidden_final_values_passed"],
+        summary["forbidden_final_values_total"],
+    )
+    return finalized
+
+
 def _forbidden_errors(case: dict[str, Any], outputs: list[dict[str, Any]], *, case_id: str) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
     forbidden = case.get("forbidden") if isinstance(case.get("forbidden"), dict) else {}
@@ -728,6 +799,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
     cases = _load_json(path)
     failures: list[dict[str, Any]] = []
     passed = 0
+    config_delta_summary = _new_config_delta_summary()
     for case_index, case in enumerate(cases):
         if not isinstance(case, dict):
             continue
@@ -764,6 +836,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
             runtime_payload = build_runtime_payload(final_config)
             expected_config_delta = case.get("expected_config_delta") if isinstance(case.get("expected_config_delta"), dict) else {}
             if expected_config_delta:
+                _update_config_delta_summary(config_delta_summary, expected_config_delta, final_config, outputs)
                 case_failures.extend(_config_delta_errors(expected_config_delta, final_config, outputs, case_id=case_id))
             expected_runtime = case.get("expected_runtime") if isinstance(case.get("expected_runtime"), dict) else {}
             if expected_runtime:
@@ -793,6 +866,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
         "failed": len(failures),
         "failures": failures,
         "shape_report": shape_report,
+        "config_delta_summary": _finalize_config_delta_summary(config_delta_summary),
     }
 
 
