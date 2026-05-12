@@ -25,7 +25,7 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertIsNotNone(entry)
         assert entry is not None
         self.assertEqual(entry.structure, "single_box")
-        self.assertIsNone(resolve_geometry_structure("sphere"))
+        self.assertEqual(resolve_geometry_structure("sphere"), "single_sphere")
 
     def test_compile_single_box_from_slot_frame(self) -> None:
         frame = SlotFrame(confidence=0.92, geometry=GeometrySlots(kind="box", size_triplet_mm=[10, 20, 30]))
@@ -47,6 +47,18 @@ class GeometryCompilerTests(unittest.TestCase):
         self.assertEqual(result.spec.structure, "single_tubs")
         self.assertEqual(result.spec.params["radius_mm"], 15.0)
         self.assertEqual(result.spec.params["half_length_mm"], 40.0)
+
+    def test_compile_single_sphere_from_slot_frame(self) -> None:
+        frame = SlotFrame(confidence=0.86, geometry=GeometrySlots(kind="sphere", radius_mm=25))
+        result = compile_geometry_spec_from_slot_frame(frame)
+
+        self.assertTrue(result.ok)
+        assert result.spec is not None
+        self.assertEqual(result.spec.structure, "single_sphere")
+        self.assertEqual(result.spec.params["radius_mm"], 25.0)
+        fragment = geometry_spec_to_config_fragment(result.spec)
+        self.assertEqual(fragment["geometry"]["structure"], "single_sphere")
+        self.assertEqual(fragment["geometry"]["params"]["child_rmax"], 25.0)
 
     def test_compile_keeps_missing_required_geometry_fields(self) -> None:
         frame = SlotFrame(confidence=0.81, geometry=GeometrySlots(kind="box"))

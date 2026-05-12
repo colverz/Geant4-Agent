@@ -34,6 +34,11 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertEqual(report["suite_summary"]["tool_guard"]["pass_rate"], 1.0)
         self.assertEqual(report["capability_summary"]["workflow_trace"]["pass_rate"], 1.0)
         self.assertIn("adversarial", report["difficulty_summary"])
+        route_summary = report["model_route_summary"]
+        self.assertGreater(route_summary["cases"], 0)
+        self.assertEqual(route_summary["runtime_allowed_count"], 0)
+        self.assertIn("cheap_model_ok", route_summary["label_counts"])
+        self.assertIn("human_confirmation_required", route_summary["label_counts"])
 
     def test_agentic_benchmark_v1_coverage_passes(self) -> None:
         report = validate_benchmark_coverage(Path("docs/eval/agentic_benchmark_v1.json"))

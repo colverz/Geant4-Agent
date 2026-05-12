@@ -606,5 +606,44 @@
         }
       }
     ]
+  },
+  {
+    "id": "live-strong-model-candidate-runtime-ready",
+    "suite": "live_llm",
+    "difficulty": "live",
+    "lang": "en",
+    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace", "llm_reliability", "model_routing"],
+    "requires_live_llm": true,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "Set up a copper target box that is 10 by 20 by 30 millimeters. Put a 1 MeV gamma point source at z equals minus 20 mm, shooting in the positive z direction. Use FTFP_BERT and JSON output.",
+        "expected_trace": {
+          "intent": "config_mutation",
+          "action_safety_class": "config_mutation",
+          "must_include_nodes": ["validate", "apply_session"],
+          "must_not_include_nodes": ["runtime_guard"],
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "expected_runtime": {
+      "after_turn_index": 0,
+      "must_have_runtime_payload": true,
+      "required_payload_keys": ["structure", "material", "source_type", "particle", "energy", "physics_list"],
+      "expected_payload_values": {
+        "structure": "single_box",
+        "material": "G4_Cu",
+        "source_type": "point",
+        "particle": "gamma",
+        "energy": 1.0,
+        "physics_list": "FTFP_BERT"
+      }
+    },
+    "expected_model_route": {
+      "label": "strong_model_candidate",
+      "must_not_allow_runtime": true,
+      "rationale_contains": ["higher difficulty"]
+    }
   }
 ]

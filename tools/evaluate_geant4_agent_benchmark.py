@@ -682,6 +682,41 @@ def _finalize_bucket_summary(summary: dict[str, dict[str, int]]) -> dict[str, di
     return finalized
 
 
+def _new_model_route_summary() -> dict[str, Any]:
+    return {
+        "cases": 0,
+        "label_counts": {},
+        "runtime_allowed_count": 0,
+        "expected_label_counts": {},
+    }
+
+
+def _update_model_route_summary(summary: dict[str, Any], case: dict[str, Any], outputs: list[dict[str, Any]]) -> None:
+    capabilities = {str(capability) for capability in case.get("capabilities", []) if isinstance(capability, str)}
+    if "model_routing" not in capabilities:
+        return
+    summary["cases"] += 1
+    actual = _model_route_decision(case, outputs)
+    label = str(actual.get("label") or "")
+    if label:
+        label_counts = summary.setdefault("label_counts", {})
+        label_counts[label] = int(label_counts.get(label, 0)) + 1
+    if actual.get("runtime_allowed"):
+        summary["runtime_allowed_count"] = int(summary.get("runtime_allowed_count", 0)) + 1
+    expected = case.get("expected_model_route") if isinstance(case.get("expected_model_route"), dict) else {}
+    expected_label = str(expected.get("label") or "")
+    if expected_label:
+        expected_counts = summary.setdefault("expected_label_counts", {})
+        expected_counts[expected_label] = int(expected_counts.get(expected_label, 0)) + 1
+
+
+def _finalize_model_route_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    finalized = dict(summary)
+    finalized["label_counts"] = dict(sorted((summary.get("label_counts") or {}).items()))
+    finalized["expected_label_counts"] = dict(sorted((summary.get("expected_label_counts") or {}).items()))
+    return finalized
+
+
 def _forbidden_errors(case: dict[str, Any], outputs: list[dict[str, Any]], *, case_id: str) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
     forbidden = case.get("forbidden") if isinstance(case.get("forbidden"), dict) else {}
@@ -834,6 +869,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
     suite_summary: dict[str, dict[str, int]] = {}
     difficulty_summary: dict[str, dict[str, int]] = {}
     capability_summary: dict[str, dict[str, int]] = {}
+    model_route_summary = _new_model_route_summary()
     for case_index, case in enumerate(cases):
         if not isinstance(case, dict):
             continue
@@ -880,6 +916,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
             case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
             case_failures.extend(_result_answer_errors(case, case_id=case_id, lang=str(case.get("lang") or "en")))
             case_failures.extend(_model_route_errors(case, outputs, case_id=case_id))
+            _update_model_route_summary(model_route_summary, case, outputs)
         finally:
             reset_session(session_id)
 
@@ -913,6 +950,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
         "suite_summary": _finalize_bucket_summary(suite_summary),
         "difficulty_summary": _finalize_bucket_summary(difficulty_summary),
         "capability_summary": _finalize_bucket_summary(capability_summary),
+        "model_route_summary": _finalize_model_route_summary(model_route_summary),
     }
 
 

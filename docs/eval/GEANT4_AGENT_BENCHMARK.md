@@ -678,26 +678,30 @@ Implemented so far:
   the runtime payload.
 - Live LLM review feedback added standard coverage for invalid physics-list
   grounding and English viewer tool guard symmetry.
-- Live LLM scenario smoke is now opt-in but executable. A 5-case
-  `deepseek-v4-flash` run passed with `llm_used_count=5`, `fallback_count=0`,
+- Live LLM scenario smoke is now opt-in but executable. The current 8-case
+  `deepseek-v4-flash` run passed with `llm_used_count=8`, `fallback_count=0`,
   `profile_mismatch_count=0`, and correct EN/ZH slot prompt profile routing.
 - The live scenario evaluator now reports language counts, slot/semantic prompt
   profile usage, fallback count, and profile mismatch count so hidden fallback
   or prompt-profile contamination cannot be counted as success.
+- Live smoke expansion caught a real `single_sphere` compiler gap. The geometry
+  catalog now supports sphere radius compilation through `single_sphere` instead
+  of rejecting valid sphere prompts after the LLM had already extracted them.
 
 Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 18
+- Standard progression checkpoint: started. The benchmark now includes 19
   hand-designed cases, including allowed session mutation, confirmation accept
   and reject policy, result metric Q&A, result artifact-path Q&A, and partial
   complex-geometry mutation blocking, invalid physics-list grounding, and
-  bilingual viewer guarding. Result Q&A now also covers the no-history path.
+  bilingual viewer guarding. Result Q&A now also covers the no-history path, and
+  one live/LLM reliability case exercises `strong_model_candidate` routing.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: stronger-model candidate cases, config delta
-  precision/recall over larger suites, broader live LLM reliability runs, and
+- Highest-value next additions: config delta precision/recall over larger
+  suites, broader live LLM reliability runs, stronger-model comparisons, and
   future opt-in runtime execution.
 
 Not implemented yet:

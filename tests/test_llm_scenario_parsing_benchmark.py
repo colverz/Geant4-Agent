@@ -107,6 +107,15 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertEqual(report["accuracy"], 1.0)
         self.assertIn("live_summary", report)
 
+    def test_live_casebank_has_explicit_language_labels(self) -> None:
+        cases = json.loads(Path("docs/eval/llm_scenario_live_casebank.json").read_text(encoding="utf-8"))
+
+        self.assertGreaterEqual(len(cases), 8)
+        self.assertTrue(all(case.get("lang") in {"en", "zh"} for case in cases))
+        lang_counts = {lang: sum(1 for case in cases if case.get("lang") == lang) for lang in {"en", "zh"}}
+        self.assertGreaterEqual(lang_counts["en"], 4)
+        self.assertGreaterEqual(lang_counts["zh"], 4)
+
     def test_min_accuracy_gate_fails_when_threshold_is_not_met(self) -> None:
         casebank = [
             {

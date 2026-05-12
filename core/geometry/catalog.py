@@ -89,6 +89,24 @@ _CATALOG: dict[str, GeometryCatalogEntry] = {
         allowed_paths=frozenset(GEOMETRY_FAMILY_REGISTRY["single_tubs"]["allowed_paths"]),
         required_paths=frozenset(GEOMETRY_FAMILY_REGISTRY["single_tubs"]["required_paths"]),
     ),
+    "single_sphere": GeometryCatalogEntry(
+        structure="single_sphere",
+        user_kind_aliases=("sphere",),
+        structure_aliases=("single_sphere",),
+        required_slot_fields=("kind", "radius_mm"),
+        params=(
+            GeometryParamDefinition(
+                name="radius_mm",
+                slot_fields=("radius_mm",),
+                config_param_keys=("child_rmax",),
+                runtime_aliases=("radius",),
+                required=True,
+                description="Sphere radius in millimetres.",
+            ),
+        ),
+        allowed_paths=frozenset(GEOMETRY_FAMILY_REGISTRY["single_sphere"]["allowed_paths"]),
+        required_paths=frozenset(GEOMETRY_FAMILY_REGISTRY["single_sphere"]["required_paths"]),
+    ),
     "single_orb": GeometryCatalogEntry(
         structure="single_orb",
         user_kind_aliases=("orb",),
