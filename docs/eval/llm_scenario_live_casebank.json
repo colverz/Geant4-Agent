@@ -220,5 +220,163 @@
       },
       "known_gaps": []
     }
+  },
+  {
+    "id": "en_neutron_air_box_plane_scoring",
+    "description": "English neutron beam request with explicit plane scorer and detector-scorer exclusion.",
+    "lang": "en",
+    "prompt": "Create a 20 mm x 20 mm x 10 mm air box target. Use a 5 MeV neutron beam source at (0,0,-30) mm pointing along +z. Score target energy deposition and a plane crossing scorer named MidPlane at z=5 mm, but do not score detector crossings. Physics FTFP_BERT, output JSON.",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_AIR",
+        "source_type": "beam",
+        "particle": "neutron",
+        "energy": 5.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -30.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 20.0,
+        "size_y": 20.0,
+        "size_z": 10.0,
+        "scoring": {
+          "target_edep": true,
+          "detector_crossings": false,
+          "plane_crossings": true,
+          "plane": {"name": "MidPlane", "z_mm": 5.0}
+        }
+      },
+      "known_gaps": []
+    }
+  },
+  {
+    "id": "zh_detector_scoring_electron_lead_sphere",
+    "description": "Chinese detector and scoring request on a lead sphere target.",
+    "lang": "zh",
+    "prompt": "建立一个半径25 mm的铅球靶，2 MeV电子点源放在(0,0,-40) mm并沿+z方向入射。在(0,0,40) mm放一个硅探测器Detector，尺寸10 x 10 x 1 mm。记录靶能量沉积和探测器穿越，不记录平面穿越。物理列表FTFP_BERT，输出JSON。",
+    "parser_expected": {
+      "runtime": {
+        "structure": "single_sphere",
+        "material": "G4_Pb",
+        "source_type": "point",
+        "particle": "e-",
+        "energy": 2.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -40.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "geometry": {"radius_mm": 25.0},
+        "detector_enabled": true,
+        "detector": {
+          "enabled": true,
+          "volume_name": "Detector",
+          "material": "G4_Si",
+          "position_mm": [0.0, 0.0, 40.0],
+          "size_x_mm": 10.0,
+          "size_y_mm": 10.0,
+          "size_z_mm": 1.0
+        },
+        "scoring": {
+          "target_edep": true,
+          "detector_crossings": true,
+          "plane_crossings": false
+        }
+      },
+      "known_gaps": []
+    }
+  },
+  {
+    "id": "en_gaussian_gamma_beam_air_box",
+    "description": "English Gaussian gamma beam request with spot and divergence parameters.",
+    "lang": "en",
+    "prompt": "Configure a 30 mm x 30 mm x 30 mm air box. Fire a 6 MeV gamma beam from (0,0,-60) mm along +z. Use a Gaussian spot with radius 3 mm and sigma 1 mm, and Gaussian divergence with half angle 1 degree and sigma 0.2 degree. Score target edep and use FTFP_BERT with JSON output.",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_AIR",
+        "source_type": "beam",
+        "particle": "gamma",
+        "energy": 6.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -60.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 30.0,
+        "size_y": 30.0,
+        "size_z": 30.0,
+        "source_spot_radius_mm": 3.0,
+        "source_spot_profile": "gaussian",
+        "source_spot_sigma_mm": 1.0,
+        "source_divergence_half_angle_deg": 1.0,
+        "source_divergence_profile": "gaussian",
+        "source_divergence_sigma_deg": 0.2,
+        "scoring": {
+          "target_edep": true,
+          "plane_crossings": false
+        }
+      },
+      "known_gaps": []
+    }
+  },
+  {
+    "id": "zh_order_mixed_detector_plane_water_proton",
+    "description": "Chinese order-mixed request where scoring and detector appear before geometry.",
+    "lang": "zh",
+    "prompt": "先帮我设置记录项：只记录靶能量沉积和一个名叫ExitPlane的z=80 mm平面穿越，不记录探测器穿越。源是150 MeV质子束，从(0,0,-120) mm沿+z方向。几何是水圆柱靶，半径40 mm，半长80 mm。物理列表FTFP_BERT，输出JSON。",
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_tubs",
+        "material": "G4_WATER",
+        "source_type": "beam",
+        "particle": "proton",
+        "energy": 150.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -120.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "radius": 40.0,
+        "half_length": 80.0,
+        "scoring": {
+          "target_edep": true,
+          "detector_crossings": false,
+          "plane_crossings": true,
+          "plane": {"name": "ExitPlane", "z_mm": 80.0}
+        }
+      },
+      "known_gaps": []
+    }
+  },
+  {
+    "id": "zh_multiturn_modify_energy_after_config",
+    "description": "Chinese multi-turn configuration followed by a confirmed source-energy modification.",
+    "lang": "zh",
+    "turns": [
+      {
+        "text": "请配置一个10 mm x 20 mm x 30 mm的铜盒靶，1 MeV伽马点源放在(0,0,-20) mm，沿+z方向入射，物理过程用FTFP_BERT，输出json。"
+      },
+      {
+        "text": "把源能量改成2 MeV，其他设置保持不变。"
+      },
+      {
+        "text": "确认修改。"
+      }
+    ],
+    "parser_expected": {
+      "is_complete": true,
+      "runtime": {
+        "structure": "single_box",
+        "material": "G4_Cu",
+        "source_type": "point",
+        "particle": "gamma",
+        "energy": 2.0,
+        "physics_list": "FTFP_BERT",
+        "position": {"x": 0.0, "y": 0.0, "z": -20.0},
+        "direction": {"x": 0.0, "y": 0.0, "z": 1.0},
+        "size_x": 10.0,
+        "size_y": 20.0,
+        "size_z": 30.0
+      },
+      "known_gaps": []
+    }
   }
 ]

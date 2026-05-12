@@ -50,6 +50,44 @@ def _compact_model_summaries(report: dict[str, Any]) -> list[dict[str, Any]]:
     return compact
 
 
+def _stringify_failure_error(error: Any) -> str:
+    if isinstance(error, dict):
+        section = error.get("section")
+        message = error.get("error") or error.get("message") or error
+        return f"{section}:{message}" if section else str(message)
+    return str(error)
+
+
+def _compact_failures(report: dict[str, Any], *, limit: int = 8) -> list[dict[str, Any]]:
+    compact: list[dict[str, Any]] = []
+
+    def add_failure(failure: dict[str, Any], *, source: str | None = None) -> None:
+        if len(compact) >= limit:
+            return
+        errors = failure.get("errors")
+        error_items = errors if isinstance(errors, list) else []
+        item: dict[str, Any] = {
+            "id": failure.get("id"),
+            "error_count": len(error_items),
+            "errors": [_stringify_failure_error(error) for error in error_items[:3]],
+        }
+        if source:
+            item["source"] = source
+        compact.append(item)
+
+    for failure in report.get("failures") or []:
+        if isinstance(failure, dict):
+            add_failure(failure)
+    for child in report.get("reports") or []:
+        if not isinstance(child, dict):
+            continue
+        source = str(child.get("model_override") or child.get("mode") or child.get("name") or "")
+        for failure in child.get("failures") or []:
+            if isinstance(failure, dict):
+                add_failure(failure, source=source or None)
+    return compact
+
+
 def _compact_key_metrics(report: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
     for key in ("total", "passed", "failed", "accuracy"):
@@ -88,6 +126,8 @@ def summarize_eval_record(path: Path) -> dict[str, Any] | None:
         "git_dirty": bool(git.get("dirty")),
         "git_changed_line_count": git.get("changed_line_count"),
         "key_metrics": _compact_key_metrics(report),
+        "failure_count": int(report.get("failed") or 0) if _safe_number(report.get("failed")) is not None else len(_compact_failures(report)),
+        "failure_summary": _compact_failures(report),
         "model_summaries": _compact_model_summaries(report),
         "failed_models": report.get("failed_models", []),
         "hidden_fallback_models": report.get("hidden_fallback_models", []),
@@ -135,8 +175,8 @@ def _format_markdown(summary: dict[str, Any]) -> str:
     lines = [
         f"# Eval Records: {summary['total']}",
         "",
-        "| created_at_utc | tool | run_id | ok | key metrics |",
-        "| --- | --- | --- | --- | --- |",
+        "| created_at_utc | tool | run_id | ok | failures | key metrics |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for record in summary["records"]:
         metrics = record.get("key_metrics") if isinstance(record.get("key_metrics"), dict) else {}
@@ -147,6 +187,7 @@ def _format_markdown(summary: dict[str, Any]) -> str:
             f"{record.get('tool') or '-'} | "
             f"{record.get('run_id') or '-'} | "
             f"{record.get('ok')} | "
+            f"{record.get('failure_count') or 0} | "
             f"{metric_text} |"
         )
     return "\n".join(lines)

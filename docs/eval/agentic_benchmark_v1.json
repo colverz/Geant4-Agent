@@ -154,6 +154,36 @@
         "physics_list": "FTFP_BERT"
       }
     },
+    "expected_config_delta": {
+      "must_apply_paths": ["geometry.structure", "source.energy", "source.particle"],
+      "allowed_apply_paths": [
+        "geometry.params.child_hz",
+        "geometry.params.child_rmax",
+        "geometry.root_name",
+        "geometry.structure",
+        "materials.selected_materials",
+        "materials.selection_reasons",
+        "materials.selection_source",
+        "materials.volume_material_map",
+        "output.format",
+        "output.path",
+        "physics.physics_list",
+        "physics.selection_reasons",
+        "physics.selection_source",
+        "source.direction",
+        "source.energy",
+        "source.particle",
+        "source.position",
+        "source.selection_reasons",
+        "source.selection_source",
+        "source.type"
+      ],
+      "expected_final_values": {
+        "geometry.structure": "single_tubs",
+        "source.energy": 150.0,
+        "source.particle": "proton"
+      }
+    },
     "expected_model_route": {
       "label": "cheap_model_ok",
       "must_not_allow_runtime": true,
@@ -222,6 +252,29 @@
       }
     ],
     "expected_config_delta": {
+      "allowed_apply_paths": [
+        "geometry.params.module_x",
+        "geometry.params.module_y",
+        "geometry.params.module_z",
+        "geometry.root_name",
+        "geometry.structure",
+        "materials.selected_materials",
+        "materials.selection_reasons",
+        "materials.selection_source",
+        "materials.volume_material_map",
+        "output.format",
+        "output.path",
+        "physics.physics_list",
+        "physics.selection_reasons",
+        "physics.selection_source",
+        "source.direction",
+        "source.energy",
+        "source.particle",
+        "source.position",
+        "source.selection_reasons",
+        "source.selection_source",
+        "source.type"
+      ],
       "expected_final_values": {
         "source.energy": 1.0
       },
@@ -271,6 +324,29 @@
       }
     ],
     "expected_config_delta": {
+      "allowed_apply_paths": [
+        "geometry.params.module_x",
+        "geometry.params.module_y",
+        "geometry.params.module_z",
+        "geometry.root_name",
+        "geometry.structure",
+        "materials.selected_materials",
+        "materials.selection_reasons",
+        "materials.selection_source",
+        "materials.volume_material_map",
+        "output.format",
+        "output.path",
+        "physics.physics_list",
+        "physics.selection_reasons",
+        "physics.selection_source",
+        "source.direction",
+        "source.energy",
+        "source.particle",
+        "source.position",
+        "source.selection_reasons",
+        "source.selection_source",
+        "source.type"
+      ],
       "expected_final_values": {
         "source.energy": 1.0
       },
@@ -776,6 +852,26 @@
     "expected_config_delta": {
       "must_apply_paths": ["geometry.structure", "source.energy", "materials.selected_materials"],
       "must_not_apply_paths": ["physics.physics_list"],
+      "allowed_apply_paths": [
+        "geometry.params.module_x",
+        "geometry.params.module_y",
+        "geometry.params.module_z",
+        "geometry.root_name",
+        "geometry.structure",
+        "materials.selected_materials",
+        "materials.selection_reasons",
+        "materials.selection_source",
+        "materials.volume_material_map",
+        "output.format",
+        "output.path",
+        "source.direction",
+        "source.energy",
+        "source.particle",
+        "source.position",
+        "source.selection_reasons",
+        "source.selection_source",
+        "source.type"
+      ],
       "expected_final_values": {
         "geometry.structure": "single_box",
         "source.energy": 1.0,

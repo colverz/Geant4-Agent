@@ -35,6 +35,22 @@ class SummarizeEvalRecordsTest(unittest.TestCase):
                 {
                     "name": "llm_scenario_model_matrix",
                     "ok": False,
+                    "reports": [
+                        {
+                            "name": "llm_scenario_parsing",
+                            "mode": "live_llm",
+                            "model_override": "offline_v2",
+                            "failures": [
+                                {
+                                    "id": "case-1",
+                                    "errors": [
+                                        "runtime.energy:expected=2.0:actual=1.0",
+                                        {"section": "expected_runtime", "error": "missing_payload_key:particle"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
                     "model_summaries": [
                         {
                             "model": "offline_v2",
@@ -62,6 +78,10 @@ class SummarizeEvalRecordsTest(unittest.TestCase):
         self.assertEqual(dry_run["key_metrics"]["applied_path_precision"], 1.0)
         self.assertEqual(matrix["model_summaries"][0]["model"], "offline_v2")
         self.assertEqual(matrix["failed_models"], ["offline_v2"])
+        self.assertEqual(matrix["failure_count"], 1)
+        self.assertEqual(matrix["failure_summary"][0]["id"], "case-1")
+        self.assertEqual(matrix["failure_summary"][0]["source"], "offline_v2")
+        self.assertIn("missing_payload_key:particle", matrix["failure_summary"][0]["errors"][1])
 
     def test_latest_only_filters_to_latest_pointer_run_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

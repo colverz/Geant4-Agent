@@ -32,7 +32,7 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertGreater(summary["expected_final_values_total"], 0)
         self.assertEqual(summary["expected_final_value_accuracy"], 1.0)
         self.assertEqual(summary["forbidden_final_value_guard_rate"], 1.0)
-        self.assertGreater(summary["allowed_apply_paths_cases"], 0)
+        self.assertGreaterEqual(summary["allowed_apply_paths_cases"], 4)
         self.assertEqual(summary["applied_path_precision"], 1.0)
         self.assertEqual(summary["unexpected_applied_path_rate"], 0.0)
         quantitative_summary = report["quantitative_result_summary"]

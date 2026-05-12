@@ -64,6 +64,16 @@ def _case_lang(case: dict[str, Any]) -> str:
     return "zh" if _CJK_PATTERN.search(prompt) else "en"
 
 
+def _case_turns(case: dict[str, Any]) -> list[dict[str, Any]]:
+    turns = case.get("turns")
+    if isinstance(turns, list) and turns:
+        normalized = [turn for turn in turns if isinstance(turn, dict) and str(turn.get("text") or "").strip()]
+        if normalized:
+            return normalized
+    prompt = str(case.get("prompt") or "").strip()
+    return [{"text": prompt}] if prompt else []
+
+
 def _profile_matches_lang(profile_id: Any, lang: str) -> bool:
     if not profile_id:
         return False
@@ -75,15 +85,29 @@ def _trajectory_from_output(out: dict[str, Any], runtime_payload: dict[str, Any]
     return {
         "llm_used": bool(out.get("llm_used")),
         "fallback_reason": out.get("fallback_reason"),
-        "is_complete": bool(out.get("is_complete")),
-        "runtime_payload_ready": _runtime_payload_ready(runtime_payload),
-        "dialogue_action": out.get("dialogue_action"),
+                "is_complete": bool(out.get("is_complete")),
+                "runtime_payload_ready": _runtime_payload_ready(runtime_payload),
+                "runtime_payload": runtime_payload,
+                "dialogue_action": out.get("dialogue_action"),
         "pipelines": out.get("pipelines"),
         "slot_prompt_profile_id": slot_debug.get("prompt_profile_id"),
         "semantic_prompt_profile_id": (out.get("internal_trace") or {}).get("prompt_profile_id")
         if isinstance(out.get("internal_trace"), dict)
         else None,
     }
+
+
+def _first_prompt_profile(outputs: list[dict[str, Any]], key: str) -> str | None:
+    for item in outputs:
+        if key == "slot":
+            debug = item.get("slot_debug") if isinstance(item.get("slot_debug"), dict) else {}
+            profile_id = debug.get("prompt_profile_id")
+        else:
+            trace = item.get("internal_trace") if isinstance(item.get("internal_trace"), dict) else {}
+            profile_id = trace.get("prompt_profile_id")
+        if profile_id:
+            return str(profile_id)
+    return None
 
 
 def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], errors: list[str]) -> None:
@@ -128,36 +152,47 @@ def _check_agent_expected(expected: dict[str, Any], trajectory: dict[str, Any], 
 
 def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str) -> dict[str, Any]:
     case_id = str(case.get("id") or "unknown")
-    prompt = str(case.get("prompt") or "").strip()
     lang = _case_lang(case)
+    turns = _case_turns(case)
     parser_expected = case.get("parser_expected", {}) if isinstance(case.get("parser_expected"), dict) else {}
     errors: list[str] = []
-    if not prompt:
+    if not turns:
         return {"id": case_id, "errors": ["missing_prompt"], "known_gaps": parser_expected.get("known_gaps", [])}
 
     session_id = f"llm-scenario-parsing-{case_id}-{'live' if live_llm else 'offline'}"
     reset_session(session_id)
     try:
-        out = process_turn(
-            {
-                "session_id": session_id,
-                "text": prompt,
-                "llm_router": live_llm,
-                "llm_question": False,
-                "normalize_input": True,
-                "geometry_pipeline": "v2",
-                "source_pipeline": "v2",
-                "enable_compare": False,
-                "autofix": True,
-            },
-            ollama_config_path=llm_config_path,
-            lang=lang,
-        )
-        if out.get("error"):
-            errors.append(f"process_turn_error:{out['error']}")
-        llm_used = bool(out.get("llm_used"))
+        outputs: list[dict[str, Any]] = []
+        for turn in turns:
+            turn_lang = str(turn.get("lang") or lang)
+            out = process_turn(
+                {
+                    "session_id": session_id,
+                    "text": str(turn.get("text") or ""),
+                    "llm_router": live_llm,
+                    "llm_question": False,
+                    "normalize_input": True,
+                    "geometry_pipeline": "v2",
+                    "source_pipeline": "v2",
+                    "enable_compare": False,
+                    "autofix": True,
+                },
+                ollama_config_path=llm_config_path,
+                lang=turn_lang,
+            )
+            outputs.append(out)
+            if out.get("error"):
+                errors.append(f"process_turn_error:{out['error']}")
+        out = outputs[-1]
+        llm_used = any(bool(item.get("llm_used")) for item in outputs)
+        fallback_reasons = [
+            item.get("fallback_reason")
+            for item in outputs
+            if item.get("fallback_reason") and item.get("fallback_reason") != "E_LLM_ROUTER_DISABLED"
+        ]
+        fallback_reason = fallback_reasons[0] if fallback_reasons else None
         if live_llm and not llm_used:
-            errors.append(f"live_llm_not_used:fallback={out.get('fallback_reason')!r}")
+            errors.append(f"live_llm_not_used:fallback={fallback_reason!r}")
 
         if "is_complete" in parser_expected and bool(out.get("is_complete")) != bool(parser_expected["is_complete"]):
             errors.append(f"is_complete:expected={parser_expected['is_complete']!r}:actual={out.get('is_complete')!r}")
@@ -166,9 +201,13 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
         turn_trace = out.get("nlu_turn_trace") if isinstance(out.get("nlu_turn_trace"), dict) else {}
         context_pack = out.get("context_pack") if isinstance(out.get("context_pack"), dict) else {}
         trajectory = _trajectory_from_output(out, runtime_payload)
+        slot_prompt_profile_id = trajectory.get("slot_prompt_profile_id") or _first_prompt_profile(outputs, "slot")
+        semantic_prompt_profile_id = trajectory.get("semantic_prompt_profile_id") or _first_prompt_profile(outputs, "semantic")
         trajectory.update(
             {
                 "lang": lang,
+                "slot_prompt_profile_id": slot_prompt_profile_id,
+                "semantic_prompt_profile_id": semantic_prompt_profile_id,
                 "node_sequence": list(turn_trace.get("node_sequence") or []),
                 "terminal_state": turn_trace.get("terminal_state"),
                 "action_safety_class": turn_trace.get("action_safety_class"),
@@ -186,6 +225,24 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
                     item.get("source_type")
                     for item in context_pack.get("retrieved_knowledge", [])
                     if isinstance(item, dict)
+                ],
+                "turns": [
+                    {
+                        "index": index,
+                        "llm_used": bool(item.get("llm_used")),
+                        "fallback_reason": item.get("fallback_reason"),
+                        "terminal_state": (
+                            item.get("nlu_turn_trace", {}).get("terminal_state")
+                            if isinstance(item.get("nlu_turn_trace"), dict)
+                            else None
+                        ),
+                        "applied_paths": (
+                            list(item.get("nlu_turn_trace", {}).get("applied_paths") or [])
+                            if isinstance(item.get("nlu_turn_trace"), dict)
+                            else []
+                        ),
+                    }
+                    for index, item in enumerate(outputs)
                 ],
             }
         )
@@ -206,7 +263,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config_path: str)
             "known_gaps": parser_expected.get("known_gaps", []),
             "lang": lang,
             "llm_used": llm_used,
-            "fallback_reason": out.get("fallback_reason"),
+            "fallback_reason": fallback_reason,
             "trajectory": trajectory,
         }
     finally:

@@ -183,6 +183,50 @@ class LlmScenarioParsingBenchmarkTest(unittest.TestCase):
         self.assertIn("apply_session", trajectory["node_sequence"])
         self.assertIn("run_beam", trajectory["tool_calls_blocked"])
 
+    def test_multiturn_case_uses_final_config_and_keeps_turn_trace(self) -> None:
+        casebank = [
+            {
+                "id": "multiturn_probe",
+                "lang": "en",
+                "turns": [
+                    {"text": "Configure a 1 MeV gamma source."},
+                    {"text": "Change it to 2 MeV."},
+                ],
+                "parser_expected": {"runtime": {"energy": 2.0}},
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "casebank.json"
+            path.write_text(json.dumps(casebank), encoding="utf-8")
+            with patch(
+                "tools.evaluate_llm_scenario_parsing.process_turn",
+                side_effect=[
+                    {
+                        "is_complete": False,
+                        "config": {"source": {"energy": 1.0}},
+                        "llm_used": True,
+                        "fallback_reason": None,
+                        "slot_debug": {"prompt_profile_id": "slot_extract_en_strict_slot_v2"},
+                        "nlu_turn_trace": {"terminal_state": "mutation_applied", "applied_paths": ["source.energy"]},
+                    },
+                    {
+                        "is_complete": True,
+                        "config": {"source": {"energy": 2.0}},
+                        "llm_used": False,
+                        "fallback_reason": "E_LLM_ROUTER_DISABLED",
+                        "nlu_turn_trace": {"terminal_state": "mutation_applied", "applied_paths": ["source.energy"]},
+                    },
+                ],
+            ), patch("tools.evaluate_llm_scenario_parsing.build_runtime_payload", return_value={"energy": 2.0}):
+                report = evaluate_llm_scenario_parsing(path, live_llm=True, llm_config_path="dummy.json")
+
+        self.assertEqual(report["failed"], 0)
+        result = report["results"][0]
+        self.assertTrue(result["llm_used"])
+        self.assertIsNone(result["fallback_reason"])
+        self.assertEqual(len(result["trajectory"]["turns"]), 2)
+        self.assertEqual(result["trajectory"]["turns"][1]["fallback_reason"], "E_LLM_ROUTER_DISABLED")
+
     def test_agentic_adversarial_context_casebank_passes(self) -> None:
         report = evaluate_llm_scenario_parsing(Path("docs/eval/nlu_agentic_adversarial_casebank.json"))
 
