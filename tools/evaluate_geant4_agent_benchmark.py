@@ -12,7 +12,17 @@ from planner.runtime_result import build_runtime_result_question_answer
 
 DEFAULT_BENCHMARK_PATH = Path("docs/eval/agentic_benchmark_v1.json")
 
-VALID_SUITES = {"core", "trajectory", "grounding", "tool_guard", "runtime", "result_qa", "live_llm", "routing"}
+VALID_SUITES = {
+    "core",
+    "trajectory",
+    "grounding",
+    "tool_guard",
+    "runtime",
+    "result_qa",
+    "quantitative_runtime",
+    "live_llm",
+    "routing",
+}
 VALID_DIFFICULTIES = {"smoke", "standard", "adversarial", "expert", "live"}
 VALID_LANGS = {"en", "zh"}
 VALID_CAPABILITIES = {
@@ -24,6 +34,7 @@ VALID_CAPABILITIES = {
     "tool_guard",
     "runtime_readiness",
     "result_grounding",
+    "quantitative_result",
     "llm_reliability",
     "model_routing",
 }
@@ -74,6 +85,7 @@ TOP_LEVEL_KEYS = {
     "expected_config_delta",
     "expected_runtime",
     "expected_result_answer",
+    "expected_quantitative_result",
     "expected_model_route",
     "forbidden",
 }
@@ -92,6 +104,14 @@ TRACE_KEYS = {
 RUNTIME_KEYS = {"after_turn_index", "must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
 CONFIG_DELTA_KEYS = {"must_apply_paths", "must_not_apply_paths", "expected_final_values", "forbidden_final_values"}
 RESULT_ANSWER_KEYS = {"question", "sample_report", "must_include", "must_not_include", "must_remain_read_only"}
+QUANTITATIVE_RESULT_KEYS = {
+    "sample_report",
+    "required_metric_keys",
+    "expected_metric_values",
+    "non_negative_metric_keys",
+    "expected_relations",
+}
+QUANTITATIVE_RELATION_KEYS = {"left", "op", "right", "numerator", "denominator"}
 MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
@@ -267,6 +287,13 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
             else:
                 _validate_result_answer(failures, case_id=case_id, expected=expected_result_answer)
 
+        if "expected_quantitative_result" in item:
+            expected_quantitative_result = item["expected_quantitative_result"]
+            if not isinstance(expected_quantitative_result, dict):
+                failures.append({"id": case_id, "section": "expected_quantitative_result", "error": "not_object"})
+            else:
+                _validate_quantitative_result(failures, case_id=case_id, expected=expected_quantitative_result)
+
         if "expected_model_route" in item:
             expected_model_route = item["expected_model_route"]
             if not isinstance(expected_model_route, dict):
@@ -428,6 +455,59 @@ def _validate_result_answer(failures: list[dict[str, Any]], *, case_id: str, exp
             )
     if "must_remain_read_only" in expected and not isinstance(expected["must_remain_read_only"], bool):
         failures.append({"id": case_id, "section": "expected_result_answer", "error": "must_remain_read_only_not_bool"})
+
+
+def _validate_quantitative_result(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
+    _add_unknown_key_errors(
+        failures,
+        case_id=case_id,
+        section="expected_quantitative_result",
+        payload=expected,
+        allowed=QUANTITATIVE_RESULT_KEYS,
+    )
+    if "sample_report" in expected and expected["sample_report"] not in {"default"}:
+        failures.append(
+            {
+                "id": case_id,
+                "section": "expected_quantitative_result",
+                "error": f"invalid_sample_report:{expected['sample_report']}",
+            }
+        )
+    for field in ("required_metric_keys", "non_negative_metric_keys"):
+        if field in expected:
+            _validate_string_list(
+                failures,
+                case_id=case_id,
+                section="expected_quantitative_result",
+                field=field,
+                value=expected[field],
+            )
+    if "expected_metric_values" in expected and not isinstance(expected["expected_metric_values"], dict):
+        failures.append(
+            {
+                "id": case_id,
+                "section": "expected_quantitative_result",
+                "error": "expected_metric_values_not_object",
+            }
+        )
+    relations = expected.get("expected_relations")
+    if relations is None:
+        return
+    if not isinstance(relations, list):
+        failures.append({"id": case_id, "section": "expected_quantitative_result", "error": "expected_relations_not_list"})
+        return
+    for index, relation in enumerate(relations):
+        section = f"expected_quantitative_result.expected_relations[{index}]"
+        if not isinstance(relation, dict):
+            failures.append({"id": case_id, "section": section, "error": "not_object"})
+            continue
+        _add_unknown_key_errors(failures, case_id=case_id, section=section, payload=relation, allowed=QUANTITATIVE_RELATION_KEYS)
+        op = relation.get("op")
+        if op not in {"equals", "equals_division"}:
+            failures.append({"id": case_id, "section": section, "error": f"invalid_op:{op}"})
+        for key in ("left", "right", "numerator", "denominator"):
+            if key in relation and not isinstance(relation[key], str):
+                failures.append({"id": case_id, "section": section, "error": f"{key}_not_string"})
 
 
 def _validate_model_route(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
@@ -599,6 +679,20 @@ def _new_config_delta_summary() -> dict[str, Any]:
     }
 
 
+def _new_quantitative_result_summary() -> dict[str, Any]:
+    return {
+        "cases": 0,
+        "required_metric_keys_total": 0,
+        "required_metric_keys_passed": 0,
+        "expected_metric_values_total": 0,
+        "expected_metric_values_passed": 0,
+        "non_negative_metric_keys_total": 0,
+        "non_negative_metric_keys_passed": 0,
+        "expected_relations_total": 0,
+        "expected_relations_passed": 0,
+    }
+
+
 def _ratio(numerator: int, denominator: int) -> float | None:
     if denominator <= 0:
         return None
@@ -653,6 +747,99 @@ def _finalize_config_delta_summary(summary: dict[str, Any]) -> dict[str, Any]:
         summary["forbidden_final_values_passed"],
         summary["forbidden_final_values_total"],
     )
+    return finalized
+
+
+def _relation_passes(relation: dict[str, Any], report: dict[str, Any]) -> bool:
+    op = relation.get("op")
+    left = _get_path(report, str(relation.get("left") or ""))
+    if op == "equals":
+        right = _get_path(report, str(relation.get("right") or ""))
+        return _values_equal(left, right)
+    if op == "equals_division":
+        numerator = _get_path(report, str(relation.get("numerator") or ""))
+        denominator = _get_path(report, str(relation.get("denominator") or ""))
+        try:
+            expected = float(numerator) / float(denominator)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return False
+        return _float_equal(left, expected)
+    return False
+
+
+def _quantitative_result_errors(expected: dict[str, Any], report: dict[str, Any], *, case_id: str) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for path in expected.get("required_metric_keys", []) or []:
+        if _get_path(report, str(path)) is None:
+            failures.append({"id": case_id, "section": "expected_quantitative_result", "error": f"missing_metric:{path}"})
+    expected_values = expected.get("expected_metric_values") or {}
+    if isinstance(expected_values, dict):
+        for path, value in expected_values.items():
+            actual = _get_path(report, str(path))
+            if not _values_equal(actual, value):
+                failures.append(
+                    {
+                        "id": case_id,
+                        "section": "expected_quantitative_result",
+                        "error": f"metric_value:{path}:expected={value!r}:actual={actual!r}",
+                    }
+                )
+    for path in expected.get("non_negative_metric_keys", []) or []:
+        actual = _get_path(report, str(path))
+        try:
+            if float(actual) < 0:
+                failures.append({"id": case_id, "section": "expected_quantitative_result", "error": f"negative_metric:{path}:{actual!r}"})
+        except (TypeError, ValueError):
+            failures.append({"id": case_id, "section": "expected_quantitative_result", "error": f"metric_not_numeric:{path}:{actual!r}"})
+    for index, relation in enumerate(expected.get("expected_relations", []) or []):
+        if not isinstance(relation, dict):
+            continue
+        if not _relation_passes(relation, report):
+            failures.append(
+                {
+                    "id": case_id,
+                    "section": "expected_quantitative_result",
+                    "error": f"relation_failed:{index}:{relation!r}",
+                }
+            )
+    return failures
+
+
+def _update_quantitative_result_summary(summary: dict[str, Any], expected: dict[str, Any], report: dict[str, Any]) -> None:
+    if not expected:
+        return
+    summary["cases"] += 1
+    for path in expected.get("required_metric_keys", []) or []:
+        summary["required_metric_keys_total"] += 1
+        if _get_path(report, str(path)) is not None:
+            summary["required_metric_keys_passed"] += 1
+    expected_values = expected.get("expected_metric_values") or {}
+    if isinstance(expected_values, dict):
+        for path, value in expected_values.items():
+            summary["expected_metric_values_total"] += 1
+            if _values_equal(_get_path(report, str(path)), value):
+                summary["expected_metric_values_passed"] += 1
+    for path in expected.get("non_negative_metric_keys", []) or []:
+        summary["non_negative_metric_keys_total"] += 1
+        try:
+            if float(_get_path(report, str(path))) >= 0:
+                summary["non_negative_metric_keys_passed"] += 1
+        except (TypeError, ValueError):
+            pass
+    for relation in expected.get("expected_relations", []) or []:
+        if not isinstance(relation, dict):
+            continue
+        summary["expected_relations_total"] += 1
+        if _relation_passes(relation, report):
+            summary["expected_relations_passed"] += 1
+
+
+def _finalize_quantitative_result_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    finalized = dict(summary)
+    finalized["required_metric_key_rate"] = _ratio(summary["required_metric_keys_passed"], summary["required_metric_keys_total"])
+    finalized["expected_metric_value_accuracy"] = _ratio(summary["expected_metric_values_passed"], summary["expected_metric_values_total"])
+    finalized["non_negative_metric_rate"] = _ratio(summary["non_negative_metric_keys_passed"], summary["non_negative_metric_keys_total"])
+    finalized["relation_pass_rate"] = _ratio(summary["expected_relations_passed"], summary["expected_relations_total"])
     return finalized
 
 
@@ -753,6 +940,7 @@ def _sample_runtime_report() -> dict[str, Any]:
         },
         "key_metrics": {
             "target_edep_total_mev": 1.5,
+            "target_edep_mean_mev_per_event": 0.375,
             "target_hit_events": 2,
             "detector_crossing_count": 1,
             "plane_crossing_count": 0,
@@ -764,7 +952,13 @@ def _sample_runtime_report() -> dict[str, Any]:
                 "primary_count": 4,
                 "sampled_position_mean_mm": [0.0, 0.0, -20.0],
                 "sampled_direction_mean": [0.0, 0.0, 1.0],
-            }
+            },
+            "scoring": {
+                "target": {
+                    "target_edep_total_mev": 1.5,
+                    "target_edep_mean_mev_per_event": 0.375,
+                }
+            },
         },
     }
 
@@ -866,6 +1060,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
     failures: list[dict[str, Any]] = []
     passed = 0
     config_delta_summary = _new_config_delta_summary()
+    quantitative_result_summary = _new_quantitative_result_summary()
     suite_summary: dict[str, dict[str, int]] = {}
     difficulty_summary: dict[str, dict[str, int]] = {}
     capability_summary: dict[str, dict[str, int]] = {}
@@ -915,6 +1110,21 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
                 case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
             case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
             case_failures.extend(_result_answer_errors(case, case_id=case_id, lang=str(case.get("lang") or "en")))
+            expected_quantitative_result = (
+                case.get("expected_quantitative_result")
+                if isinstance(case.get("expected_quantitative_result"), dict)
+                else {}
+            )
+            if expected_quantitative_result:
+                sample_report = _sample_runtime_report()
+                _update_quantitative_result_summary(quantitative_result_summary, expected_quantitative_result, sample_report)
+                case_failures.extend(
+                    _quantitative_result_errors(
+                        expected_quantitative_result,
+                        sample_report,
+                        case_id=case_id,
+                    )
+                )
             case_failures.extend(_model_route_errors(case, outputs, case_id=case_id))
             _update_model_route_summary(model_route_summary, case, outputs)
         finally:
@@ -947,6 +1157,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
         "failures": failures,
         "shape_report": shape_report,
         "config_delta_summary": _finalize_config_delta_summary(config_delta_summary),
+        "quantitative_result_summary": _finalize_quantitative_result_summary(quantitative_result_summary),
         "suite_summary": _finalize_bucket_summary(suite_summary),
         "difficulty_summary": _finalize_bucket_summary(difficulty_summary),
         "capability_summary": _finalize_bucket_summary(capability_summary),

@@ -410,6 +410,95 @@
     }
   },
   {
+    "id": "standard-quantitative-target-edep-readonly",
+    "suite": "quantitative_runtime",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["quantitative_result", "result_grounding", "intent_routing", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "For the latest simulation result, what was the target deposited energy?",
+        "expected_trace": {
+          "intent": "read_summary",
+          "action_safety_class": "read_only",
+          "terminal_state": "read_only_answer",
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "runtime_side_effects": true,
+      "session_mutation": true
+    },
+    "expected_result_answer": {
+      "question": "What was the target deposited energy?",
+      "must_include": ["target_edep_total_mev is 1.5"],
+      "must_not_include": ["Gy", "dose is"],
+      "must_remain_read_only": true
+    },
+    "expected_quantitative_result": {
+      "sample_report": "default",
+      "required_metric_keys": ["key_metrics.target_edep_total_mev"],
+      "expected_metric_values": {
+        "key_metrics.target_edep_total_mev": 1.5
+      },
+      "non_negative_metric_keys": ["key_metrics.target_edep_total_mev"]
+    }
+  },
+  {
+    "id": "standard-quantitative-edep-mean-consistency",
+    "suite": "quantitative_runtime",
+    "difficulty": "standard",
+    "lang": "en",
+    "capabilities": ["quantitative_result", "result_grounding", "workflow_trace"],
+    "requires_live_llm": false,
+    "requires_real_runtime": false,
+    "turns": [
+      {
+        "text": "For the latest simulation result, what were events_completed and mean target edep per event?",
+        "expected_trace": {
+          "intent": "read_summary",
+          "action_safety_class": "read_only",
+          "terminal_state": "read_only_answer",
+          "must_not_apply_session": true,
+          "must_not_call_runtime": true
+        }
+      }
+    ],
+    "forbidden": {
+      "runtime_side_effects": true,
+      "session_mutation": true
+    },
+    "expected_quantitative_result": {
+      "sample_report": "default",
+      "required_metric_keys": [
+        "events_completed",
+        "key_metrics.target_edep_total_mev",
+        "key_metrics.target_edep_mean_mev_per_event"
+      ],
+      "expected_metric_values": {
+        "events_completed": 4,
+        "key_metrics.target_edep_total_mev": 1.5,
+        "key_metrics.target_edep_mean_mev_per_event": 0.375
+      },
+      "non_negative_metric_keys": [
+        "key_metrics.target_edep_total_mev",
+        "key_metrics.target_edep_mean_mev_per_event"
+      ],
+      "expected_relations": [
+        {
+          "left": "key_metrics.target_edep_mean_mev_per_event",
+          "op": "equals_division",
+          "numerator": "key_metrics.target_edep_total_mev",
+          "denominator": "events_completed"
+        }
+      ]
+    }
+  },
+  {
     "id": "standard-multiturn-config-then-run-guarded",
     "suite": "trajectory",
     "difficulty": "standard",

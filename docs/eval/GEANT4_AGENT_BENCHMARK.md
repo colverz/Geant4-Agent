@@ -124,6 +124,7 @@ capability below.
 | `tool_guard` | Whether high-cost actions are blocked unless explicitly triggered | `tool_calls_allowed`, `tool_calls_blocked`, API action | run, viewer, mutation plus run/viewer, replay |
 | `runtime_readiness` | Whether a valid app-side config becomes executable payload | `SimulationSpec`, runtime payload, schema compatibility | minimal valid, full representative, missing required field |
 | `result_grounding` | Whether result follow-up uses structured result facts | `runtime_smoke_report`, result summary, answer text | no result, partial result, missing metric, artifact path |
+| `quantitative_result` | Whether numeric runtime metrics are present, non-negative, and internally consistent | `runtime_smoke_report.key_metrics`, result summary, deterministic metric relations | target edep total, per-event mean, event completion, scorer count consistency |
 | `llm_reliability` | Whether live LLM improves trajectory without hidden fallback | `llm_used`, `fallback_reason`, validation errors, latency | live used, fallback rejected, invalid JSON, schema reject |
 | `model_routing` | Whether the proposed model choice is justified before execution | routing decision report, case difficulty, failure reason | no-LLM, cheap model, escalation, human confirmation |
 
@@ -272,6 +273,27 @@ Comprehensive: must include successful result, no result, missing scorer, partia
 completion, and artifact path questions.
 
 Non-dictionary check: cases differ by result availability and metric support.
+
+### G4AgentBench-QuantitativeRuntime
+
+Measures numeric runtime-result contracts without asking an LLM to judge physics.
+
+Primary signals:
+
+- required numeric metrics exist in `runtime_smoke_report`
+- energy-deposition metrics are numeric and non-negative
+- expected fixture values match exactly where the source of truth is deterministic
+- derived metrics obey mechanical relations, for example
+  `target_edep_mean_mev_per_event = target_edep_total_mev / events_completed`
+
+Necessary: yes. The project is no longer just a config generator; it must be
+able to evaluate quantitative simulation outputs.
+
+Comprehensive: first pass covers target deposited energy. Later passes should
+add detector/plane count consistency and opt-in real Geant4 result tolerances.
+
+Non-dictionary check: the grade is numeric report structure and arithmetic, not
+the wording of a user prompt.
 
 ### G4AgentBench-LiveLLM
 
@@ -657,6 +679,8 @@ Implemented so far:
 - suite, difficulty, and capability pass-rate summaries for comparing
   benchmark runs
 - deterministic result answer grading for grounded metric and artifact questions
+- deterministic quantitative-result grading for target deposited energy,
+  non-negative numeric metrics, and per-event mean consistency
 - model routing dry-run labels for no-LLM, cheap model, guarded human
   confirmation, and validation escalation paths
 - strict rejection of unsupported fields
@@ -692,12 +716,14 @@ Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 19
+- Standard progression checkpoint: started. The benchmark now includes 21
   hand-designed cases, including allowed session mutation, confirmation accept
   and reject policy, result metric Q&A, result artifact-path Q&A, and partial
   complex-geometry mutation blocking, invalid physics-list grounding, and
   bilingual viewer guarding. Result Q&A now also covers the no-history path, and
-  one live/LLM reliability case exercises `strong_model_candidate` routing.
+  one live/LLM reliability case exercises `strong_model_candidate` routing. The
+  benchmark now also includes quantitative runtime-result checks for target
+  deposited energy and mean deposited energy per completed event.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: config delta precision/recall over larger

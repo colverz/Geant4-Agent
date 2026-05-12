@@ -31,8 +31,15 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertGreater(summary["expected_final_values_total"], 0)
         self.assertEqual(summary["expected_final_value_accuracy"], 1.0)
         self.assertEqual(summary["forbidden_final_value_guard_rate"], 1.0)
+        quantitative_summary = report["quantitative_result_summary"]
+        self.assertGreater(quantitative_summary["cases"], 0)
+        self.assertEqual(quantitative_summary["expected_metric_value_accuracy"], 1.0)
+        self.assertEqual(quantitative_summary["non_negative_metric_rate"], 1.0)
+        self.assertEqual(quantitative_summary["relation_pass_rate"], 1.0)
+        self.assertEqual(report["suite_summary"]["quantitative_runtime"]["pass_rate"], 1.0)
         self.assertEqual(report["suite_summary"]["tool_guard"]["pass_rate"], 1.0)
         self.assertEqual(report["capability_summary"]["workflow_trace"]["pass_rate"], 1.0)
+        self.assertEqual(report["capability_summary"]["quantitative_result"]["pass_rate"], 1.0)
         self.assertIn("adversarial", report["difficulty_summary"])
         route_summary = report["model_route_summary"]
         self.assertGreater(route_summary["cases"], 0)
@@ -182,6 +189,42 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertGreater(report["failed"], 0)
         errors = [failure["error"] for failure in report["failures"]]
         self.assertIn("invalid_sample_report:invented", errors)
+
+    def test_invalid_quantitative_result_shape_is_rejected(self) -> None:
+        cases = [
+            {
+                "id": "bad-quantitative-result",
+                "suite": "quantitative_runtime",
+                "difficulty": "standard",
+                "lang": "en",
+                "capabilities": ["quantitative_result"],
+                "turns": [{"text": "What was the target edep?"}],
+                "expected_quantitative_result": {
+                    "sample_report": "invented",
+                    "required_metric_keys": "key_metrics.target_edep_total_mev",
+                    "expected_metric_values": ["key_metrics.target_edep_total_mev", 1.0],
+                    "expected_relations": [
+                        {
+                            "left": "key_metrics.target_edep_mean_mev_per_event",
+                            "op": "multiply_magic",
+                        }
+                    ],
+                    "unsupported_field": True,
+                },
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "benchmark.json"
+            path.write_text(json.dumps(cases), encoding="utf-8")
+            report = validate_benchmark_shape(path)
+
+        self.assertGreater(report["failed"], 0)
+        errors = [failure["error"] for failure in report["failures"]]
+        self.assertIn("invalid_sample_report:invented", errors)
+        self.assertIn("required_metric_keys_not_list", errors)
+        self.assertIn("expected_metric_values_not_object", errors)
+        self.assertIn("invalid_op:multiply_magic", errors)
+        self.assertIn("unsupported_key:unsupported_field", errors)
 
     def test_invalid_config_delta_shape_is_rejected(self) -> None:
         cases = [
