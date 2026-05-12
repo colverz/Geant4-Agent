@@ -124,7 +124,7 @@ capability below.
 | `tool_guard` | Whether high-cost actions are blocked unless explicitly triggered | `tool_calls_allowed`, `tool_calls_blocked`, API action | run, viewer, mutation plus run/viewer, replay |
 | `runtime_readiness` | Whether a valid app-side config becomes executable payload | `SimulationSpec`, runtime payload, schema compatibility | minimal valid, full representative, missing required field |
 | `result_grounding` | Whether result follow-up uses structured result facts | `runtime_smoke_report`, result summary, answer text | no result, partial result, missing metric, artifact path |
-| `quantitative_result` | Whether numeric runtime metrics are present, non-negative, and internally consistent | `runtime_smoke_report.key_metrics`, result summary, deterministic metric relations | target edep total, per-event mean, event completion, scorer count consistency |
+| `quantitative_result` | Whether numeric runtime metrics are present, within declared ranges, non-negative, and internally consistent | `runtime_smoke_report.key_metrics`, result summary, deterministic metric values/ranges/relations | target edep total, per-event mean, event completion, scorer count consistency |
 | `llm_reliability` | Whether live LLM improves trajectory without hidden fallback | `llm_used`, `fallback_reason`, validation errors, latency | live used, fallback rejected, invalid JSON, schema reject |
 | `model_routing` | Whether the proposed model choice is justified before execution | routing decision report, case difficulty, failure reason | no-LLM, cheap model, escalation, human confirmation |
 
@@ -149,6 +149,16 @@ payload, result, or model execution metadata.
 Measurable: pass.
 
 Every capability names at least one deterministic source of truth.
+
+### Quantitative Result Checks
+
+The benchmark supports three numeric result styles:
+
+- Exact fixture values via `expected_metric_values`, used for deterministic reports and regression fixtures.
+- Tolerance or live-runtime windows via `expected_metric_ranges`, used when a real Geant4 run can vary but must remain physically plausible.
+- Internal consistency via `expected_relations`, used for values such as `mean = total / events_completed` or key metric equals structured scoring summary.
+
+This keeps the benchmark from becoming a dictionary of answer strings. The case still asks a natural question, but pass/fail is decided by typed runtime facts.
 
 ## Benchmark Suites
 
@@ -600,6 +610,72 @@ P7 should implement the benchmark in this order:
 5. Add model routing dry-run before enabling runtime model selection.
 6. Add live LLM mode only after the dry-run evaluator is stable.
 7. Compare `offline_v2`, `deepseek-v4-flash`, and optional stronger model runs.
+8. Add opt-in real-runtime quantitative grading after range/tolerance checks
+   exist, while keeping ordinary benchmark runs deterministic and safe.
+
+## Evaluation Records
+
+Every formal benchmark or live evaluation should save a full JSON record under
+`docs/reports/eval/`. This directory is ignored by git, so local live LLM outputs,
+runtime paths, and debugging traces are available for review without being
+committed.
+
+Supported evaluators accept:
+
+- `--outdir docs\reports\eval`
+- `--run-id <stable-id>`
+
+Each saved record contains:
+
+- `eval_record.schema_version`
+- `eval_record.run_id`
+- `eval_record.created_at_utc`
+- `eval_record.git.commit`
+- `eval_record.git.dirty`
+- the complete evaluator output, including failures, summaries, traces, and
+  model/profile observability fields
+
+Each tool also writes `<tool>.latest.json` as a lightweight pointer to the latest
+full report.
+
+To inspect saved records without dumping full traces:
+
+```powershell
+.venv\Scripts\python.exe tools\summarize_eval_records.py `
+  --outdir docs\reports\eval
+```
+
+For machine-readable summary:
+
+```powershell
+.venv\Scripts\python.exe tools\summarize_eval_records.py `
+  --outdir docs\reports\eval `
+  --latest-only `
+  --json
+```
+
+The summary command is read-oriented and returns success by default even if an
+older saved record failed. Use `--fail-on-failed-record` only when the summary is
+part of a CI gate.
+
+Recommended local baseline with logs:
+
+```powershell
+.venv\Scripts\python.exe tools\evaluate_geant4_agent_benchmark.py `
+  --dry-run `
+  --outdir docs\reports\eval `
+  --run-id baseline-dry-run `
+  --json
+
+.venv\Scripts\python.exe tools\evaluate_llm_scenario_model_matrix.py `
+  --casebank docs\eval\llm_scenario_live_casebank.json `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --model deepseek-v4-flash `
+  --live-llm `
+  --outdir docs\reports\eval `
+  --run-id deepseek-flash-live `
+  --json
+```
 
 ## LLM Benchmark Review
 
@@ -665,8 +741,12 @@ Current V1 checkpoint:
 
 - `docs/eval/agentic_benchmark_v1.json`
 - `tools/evaluate_geant4_agent_benchmark.py`
+- `tools/evaluate_geant4_quantitative_runtime.py`
+- `tools/evaluate_llm_scenario_model_matrix.py`
 - `tools/review_geant4_agent_benchmark.py`
 - `tests/test_geant4_agent_benchmark_shape.py`
+- `tests/test_geant4_quantitative_runtime_evaluator.py`
+- `tests/test_llm_scenario_model_matrix.py`
 - `tests/test_geant4_agent_benchmark_review.py`
 
 Implemented so far:
@@ -678,12 +758,21 @@ Implemented so far:
 - deterministic config delta grading for applied paths and final config values
 - config delta summary metrics for expected-value accuracy and mutation guard
   rates
+- config delta precision metrics through `allowed_apply_paths`, so a case can
+  distinguish correct required writes from extra unintended session mutation
 - suite, difficulty, and capability pass-rate summaries for comparing
   benchmark runs
 - deterministic result answer grading for grounded metric and artifact questions
 - deterministic quantitative-result grading for target deposited energy,
   non-negative numeric metrics, per-event mean consistency, crossing counts, and
   `key_metrics` versus structured summary consistency
+- quantitative range/tolerance grading through `expected_metric_ranges`, so real
+  Geant4 runs can be judged against plausible numeric windows without requiring
+  exact fixture values
+- opt-in live quantitative runtime evaluator. It is skipped by default, requires
+  `GEANT4_BENCHMARK_LIVE_RUNTIME=1` plus a runtime command, and grades real
+  `runtime_smoke_report` facts using required keys, ranges, non-negative checks,
+  and internal relations.
 - model routing dry-run labels for no-LLM, cheap model, guarded human
   confirmation, and validation escalation paths
 - strict rejection of unsupported fields
@@ -711,6 +800,9 @@ Implemented so far:
 - The live scenario evaluator now reports language counts, slot/semantic prompt
   profile usage, fallback count, and profile mismatch count so hidden fallback
   or prompt-profile contamination cannot be counted as success.
+- The model matrix evaluator can compare offline or live LLM scenario runs across
+  multiple model overrides. It ranks models by accuracy while still treating
+  hidden fallback and prompt-profile mismatch as hard evaluation failures.
 - Live smoke expansion caught a real `single_sphere` compiler gap. The geometry
   catalog now supports sphere radius compilation through `single_sphere` instead
   of rejecting valid sphere prompts after the LLM had already extracted them.
@@ -727,19 +819,54 @@ Current quantity assessment:
   one live/LLM reliability case exercises `strong_model_candidate` routing. The
   benchmark now also includes quantitative runtime-result checks for target
   deposited energy, mean deposited energy per completed event, crossing counts,
-  and structured summary consistency.
+  structured summary consistency, and range/tolerance checks that prepare the
+  same cases for opt-in live runtime evaluation. Config extraction now reports
+  applied-path precision on a representative full-config case, so extra
+  unintended session writes can be measured instead of hidden behind final-value
+  accuracy.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: config delta precision/recall over larger
-  suites, broader live LLM reliability runs, stronger-model comparisons, and
-  future opt-in runtime execution.
+  suites, broader live LLM reliability runs, running the new model matrix with
+  real DeepSeek model overrides, and manually triggered live runtime execution
+  with real local Geant4.
 
 Not implemented yet:
 
-- config delta precision/recall over larger suites
+- config delta precision/recall over larger suites beyond the first
+  representative full-config case
 - broader live LLM execution beyond the current opt-in smoke set
-- stronger-model candidate cases
-- real Geant4 execution
+- executed stronger-model comparison reports
+- routine real Geant4 execution in CI or default local tests
+
+Opt-in model matrix command:
+
+```powershell
+.venv\Scripts\python.exe tools\evaluate_llm_scenario_model_matrix.py `
+  --casebank docs\eval\llm_scenario_live_casebank.json `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --model deepseek-v4-flash `
+  --model deepseek-v4-pro `
+  --live-llm `
+  --json
+```
+
+Without `--live-llm`, this remains an offline structural run and does not call an
+LLM API.
+
+Opt-in live quantitative runtime command:
+
+```powershell
+$env:GEANT4_BENCHMARK_LIVE_RUNTIME="1"
+$env:GEANT4_RUNTIME_COMMAND_JSON='["runtime/geant4_local_app/build/Release/geant4_local_app.exe"]'
+.venv\Scripts\python.exe tools\evaluate_geant4_quantitative_runtime.py `
+  --benchmark docs\eval\agentic_benchmark_v1.json `
+  --events 4 `
+  --json
+```
+
+Without those environment variables, the command returns a structured skipped
+report and does not start Geant4.
 
 V1 shape self-evaluation:
 

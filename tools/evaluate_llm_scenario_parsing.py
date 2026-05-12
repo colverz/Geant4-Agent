@@ -9,6 +9,7 @@ from typing import Any
 
 from core.orchestrator.session_manager import process_turn, reset_session
 from mcp.geant4.runtime_payload import build_runtime_payload
+from tools.eval_report_io import DEFAULT_EVAL_REPORT_DIR, save_eval_output
 from tools.evaluate_simulation_scenarios import DEFAULT_SCENARIO_CASEBANK
 
 _CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
@@ -309,6 +310,8 @@ def main() -> int:
     parser.add_argument("--min-accuracy", type=float, default=1.0)
     parser.add_argument("--max-cases", type=int, default=0, help="Limit evaluated cases for low-cost live smoke runs.")
     parser.add_argument("--model-override", default=os.environ.get("GEANT4_LLM_MODEL_OVERRIDE", ""))
+    parser.add_argument("--outdir", type=Path, default=None, help="Optional directory for a full JSON eval record.")
+    parser.add_argument("--run-id", default="", help="Optional stable run id for saved eval records.")
     args = parser.parse_args()
 
     env_live = os.environ.get("GEANT4_LLM_SCENARIO", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -328,6 +331,13 @@ def main() -> int:
         "min_accuracy": report["min_accuracy"],
         "reports": [report],
     }
+    if args.outdir:
+        output = save_eval_output(
+            output,
+            outdir=args.outdir or DEFAULT_EVAL_REPORT_DIR,
+            tool=report["name"],
+            run_id=args.run_id or None,
+        )
     if args.json:
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from nlu.llm_support.ollama_client import chat, extract_json
+from tools.eval_report_io import DEFAULT_EVAL_REPORT_DIR, save_eval_output
 from tools.evaluate_geant4_agent_benchmark import DEFAULT_BENCHMARK_PATH, validate_benchmark_shape
 
 
@@ -241,6 +242,8 @@ def main() -> int:
     parser.add_argument("--model", action="append", default=[], help="Model override. Can be provided multiple times.")
     parser.add_argument("--timeout-s", type=int, default=None, help="Optional live LLM request timeout override in seconds.")
     parser.add_argument("--live-llm", action="store_true")
+    parser.add_argument("--outdir", type=Path, default=None, help="Optional directory for a full JSON eval record.")
+    parser.add_argument("--run-id", default="", help="Optional stable run id for saved eval records.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -251,6 +254,13 @@ def main() -> int:
         live_llm=bool(args.live_llm),
         timeout_s=args.timeout_s,
     )
+    if args.outdir:
+        report = save_eval_output(
+            report,
+            outdir=args.outdir or DEFAULT_EVAL_REPORT_DIR,
+            tool=report["name"],
+            run_id=args.run_id or None,
+        )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

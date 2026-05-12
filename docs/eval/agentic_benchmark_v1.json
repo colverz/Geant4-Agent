@@ -87,6 +87,29 @@
     },
     "expected_config_delta": {
       "must_apply_paths": ["geometry.structure", "source.energy", "source.particle"],
+      "allowed_apply_paths": [
+        "geometry.params.module_x",
+        "geometry.params.module_y",
+        "geometry.params.module_z",
+        "geometry.root_name",
+        "geometry.structure",
+        "materials.selected_materials",
+        "materials.selection_reasons",
+        "materials.selection_source",
+        "materials.volume_material_map",
+        "output.format",
+        "output.path",
+        "physics.physics_list",
+        "physics.selection_reasons",
+        "physics.selection_source",
+        "source.direction",
+        "source.energy",
+        "source.particle",
+        "source.position",
+        "source.selection_reasons",
+        "source.selection_source",
+        "source.type"
+      ],
       "expected_final_values": {
         "geometry.structure": "single_box",
         "source.energy": 1.0,
@@ -445,6 +468,12 @@
       "expected_metric_values": {
         "key_metrics.target_edep_total_mev": 1.5
       },
+      "expected_metric_ranges": {
+        "key_metrics.target_edep_total_mev": {
+          "min": 0.0,
+          "max": 4.0
+        }
+      },
       "non_negative_metric_keys": ["key_metrics.target_edep_total_mev"]
     }
   },
@@ -483,6 +512,12 @@
         "events_completed": 4,
         "key_metrics.target_edep_total_mev": 1.5,
         "key_metrics.target_edep_mean_mev_per_event": 0.375
+      },
+      "expected_metric_ranges": {
+        "key_metrics.target_edep_mean_mev_per_event": {
+          "min": 0.0,
+          "max": 1.0
+        }
       },
       "non_negative_metric_keys": [
         "key_metrics.target_edep_total_mev",
@@ -533,6 +568,20 @@
         "key_metrics.target_hit_events": 2,
         "key_metrics.detector_crossing_count": 1,
         "key_metrics.plane_crossing_count": 0
+      },
+      "expected_metric_ranges": {
+        "key_metrics.target_hit_events": {
+          "min": 0,
+          "max": 4
+        },
+        "key_metrics.detector_crossing_count": {
+          "min": 0,
+          "max": 4
+        },
+        "key_metrics.plane_crossing_count": {
+          "min": 0,
+          "max": 4
+        }
       },
       "non_negative_metric_keys": [
         "key_metrics.target_hit_events",

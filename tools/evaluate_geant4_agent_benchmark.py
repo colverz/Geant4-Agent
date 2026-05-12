@@ -8,6 +8,7 @@ from typing import Any
 from core.orchestrator.session_manager import process_turn, reset_session
 from mcp.geant4.runtime_payload import build_runtime_payload
 from planner.runtime_result import build_runtime_result_question_answer
+from tools.eval_report_io import DEFAULT_EVAL_REPORT_DIR, save_eval_output
 
 
 DEFAULT_BENCHMARK_PATH = Path("docs/eval/agentic_benchmark_v1.json")
@@ -102,16 +103,24 @@ TRACE_KEYS = {
     "must_not_call_runtime",
 }
 RUNTIME_KEYS = {"after_turn_index", "must_have_runtime_payload", "required_payload_keys", "expected_payload_values"}
-CONFIG_DELTA_KEYS = {"must_apply_paths", "must_not_apply_paths", "expected_final_values", "forbidden_final_values"}
+CONFIG_DELTA_KEYS = {
+    "must_apply_paths",
+    "must_not_apply_paths",
+    "allowed_apply_paths",
+    "expected_final_values",
+    "forbidden_final_values",
+}
 RESULT_ANSWER_KEYS = {"question", "sample_report", "must_include", "must_not_include", "must_remain_read_only"}
 QUANTITATIVE_RESULT_KEYS = {
     "sample_report",
     "required_metric_keys",
     "expected_metric_values",
+    "expected_metric_ranges",
     "non_negative_metric_keys",
     "expected_relations",
 }
 QUANTITATIVE_RELATION_KEYS = {"left", "op", "right", "numerator", "denominator"}
+QUANTITATIVE_RANGE_KEYS = {"min", "max"}
 MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
@@ -424,7 +433,7 @@ def _validate_runtime(failures: list[dict[str, Any]], *, case_id: str, runtime: 
 
 def _validate_config_delta(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
     _add_unknown_key_errors(failures, case_id=case_id, section="expected_config_delta", payload=expected, allowed=CONFIG_DELTA_KEYS)
-    for field in ("must_apply_paths", "must_not_apply_paths"):
+    for field in ("must_apply_paths", "must_not_apply_paths", "allowed_apply_paths"):
         if field in expected:
             _validate_string_list(
                 failures,
@@ -490,6 +499,36 @@ def _validate_quantitative_result(failures: list[dict[str, Any]], *, case_id: st
                 "error": "expected_metric_values_not_object",
             }
         )
+    ranges = expected.get("expected_metric_ranges")
+    if ranges is not None:
+        if not isinstance(ranges, dict):
+            failures.append(
+                {
+                    "id": case_id,
+                    "section": "expected_quantitative_result",
+                    "error": "expected_metric_ranges_not_object",
+                }
+            )
+        else:
+            for path, bounds in ranges.items():
+                section = f"expected_quantitative_result.expected_metric_ranges.{path}"
+                if not isinstance(bounds, dict):
+                    failures.append({"id": case_id, "section": section, "error": "not_object"})
+                    continue
+                _add_unknown_key_errors(
+                    failures,
+                    case_id=case_id,
+                    section=section,
+                    payload=bounds,
+                    allowed=QUANTITATIVE_RANGE_KEYS,
+                )
+                if "min" not in bounds and "max" not in bounds:
+                    failures.append({"id": case_id, "section": section, "error": "metric_range_missing_bound"})
+                for bound_name in ("min", "max"):
+                    if bound_name in bounds and not _is_number(bounds[bound_name]):
+                        failures.append({"id": case_id, "section": section, "error": f"metric_range_{bound_name}_not_number"})
+                if _is_number(bounds.get("min")) and _is_number(bounds.get("max")) and float(bounds["min"]) > float(bounds["max"]):
+                    failures.append({"id": case_id, "section": section, "error": "metric_range_min_gt_max"})
     relations = expected.get("expected_relations")
     if relations is None:
         return
@@ -532,6 +571,10 @@ def _float_equal(left: Any, right: Any, *, tolerance: float = 1e-6) -> bool:
         return abs(float(left) - float(right)) <= tolerance
     except (TypeError, ValueError):
         return False
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _values_equal(left: Any, right: Any) -> bool:
@@ -650,6 +693,10 @@ def _config_delta_errors(
     for path in expected.get("must_not_apply_paths", []) or []:
         if path in applied_paths:
             failures.append({"id": case_id, "section": "expected_config_delta", "error": f"forbidden_applied_path:{path}"})
+    allowed_apply_paths = set(str(path) for path in expected.get("allowed_apply_paths", []) or [])
+    if allowed_apply_paths:
+        for path in sorted(applied_paths - allowed_apply_paths):
+            failures.append({"id": case_id, "section": "expected_config_delta", "error": f"unexpected_applied_path:{path}"})
     expected_values = expected.get("expected_final_values") or {}
     if isinstance(expected_values, dict):
         for path, value in expected_values.items():
@@ -672,6 +719,10 @@ def _new_config_delta_summary() -> dict[str, Any]:
         "must_apply_paths_passed": 0,
         "must_not_apply_paths_total": 0,
         "must_not_apply_paths_passed": 0,
+        "applied_paths_total": 0,
+        "expected_or_allowed_applied_paths_total": 0,
+        "unexpected_applied_paths_total": 0,
+        "allowed_apply_paths_cases": 0,
         "expected_final_values_total": 0,
         "expected_final_values_passed": 0,
         "forbidden_final_values_total": 0,
@@ -686,6 +737,8 @@ def _new_quantitative_result_summary() -> dict[str, Any]:
         "required_metric_keys_passed": 0,
         "expected_metric_values_total": 0,
         "expected_metric_values_passed": 0,
+        "expected_metric_ranges_total": 0,
+        "expected_metric_ranges_passed": 0,
         "non_negative_metric_keys_total": 0,
         "non_negative_metric_keys_passed": 0,
         "expected_relations_total": 0,
@@ -721,6 +774,13 @@ def _update_config_delta_summary(
         summary["must_not_apply_paths_total"] += 1
         if path not in applied_paths:
             summary["must_not_apply_paths_passed"] += 1
+    allowed_apply_paths = set(str(path) for path in expected.get("allowed_apply_paths", []) or [])
+    if allowed_apply_paths:
+        summary["allowed_apply_paths_cases"] += 1
+        summary["applied_paths_total"] += len(applied_paths)
+        expected_or_allowed = applied_paths & allowed_apply_paths
+        summary["expected_or_allowed_applied_paths_total"] += len(expected_or_allowed)
+        summary["unexpected_applied_paths_total"] += len(applied_paths - allowed_apply_paths)
     expected_values = expected.get("expected_final_values") or {}
     if isinstance(expected_values, dict):
         for path, value in expected_values.items():
@@ -739,6 +799,14 @@ def _finalize_config_delta_summary(summary: dict[str, Any]) -> dict[str, Any]:
     finalized = dict(summary)
     finalized["must_apply_path_recall"] = _ratio(summary["must_apply_paths_passed"], summary["must_apply_paths_total"])
     finalized["must_not_apply_path_guard_rate"] = _ratio(summary["must_not_apply_paths_passed"], summary["must_not_apply_paths_total"])
+    finalized["applied_path_precision"] = _ratio(
+        summary["expected_or_allowed_applied_paths_total"],
+        summary["applied_paths_total"],
+    )
+    finalized["unexpected_applied_path_rate"] = _ratio(
+        summary["unexpected_applied_paths_total"],
+        summary["applied_paths_total"],
+    )
     finalized["expected_final_value_accuracy"] = _ratio(
         summary["expected_final_values_passed"],
         summary["expected_final_values_total"],
@@ -767,6 +835,27 @@ def _relation_passes(relation: dict[str, Any], report: dict[str, Any]) -> bool:
     return False
 
 
+def _range_passes(actual: Any, bounds: dict[str, Any]) -> bool:
+    try:
+        value = float(actual)
+    except (TypeError, ValueError):
+        return False
+    has_valid_bound = False
+    if "min" in bounds:
+        if not _is_number(bounds.get("min")):
+            return False
+        has_valid_bound = True
+        if value < float(bounds["min"]):
+            return False
+    if "max" in bounds:
+        if not _is_number(bounds.get("max")):
+            return False
+        has_valid_bound = True
+        if value > float(bounds["max"]):
+            return False
+    return has_valid_bound
+
+
 def _quantitative_result_errors(expected: dict[str, Any], report: dict[str, Any], *, case_id: str) -> list[dict[str, Any]]:
     failures: list[dict[str, Any]] = []
     for path in expected.get("required_metric_keys", []) or []:
@@ -782,6 +871,20 @@ def _quantitative_result_errors(expected: dict[str, Any], report: dict[str, Any]
                         "id": case_id,
                         "section": "expected_quantitative_result",
                         "error": f"metric_value:{path}:expected={value!r}:actual={actual!r}",
+                    }
+                )
+    expected_ranges = expected.get("expected_metric_ranges") or {}
+    if isinstance(expected_ranges, dict):
+        for path, bounds in expected_ranges.items():
+            if not isinstance(bounds, dict):
+                continue
+            actual = _get_path(report, str(path))
+            if not _range_passes(actual, bounds):
+                failures.append(
+                    {
+                        "id": case_id,
+                        "section": "expected_quantitative_result",
+                        "error": f"metric_range:{path}:bounds={bounds!r}:actual={actual!r}",
                     }
                 )
     for path in expected.get("non_negative_metric_keys", []) or []:
@@ -819,6 +922,14 @@ def _update_quantitative_result_summary(summary: dict[str, Any], expected: dict[
             summary["expected_metric_values_total"] += 1
             if _values_equal(_get_path(report, str(path)), value):
                 summary["expected_metric_values_passed"] += 1
+    expected_ranges = expected.get("expected_metric_ranges") or {}
+    if isinstance(expected_ranges, dict):
+        for path, bounds in expected_ranges.items():
+            if not isinstance(bounds, dict):
+                continue
+            summary["expected_metric_ranges_total"] += 1
+            if _range_passes(_get_path(report, str(path)), bounds):
+                summary["expected_metric_ranges_passed"] += 1
     for path in expected.get("non_negative_metric_keys", []) or []:
         summary["non_negative_metric_keys_total"] += 1
         try:
@@ -838,6 +949,7 @@ def _finalize_quantitative_result_summary(summary: dict[str, Any]) -> dict[str, 
     finalized = dict(summary)
     finalized["required_metric_key_rate"] = _ratio(summary["required_metric_keys_passed"], summary["required_metric_keys_total"])
     finalized["expected_metric_value_accuracy"] = _ratio(summary["expected_metric_values_passed"], summary["expected_metric_values_total"])
+    finalized["expected_metric_range_rate"] = _ratio(summary["expected_metric_ranges_passed"], summary["expected_metric_ranges_total"])
     finalized["non_negative_metric_rate"] = _ratio(summary["non_negative_metric_keys_passed"], summary["non_negative_metric_keys_total"])
     finalized["relation_pass_rate"] = _ratio(summary["expected_relations_passed"], summary["expected_relations_total"])
     return finalized
@@ -1177,6 +1289,8 @@ def main() -> int:
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_BENCHMARK_PATH)
     parser.add_argument("--coverage", action="store_true", help="Check minimum V1 suite/difficulty/capability coverage.")
     parser.add_argument("--dry-run", action="store_true", help="Execute deterministic process_turn/runtime-payload grading.")
+    parser.add_argument("--outdir", type=Path, default=None, help="Optional directory for a full JSON eval record.")
+    parser.add_argument("--run-id", default="", help="Optional stable run id for saved eval records.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -1187,6 +1301,13 @@ def main() -> int:
     else:
         report = validate_benchmark_shape(args.benchmark)
     output = {"ok": report["failed"] == 0, "report": report}
+    if args.outdir:
+        output = save_eval_output(
+            output,
+            outdir=args.outdir or DEFAULT_EVAL_REPORT_DIR,
+            tool=report["name"],
+            run_id=args.run_id or None,
+        )
     if args.json:
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:

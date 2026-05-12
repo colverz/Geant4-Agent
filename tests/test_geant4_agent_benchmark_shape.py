@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from tools.evaluate_geant4_agent_benchmark import (
+    _config_delta_errors,
     evaluate_benchmark_dry_run,
     validate_benchmark_coverage,
     validate_benchmark_shape,
@@ -31,9 +32,13 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertGreater(summary["expected_final_values_total"], 0)
         self.assertEqual(summary["expected_final_value_accuracy"], 1.0)
         self.assertEqual(summary["forbidden_final_value_guard_rate"], 1.0)
+        self.assertGreater(summary["allowed_apply_paths_cases"], 0)
+        self.assertEqual(summary["applied_path_precision"], 1.0)
+        self.assertEqual(summary["unexpected_applied_path_rate"], 0.0)
         quantitative_summary = report["quantitative_result_summary"]
         self.assertGreater(quantitative_summary["cases"], 0)
         self.assertEqual(quantitative_summary["expected_metric_value_accuracy"], 1.0)
+        self.assertEqual(quantitative_summary["expected_metric_range_rate"], 1.0)
         self.assertEqual(quantitative_summary["non_negative_metric_rate"], 1.0)
         self.assertEqual(quantitative_summary["relation_pass_rate"], 1.0)
         self.assertEqual(report["suite_summary"]["quantitative_runtime"]["pass_rate"], 1.0)
@@ -203,6 +208,18 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
                     "sample_report": "invented",
                     "required_metric_keys": "key_metrics.target_edep_total_mev",
                     "expected_metric_values": ["key_metrics.target_edep_total_mev", 1.0],
+                    "expected_metric_ranges": {
+                        "key_metrics.target_edep_total_mev": {
+                            "min": "zero",
+                            "max": True,
+                            "unsupported_bound": 2,
+                        },
+                        "key_metrics.detector_crossing_count": {},
+                        "key_metrics.plane_crossing_count": {
+                            "min": 2,
+                            "max": 1,
+                        },
+                    },
                     "expected_relations": [
                         {
                             "left": "key_metrics.target_edep_mean_mev_per_event",
@@ -223,6 +240,11 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertIn("invalid_sample_report:invented", errors)
         self.assertIn("required_metric_keys_not_list", errors)
         self.assertIn("expected_metric_values_not_object", errors)
+        self.assertIn("metric_range_min_not_number", errors)
+        self.assertIn("metric_range_max_not_number", errors)
+        self.assertIn("metric_range_missing_bound", errors)
+        self.assertIn("metric_range_min_gt_max", errors)
+        self.assertIn("unsupported_key:unsupported_bound", errors)
         self.assertIn("invalid_op:multiply_magic", errors)
         self.assertIn("unsupported_key:unsupported_field", errors)
 
@@ -237,6 +259,7 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
                 "turns": [{"text": "Set source energy to 1 MeV."}],
                 "expected_config_delta": {
                     "must_apply_paths": "source.energy",
+                    "allowed_apply_paths": {"source.energy": True},
                     "expected_final_values": ["source.energy", 1.0],
                     "unsupported_field": True,
                 },
@@ -250,8 +273,28 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertGreater(report["failed"], 0)
         errors = [failure["error"] for failure in report["failures"]]
         self.assertIn("must_apply_paths_not_list", errors)
+        self.assertIn("allowed_apply_paths_not_list", errors)
         self.assertIn("expected_final_values_not_object", errors)
         self.assertIn("unsupported_key:unsupported_field", errors)
+
+    def test_config_delta_allowed_apply_paths_catches_unexpected_mutation(self) -> None:
+        errors = _config_delta_errors(
+            {
+                "must_apply_paths": ["source.energy"],
+                "allowed_apply_paths": ["source.energy"],
+            },
+            final_config={},
+            outputs=[
+                {
+                    "nlu_turn_trace": {
+                        "applied_paths": ["source.energy", "physics.physics_list"],
+                    }
+                }
+            ],
+            case_id="precision-probe",
+        )
+
+        self.assertIn("unexpected_applied_path:physics.physics_list", [error["error"] for error in errors])
 
 
 if __name__ == "__main__":
