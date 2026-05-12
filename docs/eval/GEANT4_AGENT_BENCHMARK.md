@@ -289,8 +289,10 @@ Primary signals:
 Necessary: yes. The project is no longer just a config generator; it must be
 able to evaluate quantitative simulation outputs.
 
-Comprehensive: first pass covers target deposited energy. Later passes should
-add detector/plane count consistency and opt-in real Geant4 result tolerances.
+Comprehensive: current pass covers target deposited energy, per-event mean
+consistency, detector/plane crossing counts, and consistency between
+`key_metrics` and the structured scoring summary. Later passes should add
+opt-in real Geant4 result tolerances.
 
 Non-dictionary check: the grade is numeric report structure and arithmetic, not
 the wording of a user prompt.
@@ -680,7 +682,8 @@ Implemented so far:
   benchmark runs
 - deterministic result answer grading for grounded metric and artifact questions
 - deterministic quantitative-result grading for target deposited energy,
-  non-negative numeric metrics, and per-event mean consistency
+  non-negative numeric metrics, per-event mean consistency, crossing counts, and
+  `key_metrics` versus structured summary consistency
 - model routing dry-run labels for no-LLM, cheap model, guarded human
   confirmation, and validation escalation paths
 - strict rejection of unsupported fields
@@ -716,14 +719,15 @@ Current quantity assessment:
 
 - V1 dry-run gate: enough. The 9 hand-designed cases pass shape, coverage, and
   dry-run checks.
-- Standard progression checkpoint: started. The benchmark now includes 21
+- Standard progression checkpoint: started. The benchmark now includes 23
   hand-designed cases, including allowed session mutation, confirmation accept
   and reject policy, result metric Q&A, result artifact-path Q&A, and partial
   complex-geometry mutation blocking, invalid physics-list grounding, and
   bilingual viewer guarding. Result Q&A now also covers the no-history path, and
   one live/LLM reliability case exercises `strong_model_candidate` routing. The
   benchmark now also includes quantitative runtime-result checks for target
-  deposited energy and mean deposited energy per completed event.
+  deposited energy, mean deposited energy per completed event, crossing counts,
+  and structured summary consistency.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
 - Highest-value next additions: config delta precision/recall over larger

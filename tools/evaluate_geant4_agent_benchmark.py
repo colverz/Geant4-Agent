@@ -957,7 +957,14 @@ def _sample_runtime_report() -> dict[str, Any]:
                 "target": {
                     "target_edep_total_mev": 1.5,
                     "target_edep_mean_mev_per_event": 0.375,
-                }
+                    "target_hit_events": 2,
+                },
+                "detector_crossing": {
+                    "detector_crossing_count": 1,
+                },
+                "plane_crossing": {
+                    "plane_crossing_count": 0,
+                },
             },
         },
     }
