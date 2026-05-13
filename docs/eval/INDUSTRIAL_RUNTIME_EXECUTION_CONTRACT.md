@@ -266,6 +266,16 @@ Failure analysis:
 .venv\Scripts\python.exe tools\analyze_industrial_benchmark_failures.py --json
 ```
 
+Stage workflow summary:
+
+```powershell
+.venv\Scripts\python.exe tools\run_industrial_runtime_stage.py --json
+```
+
+The stage runner is a convenience wrapper over the strict tools. It does not
+weaken acceptance rules; it simply reports compile coverage, runtime readiness,
+golden generation state, evaluator status, and top blockers in one object.
+
 Current deterministic compiler boundary:
 
 ```powershell

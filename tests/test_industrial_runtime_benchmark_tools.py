@@ -15,6 +15,7 @@ from tools.industrial_runtime_executor import (
     extract_industrial_metrics,
 )
 from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime, summarize_compile_results
+from tools.run_industrial_runtime_stage import run_industrial_runtime_stage
 
 
 BENCHMARK_PATH = Path("docs/eval/industrial_runtime_benchmark.json")
@@ -232,6 +233,42 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
         self.assertEqual(lead_case["failure_category"], None)
         self.assertEqual(lead_case["actual_metrics"]["detector_crossing_count"], 2500)
         self.assertTrue(lead_case["metric_diff"]["transmission_factor"]["passed"])
+
+    def test_stage_runner_summarizes_current_blockers_without_runtime(self) -> None:
+        report = run_industrial_runtime_stage(env={}, generate_goldens=False)
+
+        self.assertFalse(report["ok"])
+        self.assertFalse(report["stage_summary"]["runtime_ready"])
+        self.assertEqual(report["stage_summary"]["compile_status_counts"]["compiled"], 4)
+        self.assertGreater(report["stage_summary"]["evaluation_status"]["not_evaluable"], 0)
+        self.assertGreater(len(report["stage_summary"]["top_blockers"]), 0)
+        self.assertIn("shielding_lead_gamma_transmission", report["selected_case_ids"])
+
+    def test_stage_runner_can_generate_and_evaluate_one_fake_runtime_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            script = _write_fake_runtime_script(root, artifact_dir)
+            report = run_industrial_runtime_stage(
+                golden_dir=root / "golden",
+                case_ids=["shielding_lead_gamma_transmission"],
+                generate_goldens=True,
+                env={
+                    "GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK": "1",
+                    "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, str(script)]),
+                },
+            )
+
+        self.assertFalse(report["ok"])
+        self.assertTrue(report["stage_summary"]["runtime_ready"])
+        self.assertEqual(report["stage_summary"]["golden_generated"], 1)
+        lead_case = next(
+            item
+            for item in report["evaluation"]["case_results"]
+            if item["id"] == "shielding_lead_gamma_transmission"
+        )
+        self.assertEqual(lead_case["status"], "passed")
 
 
 def _benchmark() -> dict:

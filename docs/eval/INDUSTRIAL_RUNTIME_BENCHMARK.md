@@ -247,6 +247,28 @@ Failure analysis is available via:
 This groups failures by category and domain so the next engineering work is
 driven by hard blockers rather than by easier config-only cases.
 
+Stage workflow runner:
+
+```powershell
+.venv\Scripts\python.exe tools\run_industrial_runtime_stage.py --json
+```
+
+For real local runtime + golden generation:
+
+```powershell
+$env:GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK="1"
+$env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
+.venv\Scripts\python.exe tools\run_industrial_runtime_stage.py `
+  --case-id shielding_lead_gamma_transmission `
+  --generate-goldens `
+  --golden-dir docs\eval\golden\industrial_runtime `
+  --json
+```
+
+This runner is the preferred local entrypoint for this stage because it returns
+one compact `stage_summary` covering compile coverage, runtime readiness,
+golden generation, evaluator status, and top blockers.
+
 The evaluator also includes a `compile_summary`:
 
 - `compiled`: current runtime payload can represent the case and all declared
