@@ -1,0 +1,273 @@
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+from tools.eval_report_io import DEFAULT_EVAL_REPORT_DIR, save_eval_output
+
+INDUSTRIAL_BENCHMARK_SCHEMA_VERSION = "geant4_agent_industrial_runtime_benchmark.v1"
+DEFAULT_INDUSTRIAL_BENCHMARK_PATH = Path("docs/eval/industrial_runtime_benchmark.json")
+INDUSTRIAL_RUNTIME_ENV = "GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK"
+RUNTIME_COMMAND_ENVS = ("GEANT4_RUNTIME_COMMAND_JSON", "GEANT4_RUNTIME_COMMAND")
+
+REQUIRED_DOMAINS = {
+    "industrial_ndt",
+    "shielding",
+    "medical_phantom",
+    "detector_response",
+    "beam_source",
+    "multi_turn_engineering",
+    "unsupported_boundary",
+}
+
+
+def _load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _runtime_enabled(env: dict[str, str]) -> bool:
+    return str(env.get(INDUSTRIAL_RUNTIME_ENV, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _runtime_command_configured(env: dict[str, str]) -> bool:
+    return any(str(env.get(name, "")).strip() for name in RUNTIME_COMMAND_ENVS)
+
+
+def _golden_status(case: dict[str, Any]) -> dict[str, Any]:
+    metrics = case.get("golden_metrics")
+    if not isinstance(metrics, dict) or not metrics:
+        return {"ready": False, "missing_metrics": ["<all>"]}
+    missing: list[str] = []
+    for metric_name, metric in metrics.items():
+        if not isinstance(metric, dict):
+            missing.append(str(metric_name))
+            continue
+        if metric.get("expected") is None:
+            missing.append(str(metric_name))
+            continue
+        if "tolerance" not in metric:
+            missing.append(str(metric_name))
+    return {"ready": not missing, "missing_metrics": missing}
+
+
+def validate_industrial_benchmark_shape(path: Path = DEFAULT_INDUSTRIAL_BENCHMARK_PATH) -> dict[str, Any]:
+    failures: list[dict[str, Any]] = []
+    try:
+        benchmark = _load_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "name": "industrial_runtime_benchmark_shape",
+            "total": 0,
+            "failed": 1,
+            "failures": [{"id": "<file>", "error": f"{type(exc).__name__}: {exc}"}],
+        }
+
+    if not isinstance(benchmark, dict):
+        failures.append({"id": "<root>", "error": "root_not_object"})
+        cases: list[dict[str, Any]] = []
+    else:
+        if benchmark.get("schema_version") != INDUSTRIAL_BENCHMARK_SCHEMA_VERSION:
+            failures.append({"id": "<root>", "error": "schema_version_mismatch"})
+        official = benchmark.get("official_pass_requires")
+        if not isinstance(official, dict):
+            failures.append({"id": "<root>", "error": "official_pass_requires_not_object"})
+        else:
+            for key in ("real_geant4_runtime", "golden_numeric_metrics", "single_thread_default"):
+                if official.get(key) is not True:
+                    failures.append({"id": "<root>", "error": f"official_requirement_not_true:{key}"})
+            if official.get("llm_as_judge") is not False:
+                failures.append({"id": "<root>", "error": "llm_as_judge_must_be_false"})
+        raw_cases = benchmark.get("cases")
+        cases = raw_cases if isinstance(raw_cases, list) else []
+        if not isinstance(raw_cases, list):
+            failures.append({"id": "<root>", "error": "cases_not_list"})
+
+    domains = {case.get("domain") for case in cases if isinstance(case, dict)}
+    missing_domains = sorted(REQUIRED_DOMAINS - domains)
+    if missing_domains:
+        failures.append({"id": "<coverage>", "error": f"missing_domains:{','.join(missing_domains)}"})
+    if len(cases) < 20:
+        failures.append({"id": "<coverage>", "error": "case_count_below_20"})
+
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            failures.append({"id": f"<case:{index}>", "error": "case_not_object"})
+            continue
+        case_id = str(case.get("id") or f"<case:{index}>")
+        for key in ("id", "domain", "task", "raw_dialogue", "llm_role", "required_runtime", "scenario_spec"):
+            if key not in case:
+                failures.append({"id": case_id, "error": f"missing_key:{key}"})
+        if not isinstance(case.get("raw_dialogue"), list) or not case.get("raw_dialogue"):
+            failures.append({"id": case_id, "error": "raw_dialogue_must_be_non_empty_list"})
+        if not isinstance(case.get("scenario_spec"), dict):
+            failures.append({"id": case_id, "error": "scenario_spec_not_object"})
+        if case.get("golden_required") is True:
+            if case.get("required_runtime") != "real_geant4":
+                failures.append({"id": case_id, "error": "official_case_must_require_real_geant4"})
+            if case.get("llm_role") != "candidate_config_only":
+                failures.append({"id": case_id, "error": "official_case_llm_role_must_be_candidate_config_only"})
+            if not isinstance(case.get("golden_metrics"), dict) or not case.get("golden_metrics"):
+                failures.append({"id": case_id, "error": "official_case_missing_golden_metrics"})
+        elif case.get("domain") == "unsupported_boundary":
+            if case.get("expected_status") != "unsupported_capability":
+                failures.append({"id": case_id, "error": "unsupported_case_must_mark_expected_status"})
+        else:
+            failures.append({"id": case_id, "error": "non_official_case_must_be_unsupported_boundary"})
+
+    return {
+        "name": "industrial_runtime_benchmark_shape",
+        "total": len(cases),
+        "failed": len(failures),
+        "failures": failures,
+        "domain_counts": dict(sorted(Counter(str(case.get("domain")) for case in cases if isinstance(case, dict)).items())),
+    }
+
+
+def _case_not_evaluable_result(
+    case: dict[str, Any],
+    *,
+    reasons: list[str],
+    failure_category: str,
+) -> dict[str, Any]:
+    return {
+        "id": case.get("id"),
+        "domain": case.get("domain"),
+        "status": "not_evaluable",
+        "failure_category": failure_category,
+        "reasons": list(dict.fromkeys(reasons)),
+        "required_runtime": case.get("required_runtime"),
+        "golden_status": _golden_status(case),
+    }
+
+
+def evaluate_industrial_runtime_benchmark(
+    path: Path = DEFAULT_INDUSTRIAL_BENCHMARK_PATH,
+    *,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    env_map = dict(os.environ if env is None else env)
+    shape_report = validate_industrial_benchmark_shape(path)
+    if shape_report["failed"]:
+        return {
+            "name": "industrial_runtime_benchmark",
+            "schema_version": INDUSTRIAL_BENCHMARK_SCHEMA_VERSION,
+            "ok": False,
+            "shape_report": shape_report,
+            "total": 0,
+            "passed": 0,
+            "failed": 1,
+            "not_evaluable": 0,
+            "unsupported": 0,
+            "case_results": [],
+            "summary": {"failure_categories": {"shape": 1}},
+        }
+
+    benchmark = _load_json(path)
+    cases = benchmark["cases"]
+    runtime_ready = _runtime_enabled(env_map) and _runtime_command_configured(env_map)
+    runtime_reasons: list[str] = []
+    if not _runtime_enabled(env_map):
+        runtime_reasons.append(f"{INDUSTRIAL_RUNTIME_ENV}_not_enabled")
+    if not _runtime_command_configured(env_map):
+        runtime_reasons.append("missing_runtime_command")
+
+    case_results: list[dict[str, Any]] = []
+    for case in cases:
+        if case.get("domain") == "unsupported_boundary":
+            case_results.append(
+                {
+                    "id": case.get("id"),
+                    "domain": case.get("domain"),
+                    "status": "unsupported_capability",
+                    "failure_category": "unsupported_capability",
+                    "reasons": list(case.get("capability_pressure") or []),
+                    "expected_status": case.get("expected_status"),
+                }
+            )
+            continue
+
+        reasons: list[str] = []
+        golden = _golden_status(case)
+        if not runtime_ready:
+            reasons.extend(runtime_reasons)
+        if not golden["ready"]:
+            reasons.append("missing_golden_metrics")
+        if reasons:
+            category = "runtime_unavailable" if runtime_reasons else "missing_golden"
+            if runtime_reasons and not golden["ready"]:
+                category = "runtime_unavailable_and_missing_golden"
+            case_results.append(_case_not_evaluable_result(case, reasons=reasons, failure_category=category))
+            continue
+
+        case_results.append(
+            _case_not_evaluable_result(
+                case,
+                reasons=["scenario_runtime_mapping_not_implemented"],
+                failure_category="spec_compile_error",
+            )
+        )
+
+    status_counts = Counter(str(item.get("status")) for item in case_results)
+    failure_categories = Counter(str(item.get("failure_category")) for item in case_results if item.get("failure_category"))
+    domain_counts = Counter(str(item.get("domain")) for item in case_results)
+    return {
+        "name": "industrial_runtime_benchmark",
+        "schema_version": INDUSTRIAL_BENCHMARK_SCHEMA_VERSION,
+        "ok": status_counts.get("passed", 0) > 0
+        and status_counts.get("not_evaluable", 0) == 0
+        and status_counts.get("unsupported_capability", 0) == 0,
+        "shape_report": shape_report,
+        "runtime_gate": {
+            "env_enabled": _runtime_enabled(env_map),
+            "runtime_command_configured": _runtime_command_configured(env_map),
+            "real_runtime_ready": runtime_ready,
+        },
+        "total": len(case_results),
+        "passed": status_counts.get("passed", 0),
+        "failed": status_counts.get("failed", 0),
+        "not_evaluable": status_counts.get("not_evaluable", 0),
+        "unsupported": status_counts.get("unsupported_capability", 0),
+        "case_results": case_results,
+        "summary": {
+            "status_counts": dict(sorted(status_counts.items())),
+            "failure_categories": dict(sorted(failure_categories.items())),
+            "domain_counts": dict(sorted(domain_counts.items())),
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Evaluate the industrial runtime benchmark acceptance gate.")
+    parser.add_argument("--benchmark", type=Path, default=DEFAULT_INDUSTRIAL_BENCHMARK_PATH)
+    parser.add_argument("--outdir", type=Path, default=None)
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    report = evaluate_industrial_runtime_benchmark(args.benchmark)
+    output = {"ok": report["ok"], "report": report}
+    if args.outdir:
+        output = save_eval_output(
+            output,
+            outdir=args.outdir or DEFAULT_EVAL_REPORT_DIR,
+            tool=report["name"],
+            run_id=args.run_id or None,
+        )
+    if args.json:
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+    else:
+        print(
+            f"{report['name']}: passed={report['passed']} "
+            f"not_evaluable={report['not_evaluable']} unsupported={report['unsupported']}"
+        )
+        for category, count in report["summary"]["failure_categories"].items():
+            print(f"  {category}: {count}")
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

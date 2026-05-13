@@ -146,9 +146,45 @@ useful: the benchmark is allowed to fail when the project is not ready.
 ## Immediate Implementation Tasks
 
 1. Add a shape validator for `industrial_runtime_benchmark.json`.
+   Status: implemented in `tools/evaluate_industrial_runtime_benchmark.py`.
 2. Add an official evaluator that refuses to pass without real Geant4.
+   Status: implemented. The current evaluator reports formal cases as
+   `not_evaluable` when real runtime or golden metrics are missing.
 3. Add a golden generation tool that runs real Geant4 and writes reviewed golden
    files under `docs/eval/golden/industrial_runtime/`.
 4. Add failure analysis that groups failures by LLM, spec, runtime, metric, and
    unsupported-capability causes.
 5. Stop treating legacy NLU/config benchmarks as acceptance evidence.
+
+## Current Evaluator
+
+The current evaluator is intentionally strict:
+
+```powershell
+.venv\Scripts\python.exe tools\evaluate_industrial_runtime_benchmark.py --json
+```
+
+Without real runtime opt-in and golden metrics, the evaluator must return:
+
+- `ok=false`
+- official cases as `not_evaluable`
+- unsupported boundary cases as `unsupported_capability`
+- `passed=0`
+
+This is the desired behavior. The industrial benchmark must not pass by using
+in-memory runtime, weak metric checks, or config-only validation.
+
+Official runtime evaluation will require:
+
+```powershell
+$env:GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK="1"
+$env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
+.venv\Scripts\python.exe tools\evaluate_industrial_runtime_benchmark.py `
+  --outdir docs\reports\eval `
+  --run-id industrial-runtime-latest `
+  --json
+```
+
+The next implementation step is not to weaken the evaluator. It is to add golden
+generation and scenario-to-runtime compilation until these cases become
+evaluable.
