@@ -59,6 +59,8 @@ class SummarizeEvalRecordsTest(unittest.TestCase):
                             "fallback_count": 2,
                             "profile_mismatch_count": 0,
                             "llm_used_count": 0,
+                            "elapsed_seconds": 12.5,
+                            "seconds_per_case": 3.125,
                         }
                     ],
                     "failed_models": ["offline_v2"],
@@ -77,6 +79,8 @@ class SummarizeEvalRecordsTest(unittest.TestCase):
         matrix = next(record for record in summary["records"] if record["run_id"] == "matrix")
         self.assertEqual(dry_run["key_metrics"]["applied_path_precision"], 1.0)
         self.assertEqual(matrix["model_summaries"][0]["model"], "offline_v2")
+        self.assertEqual(matrix["model_summaries"][0]["elapsed_seconds"], 12.5)
+        self.assertEqual(matrix["model_summaries"][0]["seconds_per_case"], 3.125)
         self.assertEqual(matrix["failed_models"], ["offline_v2"])
         self.assertEqual(matrix["failure_count"], 1)
         self.assertEqual(matrix["failure_summary"][0]["id"], "case-1")

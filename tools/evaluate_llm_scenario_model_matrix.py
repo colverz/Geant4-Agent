@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,13 @@ def _model_label(model: str, *, live_llm: bool) -> str:
     return "<config_model>" if live_llm else "offline_v2"
 
 
-def _summarize_report(report: dict[str, Any], *, model: str, live_llm: bool) -> dict[str, Any]:
+def _summarize_report(
+    report: dict[str, Any],
+    *,
+    model: str,
+    live_llm: bool,
+    elapsed_seconds: float | None = None,
+) -> dict[str, Any]:
     live_summary = report.get("live_summary") if isinstance(report.get("live_summary"), dict) else {}
     total = int(report.get("total") or 0)
     fallback_count = int(live_summary.get("fallback_count") or 0)
@@ -39,6 +46,8 @@ def _summarize_report(report: dict[str, Any], *, model: str, live_llm: bool) -> 
         "fallback_rate": round(fallback_count / total, 6) if total else None,
         "profile_mismatch_count": profile_mismatch_count,
         "profile_mismatch_rate": round(profile_mismatch_count / total, 6) if total else None,
+        "elapsed_seconds": round(elapsed_seconds, 6) if elapsed_seconds is not None else None,
+        "seconds_per_case": round(elapsed_seconds / total, 6) if elapsed_seconds is not None and total else None,
         "lang_counts": live_summary.get("lang_counts", {}),
         "slot_prompt_profiles": live_summary.get("slot_prompt_profiles", {}),
         "semantic_prompt_profiles": live_summary.get("semantic_prompt_profiles", {}),
@@ -80,7 +89,9 @@ def evaluate_llm_scenario_model_matrix(
     selected_models = list(models or [""])
     reports: list[dict[str, Any]] = []
     summaries: list[dict[str, Any]] = []
+    matrix_started = time.perf_counter()
     for model in selected_models:
+        started = time.perf_counter()
         report = evaluate_llm_scenario_parsing(
             casebank_path,
             live_llm=live_llm,
@@ -89,8 +100,16 @@ def evaluate_llm_scenario_model_matrix(
             max_cases=max_cases,
             model_override=model,
         )
+        elapsed_seconds = time.perf_counter() - started
         reports.append(report)
-        summaries.append(_summarize_report(report, model=model, live_llm=live_llm))
+        summaries.append(
+            _summarize_report(
+                report,
+                model=model,
+                live_llm=live_llm,
+                elapsed_seconds=elapsed_seconds,
+            )
+        )
 
     failed_reports = [summary for summary in summaries if not summary["meets_threshold"]]
     hidden_fallback_reports = [
@@ -107,6 +126,7 @@ def evaluate_llm_scenario_model_matrix(
         "casebank": str(casebank_path),
         "min_accuracy": min_accuracy,
         "max_cases": max_cases,
+        "elapsed_seconds": round(time.perf_counter() - matrix_started, 6),
         "ok": not failed_reports and not hidden_fallback_reports and not profile_mismatch_reports,
         "model_count": len(summaries),
         "model_summaries": summaries,
@@ -156,7 +176,8 @@ def main() -> int:
             print(
                 "  "
                 f"{summary['model']}: accuracy={summary['accuracy']:.3f} "
-                f"fallback={summary['fallback_count']} profile_mismatch={summary['profile_mismatch_count']}"
+                f"fallback={summary['fallback_count']} profile_mismatch={summary['profile_mismatch_count']} "
+                f"elapsed={summary.get('elapsed_seconds')}s"
             )
     return 0 if report["ok"] else 1
 

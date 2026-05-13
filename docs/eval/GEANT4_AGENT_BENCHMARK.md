@@ -794,15 +794,25 @@ Implemented so far:
   the runtime payload.
 - Live LLM review feedback added standard coverage for invalid physics-list
   grounding and English viewer tool guard symmetry.
-- Live LLM scenario smoke is now opt-in but executable. The current 8-case
-  `deepseek-v4-flash` run passed with `llm_used_count=8`, `fallback_count=0`,
-  `profile_mismatch_count=0`, and correct EN/ZH slot prompt profile routing.
+- Live LLM scenario smoke is now opt-in but executable. The previous 8-case
+  smoke has been expanded into a 13-case live scenario baseline. It covers
+  detector/scoring extraction, source beam model parameters, unit conversion,
+  Chinese order-mixed input, and a Chinese multi-turn overwrite-confirmation
+  flow. A `deepseek-v4-flash` run passed once with `llm_used_count=13`,
+  `fallback_count=0`, `profile_mismatch_count=0`, and correct EN/ZH slot prompt
+  profile routing. A later log-refresh run exposed a scorer
+  negative-constraint fluctuation; the case was narrowed to beam-model
+  evaluation and should be re-run before treating the latest live record as the
+  formal baseline.
 - The live scenario evaluator now reports language counts, slot/semantic prompt
   profile usage, fallback count, and profile mismatch count so hidden fallback
   or prompt-profile contamination cannot be counted as success.
 - The model matrix evaluator can compare offline or live LLM scenario runs across
   multiple model overrides. It ranks models by accuracy while still treating
   hidden fallback and prompt-profile mismatch as hard evaluation failures.
+- The model matrix evaluator now records `elapsed_seconds` and
+  `seconds_per_case` for each model summary, so live-model comparison can include
+  latency rather than only pass/fail accuracy.
 - Live smoke expansion caught a real `single_sphere` compiler gap. The geometry
   catalog now supports sphere radius compilation through `single_sphere` instead
   of rejecting valid sphere prompts after the LLM had already extracted them.
@@ -821,21 +831,21 @@ Current quantity assessment:
   deposited energy, mean deposited energy per completed event, crossing counts,
   structured summary consistency, and range/tolerance checks that prepare the
   same cases for opt-in live runtime evaluation. Config extraction now reports
-  applied-path precision on a representative full-config case, so extra
-  unintended session writes can be measured instead of hidden behind final-value
-  accuracy.
+  applied-path precision on five key config cases, so extra unintended session
+  writes can be measured instead of hidden behind final-value accuracy.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: config delta precision/recall over larger
-  suites, broader live LLM reliability runs, running the new model matrix with
-  real DeepSeek model overrides, and manually triggered live runtime execution
-  with real local Geant4.
+- Highest-value next additions: re-run the 13-case live scenario baseline after
+  the scorer expectation adjustment, run at least one stronger-model comparison,
+  add latency summaries to formal review notes, and manually trigger live
+  runtime execution with real local Geant4 when the local runtime command is
+  ready.
 
 Not implemented yet:
 
-- config delta precision/recall over larger suites beyond the first
-  representative full-config case
-- broader live LLM execution beyond the current opt-in smoke set
+- config delta precision/recall over larger suites beyond the current five
+  precision-covered cases
+- broader live LLM execution beyond the current 13-case opt-in baseline
 - executed stronger-model comparison reports
 - routine real Geant4 execution in CI or default local tests
 

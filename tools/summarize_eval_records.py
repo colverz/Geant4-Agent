@@ -45,6 +45,8 @@ def _compact_model_summaries(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "fallback_count": item.get("fallback_count"),
                 "profile_mismatch_count": item.get("profile_mismatch_count"),
                 "llm_used_count": item.get("llm_used_count"),
+                "elapsed_seconds": item.get("elapsed_seconds"),
+                "seconds_per_case": item.get("seconds_per_case"),
             }
         )
     return compact

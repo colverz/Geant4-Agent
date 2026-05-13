@@ -65,7 +65,10 @@ class LlmScenarioModelMatrixTest(unittest.TestCase):
         self.assertEqual(matrix["hidden_fallback_models"], ["deepseek-v4-pro"])
         self.assertEqual(matrix["profile_mismatch_models"], [])
         self.assertEqual(fake_eval.call_count, 2)
+        self.assertGreaterEqual(matrix["elapsed_seconds"], 0.0)
         self.assertEqual(matrix["model_summaries"][0]["llm_usage_rate"], 1.0)
+        self.assertIsNotNone(matrix["model_summaries"][0]["elapsed_seconds"])
+        self.assertIsNotNone(matrix["model_summaries"][0]["seconds_per_case"])
         self.assertEqual(matrix["model_summaries"][1]["fallback_rate"], 0.25)
 
     def test_model_matrix_flags_profile_mismatch(self) -> None:
