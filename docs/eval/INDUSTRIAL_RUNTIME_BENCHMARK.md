@@ -143,6 +143,14 @@ It contains the full intended industrial benchmark surface, not a toy subset.
 Some cases may initially expose unsupported functionality. That is expected and
 useful: the benchmark is allowed to fail when the project is not ready.
 
+The execution contract is:
+
+- `docs/eval/INDUSTRIAL_RUNTIME_EXECUTION_CONTRACT.md`
+
+That contract defines the only official acceptance path: LLM candidate,
+deterministic typed compilation, real Geant4 runtime, structured metrics, and
+golden numeric comparison.
+
 ## Immediate Implementation Tasks
 
 1. Add a shape validator for `industrial_runtime_benchmark.json`.
@@ -152,9 +160,15 @@ useful: the benchmark is allowed to fail when the project is not ready.
    `not_evaluable` when real runtime or golden metrics are missing.
 3. Add a golden generation tool that runs real Geant4 and writes reviewed golden
    files under `docs/eval/golden/industrial_runtime/`.
+   Status: implemented as a strict gate in
+   `tools/create_industrial_golden.py`. It intentionally refuses to write
+   goldens until real runtime opt-in and scenario-to-runtime compilation are
+   available.
 4. Add failure analysis that groups failures by LLM, spec, runtime, metric, and
    unsupported-capability causes.
+   Status: implemented in `tools/analyze_industrial_benchmark_failures.py`.
 5. Stop treating legacy NLU/config benchmarks as acceptance evidence.
+   Status: documented in `docs/eval/LEGACY_BENCHMARK_ARCHIVE.md`.
 
 ## Current Evaluator
 
@@ -188,3 +202,21 @@ $env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
 The next implementation step is not to weaken the evaluator. It is to add golden
 generation and scenario-to-runtime compilation until these cases become
 evaluable.
+
+Golden generation currently uses a hard fail-safe:
+
+```powershell
+.venv\Scripts\python.exe tools\create_industrial_golden.py --json
+```
+
+If real runtime opt-in or the deterministic scenario compiler is missing, the
+tool reports `blocked` or `not_evaluable` and writes no golden files.
+
+Failure analysis is available via:
+
+```powershell
+.venv\Scripts\python.exe tools\analyze_industrial_benchmark_failures.py --json
+```
+
+This groups failures by category and domain so the next engineering work is
+driven by hard blockers rather than by easier config-only cases.
