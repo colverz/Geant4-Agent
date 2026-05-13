@@ -178,6 +178,13 @@ golden numeric comparison.
    not a pass condition by itself; official pass still requires real Geant4 and
    reviewed golden metrics.
 
+7. Add runtime execution and metric comparison bridge.
+   Status: implemented in `tools/industrial_runtime_executor.py`. It can execute
+   compiled cases through the existing Geant4 MCP adapter, extract structured
+   metrics, generate unreviewed golden files, and compare actual metrics against
+   golden tolerances. Official scoring still requires a real local-process
+   Geant4 runtime and reviewed goldens.
+
 ## Current Evaluator
 
 The current evaluator is intentionally strict:
@@ -202,6 +209,7 @@ Official runtime evaluation will require:
 $env:GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK="1"
 $env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
 .venv\Scripts\python.exe tools\evaluate_industrial_runtime_benchmark.py `
+  --golden-dir docs\eval\golden\industrial_runtime `
   --outdir docs\reports\eval `
   --run-id industrial-runtime-latest `
   --json
@@ -220,6 +228,16 @@ Golden generation currently uses a hard fail-safe:
 If real runtime opt-in or the deterministic scenario compiler is missing, the
 tool reports `blocked` or `not_evaluable` and writes no golden files.
 
+When a case is compiled, a real local-process runtime is configured, and all
+required metrics are extractable, the golden tool writes:
+
+```text
+docs/eval/golden/industrial_runtime/<case-id>.golden.json
+```
+
+Generated files are marked `review.status="unreviewed"` and must be reviewed
+before they are treated as official baselines.
+
 Failure analysis is available via:
 
 ```powershell
@@ -237,3 +255,7 @@ The evaluator also includes a `compile_summary`:
   required metrics are not yet available from structured runtime results.
 - `unsupported_capability`: the case requires geometry/source/scoring/runtime
   behavior that the current deterministic compiler must not simplify away.
+
+If reviewed golden files exist, the evaluator uses them instead of the manifest
+placeholders. It then runs the compiled case, extracts actual metrics, and
+returns `passed`, `missing_metric`, or `metric_mismatch` from numeric comparison.

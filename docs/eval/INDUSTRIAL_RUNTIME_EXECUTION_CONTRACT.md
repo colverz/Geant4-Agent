@@ -250,6 +250,16 @@ $env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
 .venv\Scripts\python.exe tools\create_industrial_golden.py --case-id shielding_lead_gamma_transmission --json
 ```
 
+Official numeric comparison:
+
+```powershell
+$env:GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK="1"
+$env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
+.venv\Scripts\python.exe tools\evaluate_industrial_runtime_benchmark.py `
+  --golden-dir docs\eval\golden\industrial_runtime `
+  --json
+```
+
 Failure analysis:
 
 ```powershell
@@ -265,6 +275,20 @@ Current deterministic compiler boundary:
 The report's `compile_summary` is part of the acceptance feedback. It separates
 cases that are runtime-payload-ready from cases blocked by missing geometry,
 source, scorer, multi-run, or metric extraction capability.
+
+The runtime executor is:
+
+```text
+tools/industrial_runtime_executor.py
+```
+
+It owns the factual runtime part of the benchmark:
+
+- execute compiled cases through the Geant4 MCP adapter
+- reject in-memory runtime for official execution
+- extract direct and deterministic derived metrics from `result_summary`
+- compare actual metrics to reviewed golden values with tolerances
+- build unreviewed golden payloads for human review
 
 ## What This Contract Forbids
 

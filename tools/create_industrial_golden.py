@@ -19,6 +19,7 @@ from tools.evaluate_industrial_runtime_benchmark import (
     validate_industrial_benchmark_shape,
 )
 from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime, summarize_compile_results
+from tools.industrial_runtime_executor import build_industrial_golden_payload, execute_industrial_case
 
 INDUSTRIAL_GOLDEN_SCHEMA_VERSION = "geant4_agent_industrial_golden.v1"
 DEFAULT_INDUSTRIAL_GOLDEN_DIR = Path("docs/eval/golden/industrial_runtime")
@@ -201,19 +202,37 @@ def generate_industrial_golden(
             case_results.append(result)
             continue
 
-        result = _not_generated_result(
-            case,
-            status="not_evaluable",
-            failure_category="runtime_error",
-            reasons=[
-                "industrial_golden_runtime_execution_not_implemented",
-                "runtime_payload_compiled_but_no_geant4_run_was_launched",
-                "no_golden_file_written",
-            ],
-            golden_file=golden_file,
+        execution = execute_industrial_case(case, runtime_defaults=runtime_defaults, env=env_map)
+        if execution.get("status") != "completed":
+            result = _not_generated_result(
+                case,
+                status="not_evaluable",
+                failure_category=str(execution.get("failure_category") or "runtime_error"),
+                reasons=list(execution.get("errors") or ["industrial_runtime_execution_failed"]),
+                golden_file=golden_file,
+            )
+            result["compile_report"] = _compile_report_preview(compile_result)
+            result["execution_report"] = _execution_report_preview(execution)
+            case_results.append(result)
+            continue
+
+        golden_file.parent.mkdir(parents=True, exist_ok=True)
+        golden_payload = build_industrial_golden_payload(case, execution)
+        golden_file.write_text(json.dumps(golden_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        case_results.append(
+            {
+                "id": case.get("id"),
+                "domain": case.get("domain"),
+                "status": "generated",
+                "failure_category": None,
+                "reasons": [],
+                "golden_generated": True,
+                "golden_file": str(golden_file),
+                "actual_metrics": execution.get("actual_metrics") or {},
+                "compile_report": _compile_report_preview(compile_result),
+                "execution_report": _execution_report_preview(execution),
+            }
         )
-        result["compile_report"] = _compile_report_preview(compile_result)
-        case_results.append(result)
 
     status_counts = Counter(str(item.get("status")) for item in case_results)
     failure_categories = Counter(
@@ -257,6 +276,18 @@ def _compile_report_preview(compile_result: dict[str, Any]) -> dict[str, Any]:
         "unsupported_metrics": sorted(unsupported.keys()),
         "runtime_payload_keys": sorted(runtime_payload.keys()),
         "runtime_payload_available": bool(runtime_payload),
+    }
+
+
+def _execution_report_preview(execution: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": execution.get("schema_version"),
+        "status": execution.get("status"),
+        "failure_category": execution.get("failure_category"),
+        "errors": list(execution.get("errors") or []),
+        "actual_metrics": execution.get("actual_metrics") or {},
+        "missing_metrics": execution.get("missing_metrics") or [],
+        "runtime_fingerprint": execution.get("runtime_fingerprint") or {},
     }
 
 
