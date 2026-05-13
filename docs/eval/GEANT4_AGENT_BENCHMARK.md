@@ -798,12 +798,10 @@ Implemented so far:
   smoke has been expanded into a 13-case live scenario baseline. It covers
   detector/scoring extraction, source beam model parameters, unit conversion,
   Chinese order-mixed input, and a Chinese multi-turn overwrite-confirmation
-  flow. A `deepseek-v4-flash` run passed once with `llm_used_count=13`,
-  `fallback_count=0`, `profile_mismatch_count=0`, and correct EN/ZH slot prompt
-  profile routing. A later log-refresh run exposed a scorer
-  negative-constraint fluctuation; the case was narrowed to beam-model
-  evaluation and should be re-run before treating the latest live record as the
-  formal baseline.
+  flow. The current `deepseek-v4-flash` baseline passed on 2026-05-13 with
+  `llm_used_count=13`, `fallback_count=0`, `profile_mismatch_count=0`, and
+  correct EN/ZH slot prompt profile routing. The compact eval summary recorded
+  `elapsed_seconds=181.246462` and `seconds_per_case=13.942036`.
 - The live scenario evaluator now reports language counts, slot/semantic prompt
   profile usage, fallback count, and profile mismatch count so hidden fallback
   or prompt-profile contamination cannot be counted as success.
@@ -835,11 +833,10 @@ Current quantity assessment:
   writes can be measured instead of hidden behind final-value accuracy.
 - P7 standard benchmark: not complete yet. The standard target remains 20 to 30
   tasks and should add capability coverage, not near-duplicate phrasing.
-- Highest-value next additions: re-run the 13-case live scenario baseline after
-  the scorer expectation adjustment, run at least one stronger-model comparison,
-  add latency summaries to formal review notes, and manually trigger live
-  runtime execution with real local Geant4 when the local runtime command is
-  ready.
+- Highest-value next additions: run at least one stronger-model comparison, add
+  latency summaries to formal review notes, expand live reliability beyond 13
+  cases only through new capability dimensions, and manually trigger live runtime
+  execution with real local Geant4 when the local runtime command is ready.
 
 Not implemented yet:
 
