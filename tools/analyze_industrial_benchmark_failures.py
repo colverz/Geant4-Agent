@@ -100,6 +100,8 @@ def analyze_industrial_benchmark_report(report: dict[str, Any]) -> dict[str, Any
         )
 
     next_actions = [item["next_action"] for item in top_blockers[:3]]
+    compile_summary = _compile_summary(report)
+    compile_blockers = _compile_blockers(compile_summary)
     return {
         "name": "industrial_benchmark_failure_analysis",
         "ok": not top_blockers and bool(rows),
@@ -112,9 +114,53 @@ def analyze_industrial_benchmark_report(report: dict[str, Any]) -> dict[str, Any
         "domain_failures": {
             domain: dict(sorted(counts.items())) for domain, counts in sorted(domain_failures.items())
         },
+        "compile_summary": compile_summary,
+        "compile_blockers": compile_blockers,
         "top_blockers": top_blockers,
         "next_actions": next_actions,
     }
+
+
+def _compile_summary(report: dict[str, Any]) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    compile_summary = summary.get("compile_summary") if isinstance(summary.get("compile_summary"), dict) else {}
+    return compile_summary
+
+
+def _compile_blockers(compile_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    status_counts = compile_summary.get("status_counts") if isinstance(compile_summary.get("status_counts"), dict) else {}
+    if status_counts:
+        for status in ("unsupported_capability", "compiled_with_gaps"):
+            count = int(status_counts.get(status, 0) or 0)
+            if count:
+                action = (
+                    "Implement missing geometry/source/scoring capabilities before these cases can produce official goldens."
+                    if status == "unsupported_capability"
+                    else "Extend structured metric extraction or derived metric calculation for compiled cases with metric gaps."
+                )
+                blockers.append({"kind": status, "count": count, "next_action": action})
+    features = compile_summary.get("unsupported_features") if isinstance(compile_summary.get("unsupported_features"), dict) else {}
+    metrics = compile_summary.get("unsupported_metrics") if isinstance(compile_summary.get("unsupported_metrics"), dict) else {}
+    for name, count in sorted(features.items(), key=lambda item: (-int(item[1]), str(item[0])))[:5]:
+        blockers.append(
+            {
+                "kind": "unsupported_feature",
+                "name": str(name),
+                "count": int(count),
+                "next_action": "Add this capability to the runtime payload/compiler or keep the benchmark case explicitly unsupported.",
+            }
+        )
+    for name, count in sorted(metrics.items(), key=lambda item: (-int(item[1]), str(item[0])))[:5]:
+        blockers.append(
+            {
+                "kind": "unsupported_metric",
+                "name": str(name),
+                "count": int(count),
+                "next_action": "Add this metric to structured Geant4 result extraction or deterministic derived metric calculation.",
+            }
+        )
+    return blockers
 
 
 def main() -> int:

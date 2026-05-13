@@ -18,6 +18,7 @@ from tools.evaluate_industrial_runtime_benchmark import (
     _runtime_enabled,
     validate_industrial_benchmark_shape,
 )
+from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime, summarize_compile_results
 
 INDUSTRIAL_GOLDEN_SCHEMA_VERSION = "geant4_agent_industrial_golden.v1"
 DEFAULT_INDUSTRIAL_GOLDEN_DIR = Path("docs/eval/golden/industrial_runtime")
@@ -87,8 +88,8 @@ def generate_industrial_golden(
     """Generate reviewed industrial golden metrics from a real Geant4 runtime.
 
     The current implementation intentionally refuses to fabricate goldens. It
-    validates benchmark shape and runtime opt-in, then reports the precise
-    blocker until the scenario-to-runtime compiler is implemented.
+    validates benchmark shape, runtime opt-in, and deterministic scenario
+    compilation before reporting the remaining execution blocker.
     """
 
     env_map = dict(os.environ if env is None else env)
@@ -111,6 +112,7 @@ def generate_industrial_golden(
         }
 
     benchmark = _load_json(benchmark_path)
+    runtime_defaults = benchmark.get("runtime_defaults") if isinstance(benchmark.get("runtime_defaults"), dict) else {}
     selected = _selected_cases(benchmark, case_id)
     if case_id and not selected:
         return {
@@ -132,17 +134,20 @@ def generate_industrial_golden(
 
     gate = _runtime_gate(env_map)
     case_results: list[dict[str, Any]] = []
+    compile_results: list[dict[str, Any]] = []
     for case in selected:
         case_name = str(case.get("id"))
+        compile_result = compile_industrial_case_to_runtime(case, runtime_defaults=runtime_defaults)
+        compile_results.append(compile_result)
         if not _case_is_official(case):
-            case_results.append(
-                _not_generated_result(
-                    case,
-                    status="skipped",
-                    failure_category="unsupported_capability",
-                    reasons=["golden_generation_only_supports_official_runtime_cases"],
-                )
+            result = _not_generated_result(
+                case,
+                status="skipped",
+                failure_category="unsupported_capability",
+                reasons=["golden_generation_only_supports_official_runtime_cases"],
             )
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
             continue
 
         golden_file = _golden_path(golden_dir, case_name)
@@ -159,30 +164,56 @@ def generate_industrial_golden(
             continue
 
         if not gate["real_runtime_ready"]:
-            case_results.append(
-                _not_generated_result(
-                    case,
-                    status="blocked",
-                    failure_category="runtime_unavailable",
-                    reasons=list(gate["reasons"]),
-                    golden_file=golden_file,
-                )
+            result = _not_generated_result(
+                case,
+                status="blocked",
+                failure_category="runtime_unavailable",
+                reasons=list(gate["reasons"]),
+                golden_file=golden_file,
             )
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
             continue
 
-        case_results.append(
-            _not_generated_result(
+        if compile_result.get("status") == "unsupported_capability":
+            result = _not_generated_result(
                 case,
                 status="not_evaluable",
                 failure_category="spec_compile_error",
-                reasons=[
-                    "scenario_runtime_mapping_not_implemented",
-                    "no_runtime_payload_was_generated",
-                    "no_golden_file_written",
-                ],
+                reasons=list(compile_result.get("unsupported_features") or ["runtime_blueprint_not_available_for_case"]),
                 golden_file=golden_file,
             )
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
+            continue
+
+        metric_plan = compile_result.get("metric_plan") if isinstance(compile_result.get("metric_plan"), dict) else {}
+        unsupported_metrics = metric_plan.get("unsupported") if isinstance(metric_plan.get("unsupported"), dict) else {}
+        if unsupported_metrics:
+            result = _not_generated_result(
+                case,
+                status="not_evaluable",
+                failure_category="missing_metric",
+                reasons=[f"unsupported_metric:{metric}" for metric in unsupported_metrics],
+                golden_file=golden_file,
+            )
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
+            continue
+
+        result = _not_generated_result(
+            case,
+            status="not_evaluable",
+            failure_category="runtime_error",
+            reasons=[
+                "industrial_golden_runtime_execution_not_implemented",
+                "runtime_payload_compiled_but_no_geant4_run_was_launched",
+                "no_golden_file_written",
+            ],
+            golden_file=golden_file,
         )
+        result["compile_report"] = _compile_report_preview(compile_result)
+        case_results.append(result)
 
     status_counts = Counter(str(item.get("status")) for item in case_results)
     failure_categories = Counter(
@@ -207,7 +238,25 @@ def generate_industrial_golden(
         "summary": {
             "status_counts": dict(sorted(status_counts.items())),
             "failure_categories": dict(sorted(failure_categories.items())),
+            "compile_summary": summarize_compile_results(compile_results),
         },
+    }
+
+
+def _compile_report_preview(compile_result: dict[str, Any]) -> dict[str, Any]:
+    metric_plan = compile_result.get("metric_plan") if isinstance(compile_result.get("metric_plan"), dict) else {}
+    unsupported = metric_plan.get("unsupported") if isinstance(metric_plan.get("unsupported"), dict) else {}
+    supported = metric_plan.get("supported") if isinstance(metric_plan.get("supported"), dict) else {}
+    runtime_payload = compile_result.get("runtime_payload") if isinstance(compile_result.get("runtime_payload"), dict) else {}
+    return {
+        "schema_version": compile_result.get("schema_version"),
+        "status": compile_result.get("status"),
+        "failure_category": compile_result.get("failure_category"),
+        "unsupported_features": list(compile_result.get("unsupported_features") or []),
+        "supported_metric_count": len(supported),
+        "unsupported_metrics": sorted(unsupported.keys()),
+        "runtime_payload_keys": sorted(runtime_payload.keys()),
+        "runtime_payload_available": bool(runtime_payload),
     }
 
 

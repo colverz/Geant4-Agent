@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from tools.eval_report_io import DEFAULT_EVAL_REPORT_DIR, save_eval_output
+from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime, summarize_compile_results
 
 INDUSTRIAL_BENCHMARK_SCHEMA_VERSION = "geant4_agent_industrial_runtime_benchmark.v1"
 DEFAULT_INDUSTRIAL_BENCHMARK_PATH = Path("docs/eval/industrial_runtime_benchmark.json")
@@ -168,6 +169,7 @@ def evaluate_industrial_runtime_benchmark(
 
     benchmark = _load_json(path)
     cases = benchmark["cases"]
+    runtime_defaults = benchmark.get("runtime_defaults") if isinstance(benchmark.get("runtime_defaults"), dict) else {}
     runtime_ready = _runtime_enabled(env_map) and _runtime_command_configured(env_map)
     runtime_reasons: list[str] = []
     if not _runtime_enabled(env_map):
@@ -176,7 +178,10 @@ def evaluate_industrial_runtime_benchmark(
         runtime_reasons.append("missing_runtime_command")
 
     case_results: list[dict[str, Any]] = []
+    compile_results: list[dict[str, Any]] = []
     for case in cases:
+        compile_result = compile_industrial_case_to_runtime(case, runtime_defaults=runtime_defaults)
+        compile_results.append(compile_result)
         if case.get("domain") == "unsupported_boundary":
             case_results.append(
                 {
@@ -186,30 +191,66 @@ def evaluate_industrial_runtime_benchmark(
                     "failure_category": "unsupported_capability",
                     "reasons": list(case.get("capability_pressure") or []),
                     "expected_status": case.get("expected_status"),
+                    "compile_status": compile_result.get("status"),
+                    "compile_report": _compile_report_preview(compile_result),
                 }
             )
             continue
 
         reasons: list[str] = []
         golden = _golden_status(case)
+        compile_status = str(compile_result.get("status") or "")
         if not runtime_ready:
             reasons.extend(runtime_reasons)
         if not golden["ready"]:
             reasons.append("missing_golden_metrics")
+        if compile_status == "unsupported_capability":
+            reasons.extend(str(item) for item in compile_result.get("unsupported_features") or [])
         if reasons:
             category = "runtime_unavailable" if runtime_reasons else "missing_golden"
             if runtime_reasons and not golden["ready"]:
                 category = "runtime_unavailable_and_missing_golden"
-            case_results.append(_case_not_evaluable_result(case, reasons=reasons, failure_category=category))
+            if not runtime_reasons and golden["ready"] and compile_status == "unsupported_capability":
+                category = "spec_compile_error"
+            result = _case_not_evaluable_result(case, reasons=reasons, failure_category=category)
+            result["compile_status"] = compile_result.get("status")
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
+            continue
+
+        if compile_status == "unsupported_capability":
+            result = _case_not_evaluable_result(
+                case,
+                reasons=list(compile_result.get("unsupported_features") or ["runtime_blueprint_not_available_for_case"]),
+                failure_category="spec_compile_error",
+            )
+            result["compile_status"] = compile_result.get("status")
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
+            continue
+
+        metric_plan = compile_result.get("metric_plan") if isinstance(compile_result.get("metric_plan"), dict) else {}
+        unsupported_metrics = metric_plan.get("unsupported") if isinstance(metric_plan.get("unsupported"), dict) else {}
+        if unsupported_metrics:
+            result = _case_not_evaluable_result(
+                case,
+                reasons=[f"unsupported_metric:{metric}" for metric in unsupported_metrics],
+                failure_category="missing_metric",
+            )
+            result["compile_status"] = compile_result.get("status")
+            result["compile_report"] = _compile_report_preview(compile_result)
+            case_results.append(result)
             continue
 
         case_results.append(
             _case_not_evaluable_result(
                 case,
-                reasons=["scenario_runtime_mapping_not_implemented"],
-                failure_category="spec_compile_error",
+                reasons=["industrial_runtime_execution_not_implemented"],
+                failure_category="runtime_error",
             )
         )
+        case_results[-1]["compile_status"] = compile_result.get("status")
+        case_results[-1]["compile_report"] = _compile_report_preview(compile_result)
 
     status_counts = Counter(str(item.get("status")) for item in case_results)
     failure_categories = Counter(str(item.get("failure_category")) for item in case_results if item.get("failure_category"))
@@ -236,7 +277,25 @@ def evaluate_industrial_runtime_benchmark(
             "status_counts": dict(sorted(status_counts.items())),
             "failure_categories": dict(sorted(failure_categories.items())),
             "domain_counts": dict(sorted(domain_counts.items())),
+            "compile_summary": summarize_compile_results(compile_results),
         },
+    }
+
+
+def _compile_report_preview(compile_result: dict[str, Any]) -> dict[str, Any]:
+    metric_plan = compile_result.get("metric_plan") if isinstance(compile_result.get("metric_plan"), dict) else {}
+    unsupported = metric_plan.get("unsupported") if isinstance(metric_plan.get("unsupported"), dict) else {}
+    supported = metric_plan.get("supported") if isinstance(metric_plan.get("supported"), dict) else {}
+    runtime_payload = compile_result.get("runtime_payload") if isinstance(compile_result.get("runtime_payload"), dict) else {}
+    return {
+        "schema_version": compile_result.get("schema_version"),
+        "status": compile_result.get("status"),
+        "failure_category": compile_result.get("failure_category"),
+        "unsupported_features": list(compile_result.get("unsupported_features") or []),
+        "supported_metric_count": len(supported),
+        "unsupported_metrics": sorted(unsupported.keys()),
+        "runtime_payload_keys": sorted(runtime_payload.keys()),
+        "runtime_payload_available": bool(runtime_payload),
     }
 
 

@@ -166,9 +166,17 @@ golden numeric comparison.
    available.
 4. Add failure analysis that groups failures by LLM, spec, runtime, metric, and
    unsupported-capability causes.
-   Status: implemented in `tools/analyze_industrial_benchmark_failures.py`.
+   Status: implemented in `tools/analyze_industrial_benchmark_failures.py`,
+   including runtime/golden blockers and deterministic compile blockers.
 5. Stop treating legacy NLU/config benchmarks as acceptance evidence.
    Status: documented in `docs/eval/LEGACY_BENCHMARK_ARCHIVE.md`.
+
+6. Add deterministic scenario-to-runtime compiler coverage.
+   Status: initial compiler implemented in `tools/industrial_runtime_compiler.py`.
+   It compiles the currently expressible single-volume detector/plane cases and
+   reports explicit geometry/source/scoring/metric gaps for the rest. This is
+   not a pass condition by itself; official pass still requires real Geant4 and
+   reviewed golden metrics.
 
 ## Current Evaluator
 
@@ -220,3 +228,12 @@ Failure analysis is available via:
 
 This groups failures by category and domain so the next engineering work is
 driven by hard blockers rather than by easier config-only cases.
+
+The evaluator also includes a `compile_summary`:
+
+- `compiled`: current runtime payload can represent the case and all declared
+  metrics are structurally supported.
+- `compiled_with_gaps`: a runtime payload can be generated, but one or more
+  required metrics are not yet available from structured runtime results.
+- `unsupported_capability`: the case requires geometry/source/scoring/runtime
+  behavior that the current deterministic compiler must not simplify away.

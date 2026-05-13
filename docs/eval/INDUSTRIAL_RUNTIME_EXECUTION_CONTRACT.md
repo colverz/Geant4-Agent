@@ -81,6 +81,12 @@ Failure categories:
 - `spec_compile_error`
 - `unsupported_capability`
 
+The deterministic compiler must prefer explicit rejection over silent
+simplification. For example, if a case asks for a step wedge, embedded void,
+multi-layer shield, depth-binned scorer, paired rerun, or isotropic source and
+the current runtime cannot represent it, the compiler must return a structured
+gap instead of producing a weaker single-box approximation.
+
 ### 5. RuntimePayload
 
 The typed spec must compile into the exact payload consumed by the Geant4
@@ -249,6 +255,16 @@ Failure analysis:
 ```powershell
 .venv\Scripts\python.exe tools\analyze_industrial_benchmark_failures.py --json
 ```
+
+Current deterministic compiler boundary:
+
+```powershell
+.venv\Scripts\python.exe tools\evaluate_industrial_runtime_benchmark.py --json
+```
+
+The report's `compile_summary` is part of the acceptance feedback. It separates
+cases that are runtime-payload-ready from cases blocked by missing geometry,
+source, scorer, multi-run, or metric extraction capability.
 
 ## What This Contract Forbids
 
