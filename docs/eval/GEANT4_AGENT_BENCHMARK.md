@@ -1,6 +1,18 @@
 # Geant4 Agent Benchmark
 
-Status: P7 design charter
+Status: archived for legacy regression only.
+
+This document and its companion V1 casebanks are no longer the acceptance
+benchmark for industrial readiness. They remain useful as NLU, workflow guard,
+runtime payload wiring, and report-regression tests, but they do not prove
+physical correctness or deployability.
+
+The new acceptance benchmark is the industrial runtime benchmark:
+
+- `docs/eval/INDUSTRIAL_RUNTIME_BENCHMARK.md`
+- `docs/eval/industrial_runtime_benchmark.json`
+
+See `docs/eval/LEGACY_BENCHMARK_ARCHIVE.md` for the archive boundary.
 
 This document defines the benchmark strategy for evaluating Geant4Agent as an
 agentic simulation assistant. It is not a new phrase corpus. It is the evaluation

@@ -1,0 +1,515 @@
+{
+  "schema_version": "geant4_agent_industrial_runtime_benchmark.v1",
+  "status": "acceptance_design_requires_golden_generation",
+  "official_pass_requires": {
+    "real_geant4_runtime": true,
+    "golden_numeric_metrics": true,
+    "llm_as_judge": false,
+    "single_thread_default": true
+  },
+  "runtime_defaults": {
+    "physics_list": "FTFP_BERT",
+    "seed": 1337,
+    "threads": 1,
+    "events": 10000,
+    "output_format": "json"
+  },
+  "cases": [
+    {
+      "id": "ndt_steel_step_wedge_gamma_detector",
+      "domain": "industrial_ndt",
+      "task": "Estimate detector response through a steel step wedge.",
+      "raw_dialogue": [
+        "Model a 1 MeV gamma beam through a steel step wedge and score the silicon detector response behind it."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["multi_thickness_geometry", "detector_response", "attenuation_ratio"],
+      "scenario_spec": {
+        "geometry": "steel step wedge with 5, 10, 20, 30 mm regions and downstream silicon detector",
+        "materials": ["G4_STAINLESS-STEEL", "G4_Si"],
+        "source": "1 MeV gamma beam along +z",
+        "scoring": ["target_edep", "detector_edep", "detector_crossing_count", "transmission_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "events_completed": {"expected": null, "tolerance": 0},
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null},
+        "transmission_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "ndt_aluminum_block_void_contrast",
+      "domain": "industrial_ndt",
+      "task": "Detect a cylindrical void inside an aluminum block by detector contrast.",
+      "raw_dialogue": [
+        "Simulate a gamma radiography setup for an aluminum block with a central cylindrical air void and compare detector response through void and solid regions."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["void_geometry", "region_scoring", "contrast_proxy"],
+      "scenario_spec": {
+        "geometry": "aluminum block with embedded air cylinder void",
+        "materials": ["G4_Al", "G4_AIR", "G4_Si"],
+        "source": "0.662 MeV gamma beam along +z",
+        "scoring": ["detector_region_counts", "contrast_ratio", "detector_edep_total_mev"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "void_region_count": {"expected": null, "tolerance": 0},
+        "solid_region_count": {"expected": null, "tolerance": 0},
+        "contrast_ratio": {"expected": null, "tolerance": null},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "ndt_pipe_wall_corrosion_gamma",
+      "domain": "industrial_ndt",
+      "task": "Estimate gamma transmission change caused by pipe-wall thinning.",
+      "raw_dialogue": [
+        "Compare detector transmission for a steel pipe section with nominal wall thickness and a corroded thinned wall region."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["curved_geometry", "paired_scenario", "transmission_ratio"],
+      "scenario_spec": {
+        "geometry": "steel pipe section with nominal and thinned wall paths",
+        "materials": ["G4_STAINLESS-STEEL", "G4_AIR", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_crossing_count", "transmission_ratio", "relative_change"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "nominal_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "corroded_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "relative_transmission_change": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "ndt_weld_defect_slab_radiography",
+      "domain": "industrial_ndt",
+      "task": "Score detector contrast from a simplified weld defect in a steel slab.",
+      "raw_dialogue": [
+        "Set up a steel slab weld inspection scene with a low-density defect zone and evaluate detector contrast."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["defect_region", "detector_contrast", "material_mapping"],
+      "scenario_spec": {
+        "geometry": "steel slab with simplified defect insert",
+        "materials": ["G4_STAINLESS-STEEL", "G4_AIR", "G4_Si"],
+        "source": "2 MeV gamma beam",
+        "scoring": ["detector_region_counts", "contrast_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "defect_region_count": {"expected": null, "tolerance": 0},
+        "base_region_count": {"expected": null, "tolerance": 0},
+        "contrast_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "ndt_tungsten_inclusion_contrast",
+      "domain": "industrial_ndt",
+      "task": "Measure detector response change from a high-Z inclusion.",
+      "raw_dialogue": [
+        "Put a small tungsten inclusion inside an aluminum block and quantify the detector response change for a gamma beam."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["multi_material_geometry", "contrast_proxy"],
+      "scenario_spec": {
+        "geometry": "aluminum block with tungsten inclusion",
+        "materials": ["G4_Al", "G4_W", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_edep_total_mev", "detector_crossing_count", "contrast_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null},
+        "contrast_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "shielding_lead_gamma_transmission",
+      "domain": "shielding",
+      "task": "Compute gamma transmission through a lead shield.",
+      "raw_dialogue": [
+        "Use a 1 MeV gamma beam through 10 mm lead shielding and measure transmission at a silicon detector."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["shielding", "detector_response", "transmission_factor"],
+      "scenario_spec": {
+        "geometry": "lead slab shield followed by silicon detector",
+        "materials": ["G4_Pb", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_crossing_count", "detector_edep_total_mev", "transmission_factor"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null},
+        "transmission_factor": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "shielding_concrete_gamma_transmission",
+      "domain": "shielding",
+      "task": "Compute gamma attenuation through concrete shielding.",
+      "raw_dialogue": [
+        "Compare detector response before and after a 100 mm concrete shield for a 2 MeV gamma beam."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["paired_scenario", "concrete_material", "attenuation_ratio"],
+      "scenario_spec": {
+        "geometry": "concrete slab shield and downstream detector",
+        "materials": ["G4_CONCRETE", "G4_Si"],
+        "source": "2 MeV gamma beam",
+        "scoring": ["unshielded_count", "shielded_count", "attenuation_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "unshielded_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "shielded_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "attenuation_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "shielding_polyethylene_neutron_moderation",
+      "domain": "shielding",
+      "task": "Evaluate neutron response after polyethylene shielding.",
+      "raw_dialogue": [
+        "Send 5 MeV neutrons through a polyethylene slab and score downstream neutron crossings and target energy deposition."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["neutron_transport", "polyethylene_material", "particle_filter_scoring"],
+      "scenario_spec": {
+        "geometry": "polyethylene slab and downstream plane scorer",
+        "materials": ["G4_POLYETHYLENE"],
+        "source": "5 MeV neutron beam",
+        "scoring": ["plane_crossing_count", "target_edep_total_mev"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "plane_crossing_count": {"expected": null, "tolerance": 0},
+        "target_edep_total_mev": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "shielding_graded_lead_poly_gamma",
+      "domain": "shielding",
+      "task": "Compare graded lead/polyethylene shielding response.",
+      "raw_dialogue": [
+        "Build a graded shield with lead followed by polyethylene and measure detector response for a gamma beam."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["multi_layer_geometry", "material_ordering", "detector_response"],
+      "scenario_spec": {
+        "geometry": "lead slab followed by polyethylene slab and detector",
+        "materials": ["G4_Pb", "G4_POLYETHYLENE", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_crossing_count", "detector_edep_total_mev"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "medical_proton_water_depth_dose",
+      "domain": "medical_phantom",
+      "task": "Measure proton energy deposition profile in a water phantom.",
+      "raw_dialogue": [
+        "Send a 150 MeV proton beam into a water phantom and score depth-binned energy deposition."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["depth_binned_scoring", "water_phantom", "bragg_peak_proxy"],
+      "scenario_spec": {
+        "geometry": "water phantom with depth bins",
+        "materials": ["G4_WATER"],
+        "source": "150 MeV proton beam",
+        "scoring": ["depth_bin_edep", "peak_depth_mm", "target_edep_total_mev"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "target_edep_total_mev": {"expected": null, "tolerance": null},
+        "peak_depth_mm": {"expected": null, "tolerance": null},
+        "depth_bin_edep_hash": {"expected": null, "tolerance": 0}
+      }
+    },
+    {
+      "id": "medical_electron_water_surface_dose",
+      "domain": "medical_phantom",
+      "task": "Measure electron beam energy deposition near water phantom surface.",
+      "raw_dialogue": [
+        "Use a 12 MeV electron beam incident on water and score near-surface energy deposition bins."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["electron_transport", "depth_binned_scoring"],
+      "scenario_spec": {
+        "geometry": "water box with shallow depth bins",
+        "materials": ["G4_WATER"],
+        "source": "12 MeV electron beam",
+        "scoring": ["depth_bin_edep", "surface_region_edep_total_mev"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "surface_region_edep_total_mev": {"expected": null, "tolerance": null},
+        "depth_bin_edep_hash": {"expected": null, "tolerance": 0}
+      }
+    },
+    {
+      "id": "medical_gamma_water_depth_bins",
+      "domain": "medical_phantom",
+      "task": "Measure gamma energy deposition in depth bins of water.",
+      "raw_dialogue": [
+        "Fire a 6 MeV gamma beam into a water box and score energy deposition by depth bins."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["gamma_transport", "depth_binned_scoring"],
+      "scenario_spec": {
+        "geometry": "water box with depth bins",
+        "materials": ["G4_WATER"],
+        "source": "6 MeV gamma beam",
+        "scoring": ["target_edep_total_mev", "depth_bin_edep"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "target_edep_total_mev": {"expected": null, "tolerance": null},
+        "depth_bin_edep_hash": {"expected": null, "tolerance": 0}
+      }
+    },
+    {
+      "id": "detector_silicon_gamma_response",
+      "domain": "detector_response",
+      "task": "Quantify silicon detector energy deposition for a gamma beam.",
+      "raw_dialogue": [
+        "Place a silicon detector behind an air gap and measure detector energy deposition from a 1 MeV gamma beam."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["detector_edep", "detector_crossing_count"],
+      "scenario_spec": {
+        "geometry": "air gap and silicon detector",
+        "materials": ["G4_AIR", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_edep_total_mev", "detector_crossing_count"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "detector_scintillator_gamma_response",
+      "domain": "detector_response",
+      "task": "Quantify scintillator response for gamma beam exposure.",
+      "raw_dialogue": [
+        "Use a plastic scintillator detector and score deposited energy from a 662 keV gamma beam."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["scintillator_material", "detector_edep"],
+      "scenario_spec": {
+        "geometry": "plastic scintillator detector in air",
+        "materials": ["G4_PLASTIC_SC_VINYLTOLUENE", "G4_AIR"],
+        "source": "0.662 MeV gamma beam",
+        "scoring": ["detector_edep_total_mev", "detector_crossing_count"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "detector_edep_total_mev": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "detector_position_acceptance_sweep",
+      "domain": "detector_response",
+      "task": "Compare detector acceptance at two detector positions.",
+      "raw_dialogue": [
+        "Run the same gamma beam with the silicon detector at z=50 mm and z=100 mm and compare hit counts."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["paired_scenario", "detector_position_update", "acceptance_ratio"],
+      "scenario_spec": {
+        "geometry": "two detector-position variants in air",
+        "materials": ["G4_AIR", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_crossing_count", "acceptance_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "near_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "far_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "acceptance_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "beam_gaussian_spread_plane",
+      "domain": "beam_source",
+      "task": "Measure Gaussian beam spatial spread at a downstream plane.",
+      "raw_dialogue": [
+        "Use a Gaussian gamma beam with 3 mm spot sigma and score the spatial spread at a plane 100 mm downstream."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["gaussian_source", "plane_spatial_scoring"],
+      "scenario_spec": {
+        "geometry": "air world with downstream scoring plane",
+        "materials": ["G4_AIR"],
+        "source": "gamma Gaussian beam",
+        "scoring": ["plane_crossing_count", "plane_spread_sigma_x_mm", "plane_spread_sigma_y_mm"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "plane_crossing_count": {"expected": null, "tolerance": 0},
+        "plane_spread_sigma_x_mm": {"expected": null, "tolerance": null},
+        "plane_spread_sigma_y_mm": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "beam_collimated_gamma_aperture",
+      "domain": "beam_source",
+      "task": "Measure acceptance through a collimator aperture.",
+      "raw_dialogue": [
+        "Collimate a gamma beam with a lead aperture and measure downstream plane crossings."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["collimator_geometry", "aperture_acceptance"],
+      "scenario_spec": {
+        "geometry": "lead collimator with circular aperture and downstream plane",
+        "materials": ["G4_Pb", "G4_AIR"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["plane_crossing_count", "aperture_acceptance_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "plane_crossing_count": {"expected": null, "tolerance": 0},
+        "aperture_acceptance_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "beam_isotropic_source_solid_angle",
+      "domain": "beam_source",
+      "task": "Measure detector acceptance from an isotropic point source.",
+      "raw_dialogue": [
+        "Use an isotropic gamma point source and compute the fraction of events crossing a small silicon detector."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["isotropic_source", "solid_angle_acceptance"],
+      "scenario_spec": {
+        "geometry": "point source and small silicon detector in air",
+        "materials": ["G4_AIR", "G4_Si"],
+        "source": "isotropic 1 MeV gamma point source",
+        "scoring": ["detector_crossing_count", "acceptance_fraction"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "detector_crossing_count": {"expected": null, "tolerance": 0},
+        "acceptance_fraction": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "multiturn_shield_thickness_update",
+      "domain": "multi_turn_engineering",
+      "task": "Increase lead shielding thickness and verify the golden metric changes.",
+      "raw_dialogue": [
+        "Set up a 1 MeV gamma beam through a 5 mm lead shield and score the detector.",
+        "Increase the lead thickness to 20 mm and rerun the same events.",
+        "Compare the detector transmission against the original run."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["multi_turn_update", "paired_runtime_runs", "metric_delta"],
+      "scenario_spec": {
+        "geometry": "lead shield thickness variants with downstream silicon detector",
+        "materials": ["G4_Pb", "G4_Si"],
+        "source": "1 MeV gamma beam",
+        "scoring": ["detector_crossing_count", "transmission_ratio_delta"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "thin_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "thick_detector_crossing_count": {"expected": null, "tolerance": 0},
+        "transmission_ratio_delta": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "multiturn_source_energy_update",
+      "domain": "multi_turn_engineering",
+      "task": "Change source energy and verify the quantitative result changes.",
+      "raw_dialogue": [
+        "Run a gamma beam through a copper block at 1 MeV and score target energy deposition.",
+        "Change the source energy to 2 MeV, keep the geometry and scoring unchanged, and rerun.",
+        "Compare target deposited energy between the two runs."
+      ],
+      "llm_role": "candidate_config_only",
+      "required_runtime": "real_geant4",
+      "capability_pressure": ["multi_turn_update", "source_energy_preservation", "paired_metric_delta"],
+      "scenario_spec": {
+        "geometry": "copper box target",
+        "materials": ["G4_Cu"],
+        "source": "gamma beam energy variants",
+        "scoring": ["target_edep_total_mev", "edep_ratio"]
+      },
+      "golden_required": true,
+      "golden_metrics": {
+        "edep_total_1mev": {"expected": null, "tolerance": null},
+        "edep_total_2mev": {"expected": null, "tolerance": null},
+        "edep_ratio": {"expected": null, "tolerance": null}
+      }
+    },
+    {
+      "id": "unsupported_cad_import_detector_housing",
+      "domain": "unsupported_boundary",
+      "task": "Expose CAD-import limitation for a realistic detector housing.",
+      "raw_dialogue": [
+        "Import this detector housing CAD model and simulate gamma response inside it."
+      ],
+      "llm_role": "capability_gap_explanation_only",
+      "required_runtime": "not_expected_until_supported",
+      "capability_pressure": ["cad_import", "complex_geometry"],
+      "scenario_spec": {
+        "geometry": "external CAD detector housing",
+        "materials": ["multiple"],
+        "source": "gamma source",
+        "scoring": ["detector_edep_total_mev"]
+      },
+      "golden_required": false,
+      "expected_status": "unsupported_capability"
+    },
+    {
+      "id": "unsupported_rotating_ct_gantry",
+      "domain": "unsupported_boundary",
+      "task": "Expose moving-source CT gantry limitation.",
+      "raw_dialogue": [
+        "Build a rotating CT gantry with a moving x-ray source and collect projections around the object."
+      ],
+      "llm_role": "capability_gap_explanation_only",
+      "required_runtime": "not_expected_until_supported",
+      "capability_pressure": ["moving_geometry", "multi_projection_runtime"],
+      "scenario_spec": {
+        "geometry": "rotating source and detector gantry",
+        "materials": ["multiple"],
+        "source": "moving x-ray source",
+        "scoring": ["projection_series"]
+      },
+      "golden_required": false,
+      "expected_status": "unsupported_capability"
+    }
+  ]
+}
