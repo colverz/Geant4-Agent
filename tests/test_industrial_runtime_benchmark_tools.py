@@ -207,7 +207,7 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
         self.assertAlmostEqual(golden["metrics"]["transmission_factor"]["expected"], 0.25)
         self.assertEqual(golden["review"]["status"], "unreviewed")
 
-    def test_official_evaluator_runs_and_compares_against_generated_golden(self) -> None:
+    def test_official_evaluator_rejects_unreviewed_generated_golden_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             artifact_dir = root / "artifacts"
@@ -229,10 +229,69 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
             report = evaluate_industrial_runtime_benchmark(BENCHMARK_PATH, env=env, golden_dir=golden_dir)
 
         lead_case = next(item for item in report["case_results"] if item["id"] == "shielding_lead_gamma_transmission")
+        self.assertEqual(lead_case["status"], "not_evaluable")
+        self.assertEqual(lead_case["failure_category"], "unreviewed_golden")
+        self.assertTrue(lead_case["golden_status"]["review_required"])
+        self.assertIn("unreviewed_golden_metrics", lead_case["reasons"])
+
+    def test_wiring_evaluator_can_compare_unreviewed_generated_golden_when_explicitly_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            script = _write_fake_runtime_script(root, artifact_dir)
+            env = {
+                "GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK": "1",
+                "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, str(script)]),
+            }
+            golden_dir = root / "golden"
+            golden_report = generate_industrial_golden(
+                BENCHMARK_PATH,
+                case_id="shielding_lead_gamma_transmission",
+                golden_dir=golden_dir,
+                env=env,
+            )
+            self.assertTrue(golden_report["ok"])
+
+            report = evaluate_industrial_runtime_benchmark(
+                BENCHMARK_PATH,
+                env=env,
+                golden_dir=golden_dir,
+                allow_unreviewed_goldens=True,
+            )
+
+        lead_case = next(item for item in report["case_results"] if item["id"] == "shielding_lead_gamma_transmission")
         self.assertEqual(lead_case["status"], "passed")
         self.assertEqual(lead_case["failure_category"], None)
         self.assertEqual(lead_case["actual_metrics"]["detector_crossing_count"], 2500)
         self.assertTrue(lead_case["metric_diff"]["transmission_factor"]["passed"])
+
+    def test_official_evaluator_passes_reviewed_generated_golden(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            script = _write_fake_runtime_script(root, artifact_dir)
+            env = {
+                "GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK": "1",
+                "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, str(script)]),
+            }
+            golden_dir = root / "golden"
+            golden_report = generate_industrial_golden(
+                BENCHMARK_PATH,
+                case_id="shielding_lead_gamma_transmission",
+                golden_dir=golden_dir,
+                env=env,
+            )
+            self.assertTrue(golden_report["ok"])
+            _mark_golden_reviewed(Path(golden_report["case_results"][0]["golden_file"]))
+
+            report = evaluate_industrial_runtime_benchmark(BENCHMARK_PATH, env=env, golden_dir=golden_dir)
+
+        lead_case = next(item for item in report["case_results"] if item["id"] == "shielding_lead_gamma_transmission")
+        self.assertEqual(lead_case["status"], "passed")
+        self.assertEqual(lead_case["failure_category"], None)
+        self.assertFalse(lead_case["golden_status"]["review_required"])
 
     def test_stage_runner_summarizes_current_blockers_without_runtime(self) -> None:
         report = run_industrial_runtime_stage(env={}, generate_goldens=False)
@@ -240,6 +299,7 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertFalse(report["stage_summary"]["runtime_ready"])
         self.assertEqual(report["stage_summary"]["compile_status_counts"]["compiled"], 4)
+        self.assertTrue(report["stage_summary"]["review_required_for_official_eval"])
         self.assertGreater(report["stage_summary"]["evaluation_status"]["not_evaluable"], 0)
         self.assertGreater(len(report["stage_summary"]["top_blockers"]), 0)
         self.assertIn("shielding_lead_gamma_transmission", report["selected_case_ids"])
@@ -268,7 +328,8 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
             for item in report["evaluation"]["case_results"]
             if item["id"] == "shielding_lead_gamma_transmission"
         )
-        self.assertEqual(lead_case["status"], "passed")
+        self.assertEqual(lead_case["status"], "not_evaluable")
+        self.assertEqual(lead_case["failure_category"], "unreviewed_golden")
 
 
 def _benchmark() -> dict:
@@ -332,6 +393,16 @@ def _write_fake_runtime_script(root: Path, artifact_dir: Path) -> Path:
         encoding="utf-8",
     )
     return script
+
+
+def _mark_golden_reviewed(path: Path) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["review"] = {
+        "status": "reviewed",
+        "reviewer": "test",
+        "notes": "Reviewed in unit test fixture.",
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":

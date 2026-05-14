@@ -238,6 +238,13 @@ docs/eval/golden/industrial_runtime/<case-id>.golden.json
 Generated files are marked `review.status="unreviewed"` and must be reviewed
 before they are treated as official baselines.
 
+Official evaluator policy:
+
+- Default: only `review.status="reviewed"` golden files can be used for a pass.
+- Development/wiring mode: `--allow-unreviewed-goldens` may be used to verify
+  runtime plumbing, but the result is not an official benchmark pass.
+- Manifest placeholders with `expected=null` are never passable.
+
 Failure analysis is available via:
 
 ```powershell
@@ -268,6 +275,16 @@ $env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
 This runner is the preferred local entrypoint for this stage because it returns
 one compact `stage_summary` covering compile coverage, runtime readiness,
 golden generation, evaluator status, and top blockers.
+
+For wiring-only checks after generating unreviewed goldens:
+
+```powershell
+.venv\Scripts\python.exe tools\run_industrial_runtime_stage.py `
+  --allow-unreviewed-goldens `
+  --json
+```
+
+Do not use this flag for official readiness claims.
 
 The evaluator also includes a `compile_summary`:
 

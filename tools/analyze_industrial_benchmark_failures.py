@@ -16,6 +16,7 @@ FAILURE_ACTIONS = {
     "runtime_unavailable": "Configure GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK=1 and a real GEANT4_RUNTIME_COMMAND_JSON/GEANT4_RUNTIME_COMMAND.",
     "runtime_unavailable_and_missing_golden": "Configure real runtime first, then run industrial golden generation for every official case.",
     "missing_golden": "Run tools/create_industrial_golden.py against a pinned real Geant4 runtime and review generated golden files.",
+    "unreviewed_golden": "Review generated golden files and set review.status to reviewed before official evaluation.",
     "spec_compile_error": "Implement deterministic scenario-to-runtime compilation for this benchmark family; do not ask the LLM to judge physics.",
     "runtime_error": "Inspect real Geant4 artifacts, wrapper stderr, and generated runtime payload.",
     "missing_metric": "Extend runtime result extraction so every required golden metric is present in structured output.",

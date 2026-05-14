@@ -300,6 +300,11 @@ It owns the factual runtime part of the benchmark:
 - compare actual metrics to reviewed golden values with tolerances
 - build unreviewed golden payloads for human review
 
+Golden review is mandatory for official evaluation. Generated golden files start
+as `review.status="unreviewed"`. The strict evaluator rejects them unless the
+caller explicitly opts into `--allow-unreviewed-goldens`, which is reserved for
+development wiring checks and must not be reported as industrial readiness.
+
 ## What This Contract Forbids
 
 - Passing an official case with `InMemoryGeant4Adapter`.

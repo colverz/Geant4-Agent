@@ -76,6 +76,7 @@ def run_industrial_runtime_stage(
     case_ids: list[str] | None = None,
     generate_goldens: bool = False,
     run_evaluation: bool = True,
+    allow_unreviewed_goldens: bool = False,
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     env_map = dict(os.environ if env is None else env)
@@ -96,7 +97,12 @@ def run_industrial_runtime_stage(
             )
 
     evaluation_report = (
-        evaluate_industrial_runtime_benchmark(benchmark_path, env=env_map, golden_dir=golden_dir)
+        evaluate_industrial_runtime_benchmark(
+            benchmark_path,
+            env=env_map,
+            golden_dir=golden_dir,
+            allow_unreviewed_goldens=allow_unreviewed_goldens,
+        )
         if run_evaluation
         else None
     )
@@ -121,6 +127,8 @@ def run_industrial_runtime_stage(
             "generated": generated,
             "blocked": blocked,
             "not_evaluable": not_evaluable,
+            "review_required_for_official_eval": not allow_unreviewed_goldens,
+            "allow_unreviewed_goldens": allow_unreviewed_goldens,
             "reports": golden_reports,
         },
         "evaluation": evaluation_report,
@@ -179,6 +187,7 @@ def _stage_summary(
         "golden_generated": golden_generated,
         "golden_blocked": golden_blocked,
         "golden_not_evaluable": golden_not_evaluable,
+        "review_required_for_official_eval": True,
         "evaluation_status": eval_status,
         "top_blockers": top_blockers,
     }
@@ -190,6 +199,11 @@ def main() -> int:
     parser.add_argument("--golden-dir", type=Path, default=DEFAULT_INDUSTRIAL_GOLDEN_DIR)
     parser.add_argument("--case-id", action="append", default=[])
     parser.add_argument("--generate-goldens", action="store_true")
+    parser.add_argument(
+        "--allow-unreviewed-goldens",
+        action="store_true",
+        help="Wiring/dev mode only. Official stage evaluation requires reviewed golden files.",
+    )
     parser.add_argument("--no-eval", action="store_true")
     parser.add_argument("--outdir", type=Path, default=None)
     parser.add_argument("--run-id", default="")
@@ -202,6 +216,7 @@ def main() -> int:
         case_ids=list(args.case_id or []),
         generate_goldens=args.generate_goldens,
         run_evaluation=not args.no_eval,
+        allow_unreviewed_goldens=args.allow_unreviewed_goldens,
     )
     output = {"ok": report["ok"], "report": report}
     if args.outdir:
@@ -225,6 +240,7 @@ def main() -> int:
             f"blocked:{summary['golden_blocked']} "
             f"not_evaluable:{summary['golden_not_evaluable']}"
         )
+        print(f"review_required_for_official_eval={summary['review_required_for_official_eval']}")
         print(f"evaluation_status={summary['evaluation_status']}")
         if summary["top_blockers"]:
             print("top_blockers:")

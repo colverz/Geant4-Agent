@@ -16,6 +16,7 @@ DEFAULT_INDUSTRIAL_BENCHMARK_PATH = Path("docs/eval/industrial_runtime_benchmark
 DEFAULT_INDUSTRIAL_GOLDEN_DIR = Path("docs/eval/golden/industrial_runtime")
 INDUSTRIAL_RUNTIME_ENV = "GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK"
 RUNTIME_COMMAND_ENVS = ("GEANT4_RUNTIME_COMMAND_JSON", "GEANT4_RUNTIME_COMMAND")
+REVIEWED_GOLDEN_STATUS = "reviewed"
 
 REQUIRED_DOMAINS = {
     "industrial_ndt",
@@ -44,24 +45,63 @@ def _golden_file_path(case: dict[str, Any], golden_dir: Path) -> Path:
     return golden_dir / f"{case.get('id')}.golden.json"
 
 
-def _golden_metrics(case: dict[str, Any], golden_dir: Path | None = None) -> dict[str, Any]:
+def _golden_payload(case: dict[str, Any], golden_dir: Path | None = None) -> dict[str, Any] | None:
     if golden_dir is not None:
         path = _golden_file_path(case, golden_dir)
         if path.exists():
             try:
                 payload = _load_json(path)
             except (OSError, json.JSONDecodeError):
-                return {}
+                return None
+            return payload if isinstance(payload, dict) else None
+    return None
+
+
+def _golden_review_status(golden_payload: dict[str, Any] | None) -> str | None:
+    review = golden_payload.get("review") if isinstance(golden_payload, dict) else None
+    if not isinstance(review, dict):
+        return None
+    status = review.get("status")
+    return str(status).strip().lower() if status else None
+
+
+def _golden_metrics(
+    case: dict[str, Any],
+    golden_dir: Path | None = None,
+    *,
+    allow_unreviewed: bool = False,
+) -> dict[str, Any]:
+    payload = _golden_payload(case, golden_dir)
+    if payload is not None:
+        review_status = _golden_review_status(payload)
+        if review_status == REVIEWED_GOLDEN_STATUS or allow_unreviewed:
             metrics = payload.get("metrics") if isinstance(payload, dict) else {}
             return metrics if isinstance(metrics, dict) else {}
+        return {}
     metrics = case.get("golden_metrics")
     return metrics if isinstance(metrics, dict) else {}
 
 
-def _golden_status(case: dict[str, Any], golden_dir: Path | None = None) -> dict[str, Any]:
-    metrics = _golden_metrics(case, golden_dir)
+def _golden_status(
+    case: dict[str, Any],
+    golden_dir: Path | None = None,
+    *,
+    allow_unreviewed: bool = False,
+) -> dict[str, Any]:
+    payload = _golden_payload(case, golden_dir)
+    review_status = _golden_review_status(payload)
+    review_required = payload is not None and review_status != REVIEWED_GOLDEN_STATUS and not allow_unreviewed
+    metrics = _golden_metrics(case, golden_dir, allow_unreviewed=allow_unreviewed)
     if not isinstance(metrics, dict) or not metrics:
-        result = {"ready": False, "missing_metrics": ["<all>"]}
+        missing = ["<all>"]
+        if review_required:
+            missing = ["<reviewed_golden>"]
+        result = {
+            "ready": False,
+            "missing_metrics": missing,
+            "review_status": review_status,
+            "review_required": review_required,
+        }
         if golden_dir is not None:
             result["golden_file"] = str(_golden_file_path(case, golden_dir))
         return result
@@ -75,7 +115,14 @@ def _golden_status(case: dict[str, Any], golden_dir: Path | None = None) -> dict
             continue
         if "tolerance" not in metric:
             missing.append(str(metric_name))
-    result = {"ready": not missing, "missing_metrics": missing}
+    if review_required:
+        missing.append("<reviewed_golden>")
+    result = {
+        "ready": not missing and not review_required,
+        "missing_metrics": missing,
+        "review_status": review_status,
+        "review_required": review_required,
+    }
     if golden_dir is not None:
         result["golden_file"] = str(_golden_file_path(case, golden_dir))
     return result
@@ -160,6 +207,7 @@ def _case_not_evaluable_result(
     reasons: list[str],
     failure_category: str,
     golden_dir: Path | None = None,
+    allow_unreviewed_goldens: bool = False,
 ) -> dict[str, Any]:
     return {
         "id": case.get("id"),
@@ -168,7 +216,7 @@ def _case_not_evaluable_result(
         "failure_category": failure_category,
         "reasons": list(dict.fromkeys(reasons)),
         "required_runtime": case.get("required_runtime"),
-        "golden_status": _golden_status(case, golden_dir),
+        "golden_status": _golden_status(case, golden_dir, allow_unreviewed=allow_unreviewed_goldens),
     }
 
 
@@ -177,6 +225,7 @@ def evaluate_industrial_runtime_benchmark(
     *,
     env: dict[str, str] | None = None,
     golden_dir: Path = DEFAULT_INDUSTRIAL_GOLDEN_DIR,
+    allow_unreviewed_goldens: bool = False,
 ) -> dict[str, Any]:
     env_map = dict(os.environ if env is None else env)
     shape_report = validate_industrial_benchmark_shape(path)
@@ -226,18 +275,23 @@ def evaluate_industrial_runtime_benchmark(
             continue
 
         reasons: list[str] = []
-        golden = _golden_status(case, golden_dir)
+        golden = _golden_status(case, golden_dir, allow_unreviewed=allow_unreviewed_goldens)
         compile_status = str(compile_result.get("status") or "")
         if not runtime_ready:
             reasons.extend(runtime_reasons)
         if not golden["ready"]:
-            reasons.append("missing_golden_metrics")
+            if golden.get("review_required"):
+                reasons.append("unreviewed_golden_metrics")
+            else:
+                reasons.append("missing_golden_metrics")
         if compile_status == "unsupported_capability":
             reasons.extend(str(item) for item in compile_result.get("unsupported_features") or [])
         if reasons:
             category = "runtime_unavailable" if runtime_reasons else "missing_golden"
             if runtime_reasons and not golden["ready"]:
                 category = "runtime_unavailable_and_missing_golden"
+            if golden.get("review_required") and not runtime_reasons:
+                category = "unreviewed_golden"
             if not runtime_reasons and golden["ready"] and compile_status == "unsupported_capability":
                 category = "spec_compile_error"
             result = _case_not_evaluable_result(
@@ -245,6 +299,7 @@ def evaluate_industrial_runtime_benchmark(
                 reasons=reasons,
                 failure_category=category,
                 golden_dir=golden_dir,
+                allow_unreviewed_goldens=allow_unreviewed_goldens,
             )
             result["compile_status"] = compile_result.get("status")
             result["compile_report"] = _compile_report_preview(compile_result)
@@ -257,6 +312,7 @@ def evaluate_industrial_runtime_benchmark(
                 reasons=list(compile_result.get("unsupported_features") or ["runtime_blueprint_not_available_for_case"]),
                 failure_category="spec_compile_error",
                 golden_dir=golden_dir,
+                allow_unreviewed_goldens=allow_unreviewed_goldens,
             )
             result["compile_status"] = compile_result.get("status")
             result["compile_report"] = _compile_report_preview(compile_result)
@@ -271,6 +327,7 @@ def evaluate_industrial_runtime_benchmark(
                 reasons=[f"unsupported_metric:{metric}" for metric in unsupported_metrics],
                 failure_category="missing_metric",
                 golden_dir=golden_dir,
+                allow_unreviewed_goldens=allow_unreviewed_goldens,
             )
             result["compile_status"] = compile_result.get("status")
             result["compile_report"] = _compile_report_preview(compile_result)
@@ -284,6 +341,7 @@ def evaluate_industrial_runtime_benchmark(
                 reasons=list(execution.get("errors") or ["industrial_runtime_execution_failed"]),
                 failure_category=str(execution.get("failure_category") or "runtime_error"),
                 golden_dir=golden_dir,
+                allow_unreviewed_goldens=allow_unreviewed_goldens,
             )
             result["compile_status"] = compile_result.get("status")
             result["compile_report"] = _compile_report_preview(compile_result)
@@ -291,7 +349,10 @@ def evaluate_industrial_runtime_benchmark(
             case_results.append(result)
             continue
 
-        comparison = compare_industrial_metrics(execution.get("actual_metrics") or {}, _golden_metrics(case, golden_dir))
+        comparison = compare_industrial_metrics(
+            execution.get("actual_metrics") or {},
+            _golden_metrics(case, golden_dir, allow_unreviewed=allow_unreviewed_goldens),
+        )
         status = "passed" if comparison["ok"] else "failed"
         failure_category = None
         if comparison["missing_metrics"]:
@@ -331,6 +392,11 @@ def evaluate_industrial_runtime_benchmark(
             "env_enabled": _runtime_enabled(env_map),
             "runtime_command_configured": _runtime_command_configured(env_map),
             "real_runtime_ready": runtime_ready,
+        },
+        "golden_policy": {
+            "golden_dir": str(golden_dir),
+            "review_required": not allow_unreviewed_goldens,
+            "allow_unreviewed_goldens": allow_unreviewed_goldens,
         },
         "total": len(case_results),
         "passed": status_counts.get("passed", 0),
@@ -380,12 +446,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate the industrial runtime benchmark acceptance gate.")
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_INDUSTRIAL_BENCHMARK_PATH)
     parser.add_argument("--golden-dir", type=Path, default=DEFAULT_INDUSTRIAL_GOLDEN_DIR)
+    parser.add_argument(
+        "--allow-unreviewed-goldens",
+        action="store_true",
+        help="Wiring/dev mode only. Official benchmark pass requires reviewed golden files.",
+    )
     parser.add_argument("--outdir", type=Path, default=None)
     parser.add_argument("--run-id", default="")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    report = evaluate_industrial_runtime_benchmark(args.benchmark, golden_dir=args.golden_dir)
+    report = evaluate_industrial_runtime_benchmark(
+        args.benchmark,
+        golden_dir=args.golden_dir,
+        allow_unreviewed_goldens=args.allow_unreviewed_goldens,
+    )
     output = {"ok": report["ok"], "report": report}
     if args.outdir:
         output = save_eval_output(
