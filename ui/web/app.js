@@ -284,6 +284,8 @@ function designMessage(data) {
   const material = setup.material || asList(config.materials?.selected_materials).join(", ") || "-";
   const source = setup.source || [config.source?.particle, config.source?.energy ? `${config.source.energy} MeV` : ""].filter(Boolean).join(" ") || "-";
   const geometry = setup.geometry || config.geometry?.structure || "-";
+  const rationale = setup.design_rationale ? String(setup.design_rationale) : "";
+  const alternatives = asList(setup.alternatives_considered);
   const lines = [
     text("designTitle"),
     "",
@@ -307,6 +309,8 @@ function designMessage(data) {
       : `${text("nextAction")}: ${nextActionText(candidate.next_action)}`,
   ];
   if (simplifications.length) lines.push("", state.lang === "zh" ? "需要说明的近似：" : "Approximation:", ...simplifications.slice(0, 4).map((x) => `- ${x}`));
+  if (rationale) lines.push("", state.lang === "zh" ? `为什么这样建模：${rationale}` : `Rationale: ${rationale}`);
+  if (alternatives.length) lines.push("", state.lang === "zh" ? "我考虑过但没有优先采用的方案：" : "Alternatives considered:", ...alternatives.slice(0, 4).map((x) => `- ${x}`));
   if (unsupported.length) lines.push("", state.lang === "zh" ? "当前不支持：" : "Unsupported:", ...unsupported.slice(0, 4).map((x) => `- ${x}`));
   if (decisions.length) lines.push("", state.lang === "zh" ? "需要你裁定：" : "Decision required:", ...decisions.slice(0, 4).map((x) => `- ${x}`));
   if (refs.length) lines.push("", `${text("referenceTags")}: ${refs.slice(0, 6).join(", ")}`);

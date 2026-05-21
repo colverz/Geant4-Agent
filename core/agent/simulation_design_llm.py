@@ -32,9 +32,14 @@ def build_simulation_design_prompt(user_goal: str, reference_pack: dict[str, Any
         "Prefer a useful runnable candidate with explicit assumptions over repeatedly asking for missing ordinary parameters.\n"
         "Use reasonable defaults only when they are standard/simple and list them in assumptions.\n"
         "Never hide a physically meaningful approximation. If an approximation changes the physical model, require user approval.\n"
+        "The reference pack provides full catalogs for materials, sources, scoring, and geometry. These catalogs are the knowledge context.\n"
+        "query_hints are only orientation hints from the user text. They are non-binding and must not restrict your design choices.\n"
+        "Choose the setup by comparing the full catalog tags, use_cases, notes, and runtime capabilities.\n"
+        "Do not behave like a keyword extractor. Make a design choice, then justify it briefly in recommended_setup.design_rationale.\n"
+        "If you reject plausible alternatives, put compact reasons in recommended_setup.alternatives_considered.\n"
         f"The output schema_version must be exactly {SIMULATION_DESIGN_SCHEMA_VERSION}. Do not copy the reference pack schema_version.\n"
         "recommended_setup must include: geometry, material, source, detector, scoring.\n"
-        "recommended_setup may also include: target_material, environment_material, void_material, dimensions_mm, source_particle, source_energy_mev, source_position_mm, source_direction.\n"
+        "recommended_setup may also include: target_material, environment_material, void_material, dimensions_mm, source_particle, source_energy_mev, source_position_mm, source_direction, design_rationale, alternatives_considered.\n"
         "material is the primary target/scoring material unless there is no target and the user is explicitly modeling only an environment.\n"
         "environment_material is the surrounding medium or world-like transport medium when relevant.\n"
         "void_material is the material inside an embedded defect or cavity when relevant.\n"
@@ -61,7 +66,7 @@ def build_simulation_design_prompt(user_goal: str, reference_pack: dict[str, Any
         f"{_json_dumps(sorted(ALLOWED_NEXT_ACTIONS))}\n\n"
         "Output schema fields:\n"
         f"{_json_dumps(['schema_version','goal','recommended_setup','observables','assumptions','simplifications','unsupported_capabilities','user_decisions_required','knowledge_references','capability_check','next_action'])}\n\n"
-        "Reference pack for choosing canonical IDs. This is not the output schema:\n"
+        "Reference pack for choosing canonical IDs. materials/sources/scoring/geometry are full catalogs; query_hints are not binding. This is not the output schema:\n"
         f"{_json_dumps(reference_pack)}\n\n"
         "User goal:\n"
         f"{user_goal}\n"
@@ -263,7 +268,15 @@ def _normalize_setup(setup: dict[str, Any], raw_setup: Any, *, goal: str = "") -
         normalized["environment_material"] = environment_material
     if void_material:
         normalized["void_material"] = void_material
-    for key in ("dimensions_mm", "source_particle", "source_energy_mev", "source_position_mm", "source_direction"):
+    for key in (
+        "dimensions_mm",
+        "source_particle",
+        "source_energy_mev",
+        "source_position_mm",
+        "source_direction",
+        "design_rationale",
+        "alternatives_considered",
+    ):
         if key in setup:
             normalized[key] = setup[key]
     return normalized

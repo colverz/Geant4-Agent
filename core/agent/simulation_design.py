@@ -94,16 +94,24 @@ def build_simulation_design_reference_pack(
     annotations = load_simulation_design_annotations()
     capabilities = runtime_capabilities if isinstance(runtime_capabilities, dict) else default_runtime_capabilities(annotations)
     low = str(user_goal or "").lower()
-    material_refs = _select_material_refs(low, annotations)
-    source_refs = _select_refs(low, annotations.get("sources", {}), default_keys=("beam", "point"))
-    scoring_refs = _select_scoring_refs(low, annotations)
-    geometry_refs = _select_geometry_refs(low, annotations)
     return {
         "schema_version": "geant4_agent_simulation_design_reference_pack.v1",
-        "materials": material_refs,
-        "sources": source_refs,
-        "scoring": scoring_refs,
-        "geometry": geometry_refs,
+        "materials": _catalog_refs(annotations.get("materials", {})),
+        "sources": _catalog_refs(annotations.get("sources", {})),
+        "scoring": _catalog_refs(annotations.get("scoring", {})),
+        "geometry": _catalog_refs(annotations.get("geometry", {})),
+        "query_hints": {
+            "materials": _select_material_refs(low, annotations),
+            "sources": _select_refs(low, annotations.get("sources", {}), default_keys=("beam", "point")),
+            "scoring": _select_scoring_refs(low, annotations),
+            "geometry": _select_geometry_refs(low, annotations),
+        },
+        "selection_policy": {
+            "catalog_scope": "full_catalog",
+            "query_hints_are_non_binding": True,
+            "llm_must_select_from_full_catalog": True,
+            "deterministic_code_only_validates_selection": True,
+        },
         "runtime_capabilities": capabilities,
     }
 
@@ -287,6 +295,11 @@ def _ref_item(name: str, value: Any) -> dict[str, Any]:
     }
 
 
+def _catalog_refs(section: Any) -> list[dict[str, Any]]:
+    data = section if isinstance(section, dict) else {}
+    return [_ref_item(str(name), value) for name, value in data.items()]
+
+
 def _recommended_setup(text: str) -> dict[str, Any]:
     geometry = "single_box"
     material = "G4_Cu"
@@ -397,8 +410,9 @@ def _user_decisions_required(simplifications: tuple[str, ...], unsupported: tupl
 
 def _knowledge_reference_ids(reference_pack: dict[str, Any]) -> list[str]:
     refs: list[str] = []
+    source = reference_pack.get("query_hints") if isinstance(reference_pack.get("query_hints"), dict) else reference_pack
     for section in ("materials", "sources", "scoring", "geometry"):
-        for item in reference_pack.get(section) or []:
+        for item in source.get(section) or []:
             if isinstance(item, dict) and item.get("id"):
                 refs.append(f"{section}:{item['id']}")
     return list(dict.fromkeys(refs))

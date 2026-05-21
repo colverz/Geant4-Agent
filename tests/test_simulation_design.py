@@ -13,6 +13,7 @@ from core.agent.simulation_design import (
     validate_simulation_design_annotations,
 )
 from core.agent.simulation_design_llm import normalize_simulation_design_candidate
+from core.agent.simulation_design_llm import build_simulation_design_prompt
 from core.orchestrator.session_manager import process_turn, reset_session
 from ui.web.request_router import handle_post_request
 
@@ -42,7 +43,7 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertIn("slab_approximation_requires_user_approval", annotations["geometry"]["pipe"]["tags"])
         self.assertIn("vacuum", annotations["materials"]["G4_Galactic"]["tags"])
 
-    def test_reference_pack_selects_relevant_capabilities(self) -> None:
+    def test_reference_pack_provides_full_catalog_with_non_binding_query_hints(self) -> None:
         pack = build_simulation_design_reference_pack(
             "Design a polyethylene neutron moderation benchmark with plane crossing scoring."
         )
@@ -53,8 +54,26 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertIn("plane_crossing_count", pack["runtime_capabilities"]["supported_scoring"])
         material_ids = {item["id"] for item in pack["materials"]}
         scoring_ids = {item["id"] for item in pack["scoring"]}
+        hinted_material_ids = {item["id"] for item in pack["query_hints"]["materials"]}
+        hinted_scoring_ids = {item["id"] for item in pack["query_hints"]["scoring"]}
+        self.assertEqual(pack["selection_policy"]["catalog_scope"], "full_catalog")
+        self.assertTrue(pack["selection_policy"]["query_hints_are_non_binding"])
         self.assertIn("G4_POLYETHYLENE", material_ids)
+        self.assertIn("G4_Pb", material_ids)
+        self.assertIn("G4_Galactic", material_ids)
         self.assertIn("plane_crossing_count", scoring_ids)
+        self.assertIn("G4_POLYETHYLENE", hinted_material_ids)
+        self.assertIn("plane_crossing_count", hinted_scoring_ids)
+
+    def test_simulation_design_prompt_uses_full_catalog_not_extraction_subset(self) -> None:
+        pack = build_simulation_design_reference_pack("真空环境中的 gamma 传输模拟")
+        prompt = build_simulation_design_prompt("真空环境中的 gamma 传输模拟", pack, lang="zh")
+
+        self.assertIn("full catalogs", prompt)
+        self.assertIn("query_hints are only orientation hints", prompt)
+        self.assertIn("Do not behave like a keyword extractor", prompt)
+        self.assertIn("G4_Galactic", prompt)
+        self.assertIn("G4_Pb", prompt)
 
     def test_supported_lead_gamma_transmission_design_can_build_candidate_config(self) -> None:
         candidate = build_simulation_design_candidate(
@@ -126,6 +145,24 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertEqual(normalized["recommended_setup"]["material"], "G4_Galactic")
         self.assertEqual(normalized["recommended_setup"]["environment_material"], "G4_Galactic")
         self.assertIn("materials:G4_Galactic", normalized["knowledge_references"])
+
+    def test_llm_normalization_preserves_design_rationale_and_alternatives(self) -> None:
+        raw = {
+            "recommended_setup": {
+                "geometry": "single_box",
+                "material": "G4_Pb",
+                "source": "beam",
+                "scoring": ["detector_crossing_count"],
+                "design_rationale": "Lead is selected because the goal is gamma attenuation.",
+                "alternatives_considered": ["G4_WATER rejected because it is a phantom material."],
+            },
+            "observables": ["detector_crossing_count"],
+        }
+
+        normalized = normalize_simulation_design_candidate(raw, "gamma shielding benchmark")
+
+        self.assertIn("gamma attenuation", normalized["recommended_setup"]["design_rationale"])
+        self.assertEqual(len(normalized["recommended_setup"]["alternatives_considered"]), 1)
 
     def test_chinese_void_contrast_selects_void_references_and_supported_region_scoring(self) -> None:
         pack = build_simulation_design_reference_pack("铝块内部空洞缺陷的区域 contrast 模拟")
