@@ -18,11 +18,11 @@ const copy = {
   zh: {
     welcome: "描述你的模拟目标。我会先整理方案并生成候选配置，确认后再进入 Geant4 运行。",
     sendFailed: "这一轮请求失败",
-    noResult: "还没有 Geant4 运行结果。先运行一次模拟后再追问结果。",
-    noConfig: "还没有当前配置。请先描述一个模拟目标。",
-    generalQuestion: "这不像配置修改、结果追问或运行请求。我不会写入配置。你可以直接说明要修改的几何、材料、源、物理或输出。",
-    runIntent: (events) => `收到明确运行请求。我会先把候选配置同步到当前会话，再校验并运行 ${events} 个事件。`,
-    viewerIntent: "收到明确 viewer 请求。我会先校验配置，然后打开 Geant4 viewer。",
+    noResult: "还没有模拟结果。你可以说“批准运行 1000 events”，我会先校验当前方案再运行。",
+    noConfig: "还没有可运行方案。请先描述模拟目标，我会给出推荐配置。",
+    generalQuestion: "我会先把它理解成模拟目标来整理方案；如果只是普通问题，我不会写入配置或启动运行。",
+    runIntent: (events) => `收到运行请求。我会使用当前方案，先校验，再运行 ${events} 个事件。`,
+    viewerIntent: "收到 viewer 请求。我会先校验配置，再打开 Geant4 viewer。",
     retained: "已确认当前方案，并写入当前配置。你可以继续修改，或直接运行模拟。",
     validateOk: "配置预检通过，可以运行。",
     validateFailed: "配置还不能运行",
@@ -137,10 +137,6 @@ async function getJson(path) {
 function setBusy(value) {
   state.sending = value;
   $("send-btn").disabled = value;
-  $("validate-btn").disabled = value;
-  $("run1-btn").disabled = value;
-  $("run10-btn").disabled = value;
-  $("viewer-btn").disabled = value;
   $("activity-strip").hidden = !value;
   if (value) $("activity-strip").textContent = state.lang === "zh" ? "Agent 正在处理..." : "Agent is working...";
 }
@@ -291,17 +287,32 @@ function designMessage(data) {
   const lines = [
     text("designTitle"),
     "",
-    `${text("goal")}: ${candidate.goal || "-"}`,
-    `${text("model")}: ${geometry}; ${material}; ${source}`,
-    `${text("observables")}: ${observables.join(", ") || "-"}`,
-    `${text("runnable")}: ${boolText(check.supported)}`,
-    `${text("approval")}: ${boolText(check.requires_user_approval)}`,
-    `${text("nextAction")}: ${nextActionText(candidate.next_action)}`,
+    state.lang === "zh"
+      ? `目标：${candidate.goal || "-"}`
+      : `${text("goal")}: ${candidate.goal || "-"}`,
+    state.lang === "zh"
+      ? `推荐做法：用 ${geometry} 几何，主材料 ${material}，源模型 ${source}。`
+      : `${text("model")}: ${geometry}; ${material}; ${source}`,
+    state.lang === "zh"
+      ? `要看的结果：${observables.join(", ") || "-"}`
+      : `${text("observables")}: ${observables.join(", ") || "-"}`,
+    state.lang === "zh"
+      ? `能否直接形成可运行配置：${boolText(check.supported)}`
+      : `${text("runnable")}: ${boolText(check.supported)}`,
+    state.lang === "zh"
+      ? `是否需要你先批准近似：${boolText(check.requires_user_approval)}`
+      : `${text("approval")}: ${boolText(check.requires_user_approval)}`,
+    state.lang === "zh"
+      ? `下一步：${nextActionText(candidate.next_action)}`
+      : `${text("nextAction")}: ${nextActionText(candidate.next_action)}`,
   ];
-  if (simplifications.length) lines.push("", "Approximation:", ...simplifications.slice(0, 4).map((x) => `- ${x}`));
-  if (unsupported.length) lines.push("", "Unsupported:", ...unsupported.slice(0, 4).map((x) => `- ${x}`));
-  if (decisions.length) lines.push("", "Decision required:", ...decisions.slice(0, 4).map((x) => `- ${x}`));
+  if (simplifications.length) lines.push("", state.lang === "zh" ? "需要说明的近似：" : "Approximation:", ...simplifications.slice(0, 4).map((x) => `- ${x}`));
+  if (unsupported.length) lines.push("", state.lang === "zh" ? "当前不支持：" : "Unsupported:", ...unsupported.slice(0, 4).map((x) => `- ${x}`));
+  if (decisions.length) lines.push("", state.lang === "zh" ? "需要你裁定：" : "Decision required:", ...decisions.slice(0, 4).map((x) => `- ${x}`));
   if (refs.length) lines.push("", `${text("referenceTags")}: ${refs.slice(0, 6).join(", ")}`);
+  if (state.lang === "zh") {
+    lines.push("", "如果这个方案合理，直接回复“批准运行 1000 events”。如果不合理，告诉我要改材料、几何、源或观测量。");
+  }
   return lines.join("\n");
 }
 
@@ -341,7 +352,7 @@ function isAcceptCurrentDesignText(inputText) {
 
 function parseRequestedEvents(inputText) {
   const match = String(inputText || "").match(/(\d+)\s*(events?|个事件|次)/i);
-  if (!match) return 1;
+  if (!match) return 1000;
   return Math.max(1, Math.min(100000, Number.parseInt(match[1], 10)));
 }
 
@@ -540,7 +551,28 @@ async function sendPrompt() {
     }
     if (intent.intent === "run_requested") {
       const events = parseRequestedEvents(input);
-      appendAgent(text("runIntent", events), baseActivity);
+      if (!state.lastRecommendedConfig || !Object.keys(state.lastRecommendedConfig).length) {
+        const designData = await requestDesign(input);
+        applyDesignResponse(designData);
+        appendAgent(`${designMessage(designData)}\n\n${text("runIntent", events)}`, [
+          ...baseActivity,
+          { stage: "design", detail: "No runnable candidate existed, so the agent designed one first.", status: "done" },
+          { stage: "capability", detail: `next_action=${designData.simulation_design?.next_action || "unknown"}`, status: "done" },
+          { stage: "config", detail: designData.recommended_config ? "Recommended config draft is available." : "No runnable config draft.", status: designData.recommended_config ? "done" : "warn" },
+        ]);
+        if (!state.lastRecommendedConfig || !Object.keys(state.lastRecommendedConfig).length) {
+          appendAgent(
+            state.lang === "zh"
+              ? "这个目标现在还不能直接运行，因为方案需要你先批准近似或补充关键条件。我不会把不合理方案硬塞进 Geant4。"
+              : "This goal is not directly runnable yet because the design needs approval or key missing information.",
+            [{ stage: "capability", detail: "Runtime execution stopped before preflight.", status: "warn" }],
+            "warning"
+          );
+          return;
+        }
+      } else {
+        appendAgent(text("runIntent", events), baseActivity);
+      }
       await runGeant4(events);
       return;
     }
@@ -614,10 +646,6 @@ function bindEvents() {
     updateAll();
   });
   $("model-config-select").addEventListener("change", (event) => setRuntimeConfig(event.target.value).catch((error) => appendAgent(error.message, [], "error")));
-  $("validate-btn").addEventListener("click", () => validateGeant4Config(1).catch((error) => appendAgent(error.message, [], "error")));
-  $("run1-btn").addEventListener("click", () => runGeant4(1).catch((error) => appendAgent(error.message, [], "error")));
-  $("run10-btn").addEventListener("click", () => runGeant4(10).catch((error) => appendAgent(error.message, [], "error")));
-  $("viewer-btn").addEventListener("click", () => openViewer().catch((error) => appendAgent(error.message, [], "error")));
   $("refresh-btn").addEventListener("click", () => Promise.all([refreshGeant4State(), refreshGeant4Log()]).catch((error) => appendAgent(error.message, [], "error")));
   $("reset-btn").addEventListener("click", () => resetSession().catch((error) => appendAgent(error.message, [], "error")));
   document.querySelectorAll(".evidence-tab").forEach((button) => {

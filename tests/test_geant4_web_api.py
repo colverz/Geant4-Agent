@@ -422,11 +422,16 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
 
     def test_frontend_uses_simulation_design_as_default_conversation_path(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        index_html = Path("ui/web/index.html").read_text(encoding="utf-8")
         self.assertIn('"/api/simulation/design"', app_js)
         self.assertIn('"/api/simulation/accept"', app_js)
         self.assertIn("requestDesign(input)", app_js)
         self.assertIn("applyDesignResponse(data)", app_js)
         self.assertIn("appendAgent(designMessage(data)", app_js)
+        self.assertIn("No runnable candidate existed, so the agent designed one first.", app_js)
+        self.assertNotIn("run1-btn", index_html)
+        self.assertNotIn("run10-btn", index_html)
+        self.assertNotIn("validate-btn", index_html)
         self.assertNotIn('"/api/step_async"', app_js)
 
     def test_frontend_read_only_questions_do_not_run_or_write_config(self) -> None:

@@ -73,6 +73,7 @@ def validate_simulation_design_annotations(annotations: dict[str, Any]) -> list[
         "G4_WATER",
         "G4_Si",
         "G4_AIR",
+        "G4_Galactic",
         "G4_POLYETHYLENE",
         "G4_PLASTIC_SC_VINYLTOLUENE",
     ):
@@ -225,6 +226,7 @@ def _select_material_refs(text: str, annotations: dict[str, Any]) -> list[dict[s
         "G4_WATER": ("water", "phantom", "dose", "水", "模体", "剂量"),
         "G4_Si": ("silicon", "detector", "硅", "探测器"),
         "G4_AIR": ("air", "gap", "空气", "气隙"),
+        "G4_Galactic": ("vacuum", "space", "真空", "虚空", "宇宙", "太空"),
         "G4_POLYETHYLENE": ("polyethylene", "neutron", "moderation", "聚乙烯", "中子", "慢化"),
         "G4_PLASTIC_SC_VINYLTOLUENE": ("scintillator", "plastic", "闪烁体", "塑料"),
         "G4_STAINLESS-STEEL": ("steel", "pipe", "wedge", "钢", "管", "楔"),
@@ -288,6 +290,8 @@ def _ref_item(name: str, value: Any) -> dict[str, Any]:
 def _recommended_setup(text: str) -> dict[str, Any]:
     geometry = "single_box"
     material = "G4_Cu"
+    environment_material = None
+    void_material = None
     source = "beam"
     detector = None
     scoring = ["target_edep"]
@@ -327,14 +331,28 @@ def _recommended_setup(text: str) -> dict[str, Any]:
     if "void" in text or "空洞" in text or "孔洞" in text:
         geometry = "void"
         material = "G4_Al"
+        void_material = "G4_AIR"
         scoring = ["region_contrast", "detector_edep"]
-    return {
+    if any(token in text for token in ("vacuum", "space", "真空", "虚空", "宇宙", "太空")):
+        environment_material = "G4_Galactic"
+        if geometry == "void":
+            void_material = "G4_Galactic"
+        if not has_explicit_target_material:
+            material = "G4_Galactic"
+        elif material == "G4_AIR" and has_explicit_target_material:
+            material = "G4_Cu"
+    setup = {
         "geometry": geometry,
         "material": material,
         "source": source,
         "detector": detector,
         "scoring": scoring,
     }
+    if environment_material:
+        setup["environment_material"] = environment_material
+    if void_material:
+        setup["void_material"] = void_material
+    return setup
 
 
 def _observables(text: str) -> tuple[str, ...]:

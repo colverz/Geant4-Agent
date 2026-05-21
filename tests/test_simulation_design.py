@@ -12,6 +12,7 @@ from core.agent.simulation_design import (
     load_simulation_design_annotations,
     validate_simulation_design_annotations,
 )
+from core.agent.simulation_design_llm import normalize_simulation_design_candidate
 from core.orchestrator.session_manager import process_turn, reset_session
 from ui.web.request_router import handle_post_request
 
@@ -26,6 +27,7 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
             "G4_WATER",
             "G4_Si",
             "G4_AIR",
+            "G4_Galactic",
             "G4_POLYETHYLENE",
             "G4_PLASTIC_SC_VINYLTOLUENE",
         ):
@@ -38,6 +40,7 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertIn("single_box_supported", annotations["geometry"]["single_box"]["tags"])
         self.assertIn("step_wedge_supported", annotations["geometry"]["step_wedge"]["tags"])
         self.assertIn("slab_approximation_requires_user_approval", annotations["geometry"]["pipe"]["tags"])
+        self.assertIn("vacuum", annotations["materials"]["G4_Galactic"]["tags"])
 
     def test_reference_pack_selects_relevant_capabilities(self) -> None:
         pack = build_simulation_design_reference_pack(
@@ -94,6 +97,35 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertIn("detector_crossing_count", candidate["observables"])
         self.assertIn("detector_edep", candidate["observables"])
         self.assertNotIn("region_contrast", candidate["observables"])
+
+    def test_vacuum_environment_uses_g4_galactic_not_air(self) -> None:
+        candidate = build_simulation_design_candidate("真空环境中的 1 MeV gamma 点源传输模拟").to_dict()
+        pack = build_simulation_design_reference_pack("真空环境中的 1 MeV gamma 点源传输模拟")
+
+        self.assertEqual(candidate["recommended_setup"]["material"], "G4_Galactic")
+        self.assertEqual(candidate["recommended_setup"]["environment_material"], "G4_Galactic")
+        self.assertNotEqual(candidate["recommended_setup"]["material"], "G4_AIR")
+        self.assertIn("materials:G4_Galactic", candidate["knowledge_references"])
+        self.assertIn("G4_Galactic", {item["id"] for item in pack["materials"]})
+
+    def test_llm_normalization_rejects_air_as_vacuum_substitute(self) -> None:
+        raw = {
+            "recommended_setup": {
+                "geometry": "single_box",
+                "material": "G4_AIR",
+                "source": "beam",
+                "scoring": ["target_edep"],
+            },
+            "observables": ["target_edep"],
+            "knowledge_references": ["materials:G4_AIR"],
+            "unsupported_capabilities": [],
+        }
+
+        normalized = normalize_simulation_design_candidate(raw, "vacuum beamline transport benchmark")
+
+        self.assertEqual(normalized["recommended_setup"]["material"], "G4_Galactic")
+        self.assertEqual(normalized["recommended_setup"]["environment_material"], "G4_Galactic")
+        self.assertIn("materials:G4_Galactic", normalized["knowledge_references"])
 
     def test_chinese_void_contrast_selects_void_references_and_supported_region_scoring(self) -> None:
         pack = build_simulation_design_reference_pack("铝块内部空洞缺陷的区域 contrast 模拟")
@@ -349,6 +381,43 @@ class SimulationDesignWorkflowTest(unittest.TestCase):
             self.assertEqual(validate_body["payload"]["missing_paths"], [])
             self.assertEqual(run_status, 200)
             self.assertEqual(run_body["runtime_smoke_report"]["events_completed"], 1)
+        finally:
+            reset_session(session_id)
+
+    def test_web_api_vacuum_design_commits_galactic_and_passes_runtime_preflight(self) -> None:
+        session_id = "simulation-design-vacuum-runtime"
+        reset_session(session_id)
+        common = {"legacy_sessions": {}, "solve_fn": lambda payload: {}, "step_fn": lambda payload: {}}
+        try:
+            design_status, design_body = handle_post_request(
+                "/api/simulation/design",
+                {
+                    "session_id": session_id,
+                    "text": "真空环境中的 1 MeV gamma 点源传输模拟，输出 json",
+                    "lang": "zh",
+                    "llm_router": False,
+                },
+                **common,
+            )
+            accept_status, accept_body = handle_post_request(
+                "/api/simulation/accept",
+                {"session_id": session_id},
+                **common,
+            )
+            validate_status, validate_body = handle_post_request(
+                "/api/geant4/validate",
+                {"session_id": session_id, "events": 1},
+                **common,
+            )
+
+            self.assertEqual(design_status, 200)
+            self.assertEqual(design_body["simulation_design"]["recommended_setup"]["material"], "G4_Galactic")
+            self.assertEqual(design_body["recommended_config"]["materials"]["selected_materials"], ["G4_Galactic"])
+            self.assertEqual(accept_status, 200)
+            self.assertTrue(accept_body["ok"])
+            self.assertEqual(validate_status, 200)
+            self.assertTrue(validate_body["payload"]["ok"])
+            self.assertEqual(validate_body["payload"]["missing_paths"], [])
         finally:
             reset_session(session_id)
 

@@ -19,7 +19,12 @@
     "G4_AIR": {
       "tags": ["air_gap", "environment", "low_density_gap"],
       "use_cases": ["air gap", "world-like transport gap"],
-      "notes": "Useful for air gaps between source, target, and detector."
+      "notes": "Useful for air gaps between source, target, and detector. Do not use as a substitute for vacuum."
+    },
+    "G4_Galactic": {
+      "tags": ["vacuum", "space", "low_density_environment", "world_vacuum"],
+      "use_cases": ["vacuum environment", "space-like transport region", "beamline vacuum"],
+      "notes": "Use for vacuum or space-like environments. G4_AIR is not a valid vacuum approximation."
     },
     "G4_POLYETHYLENE": {
       "tags": ["shielding", "moderator", "neutron_moderation"],

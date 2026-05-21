@@ -36,7 +36,8 @@
               <h2>描述你的模拟目标。我会先整理方案并生成候选配置，确认后再进入 Geant4 运行。</h2>
               <p>
                 例如：10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at
-                (0,0,-20) mm along +z; physics FTFP_BERT.
+                (0,0,-20) mm along +z; physics FTFP_BERT. 也可以直接说：
+                “设计一个真空环境中的伽马透射模拟，批准后运行 1000 events。”
               </p>
             </article>
           </div>
@@ -44,10 +45,6 @@
           <section class="composer-zone" aria-label="Prompt composer">
             <div id="activity-strip" class="activity-strip" hidden></div>
             <div class="command-bar">
-              <button id="validate-btn" class="secondary">Validate</button>
-              <button id="run1-btn" class="primary">Run 1 Event</button>
-              <button id="run10-btn" class="secondary">Run 10 Events</button>
-              <button id="viewer-btn" class="secondary">Viewer</button>
               <button id="refresh-btn" class="ghost">Refresh</button>
               <button id="reset-btn" class="ghost danger">Reset</button>
             </div>

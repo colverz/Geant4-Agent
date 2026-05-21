@@ -1127,9 +1127,17 @@ def _simulation_design_recommended_config(candidate: dict[str, Any]) -> tuple[di
     setup = candidate.get("recommended_setup") if isinstance(candidate.get("recommended_setup"), dict) else {}
     goal = str(candidate.get("goal") or "")
     low = goal.lower()
-    material = str(setup.get("material") or "").strip() or "G4_WATER"
+    material = str(setup.get("target_material") or setup.get("material") or "").strip() or "G4_WATER"
+    environment_material = str(setup.get("environment_material") or "").strip()
+    void_material = str(setup.get("void_material") or "").strip()
     geometry = str(setup.get("geometry") or "single_box").strip() or "single_box"
     source_kind = str(setup.get("source") or "beam").strip() or "beam"
+    root_name = "Target"
+    structure = {
+        "void": "embedded_void",
+        "inclusion": "embedded_inclusion",
+        "multi_layer": "multi_layer_stack",
+    }.get(geometry, geometry)
     particle = "gamma"
     for name in ("neutron", "proton", "electron", "gamma"):
         if name in low:
@@ -1151,17 +1159,20 @@ def _simulation_design_recommended_config(candidate: dict[str, Any]) -> tuple[di
     if dim_match:
         dimensions = tuple(float(dim_match.group(i)) for i in range(1, 4))  # type: ignore[assignment]
     assumptions = [
-        "single_box geometry is used for the runnable draft",
+        f"{structure} geometry is used for the runnable draft",
         "default dimensions are 10 x 10 x 10 mm unless dimensions were provided",
         "source starts at (0, 0, -20) mm and points along +z",
         "physics list defaults to FTFP_BERT",
     ]
+    if environment_material:
+        assumptions.append(f"environment material is represented as {environment_material}")
     detector_enabled = "detector" in " ".join(str(item) for item in candidate.get("observables", [])).lower() or bool(
         isinstance(setup.get("detector"), dict) and setup.get("detector", {}).get("enabled")
     )
     config = {
         "geometry": {
-            "structure": "single_box" if geometry in {"single_box", "slab"} else geometry,
+            "structure": "single_box" if structure == "slab" else structure,
+            "root_name": root_name,
             "params": {
                 "module_x": dimensions[0],
                 "module_y": dimensions[1],
@@ -1170,10 +1181,10 @@ def _simulation_design_recommended_config(candidate: dict[str, Any]) -> tuple[di
         },
         "materials": {
             "selected_materials": [material],
-            "volume_material_map": {"target": material},
+            "volume_material_map": {root_name: material},
         },
         "source": {
-            "type": "point" if source_kind == "point" else "beam",
+            "type": source_kind if source_kind in {"point", "beam", "isotropic"} else "beam",
             "particle": particle,
             "energy": energy_mev,
             "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
@@ -1182,13 +1193,68 @@ def _simulation_design_recommended_config(candidate: dict[str, Any]) -> tuple[di
         "physics": {"physics_list": "FTFP_BERT"},
         "output": {"format": "json"},
     }
+    for extra_material in (environment_material, void_material):
+        if extra_material and extra_material not in config["materials"]["selected_materials"]:
+            config["materials"]["selected_materials"].append(extra_material)
+    if structure == "step_wedge":
+        step_width = max(5.0, dimensions[0] / 3.0)
+        config["geometry"]["steps"] = [
+            {"name": "ThinStep", "width_mm": step_width, "thickness_mm": max(2.0, dimensions[2] * 0.25), "material": material, "role": "region_a"},
+            {"name": "MidStep", "width_mm": step_width, "thickness_mm": max(4.0, dimensions[2] * 0.5), "material": material, "role": "target"},
+            {"name": "ThickStep", "width_mm": step_width, "thickness_mm": max(6.0, dimensions[2]), "material": material, "role": "region_b"},
+        ]
+        config["materials"]["volume_material_map"].update({"ThinStep": material, "MidStep": material, "ThickStep": material})
+    elif structure == "embedded_void":
+        void_size = [max(2.0, dimensions[0] * 0.25), max(2.0, dimensions[1] * 0.25), max(2.0, dimensions[2] * 0.25)]
+        config["geometry"]["volumes"] = [
+            {"name": root_name, "shape": "box", "material": material, "role": "region_b", "size_mm": list(dimensions)},
+            {
+                "name": "VoidRegion",
+                "shape": "box",
+                "material": void_material or "G4_AIR",
+                "role": "region_a",
+                "parent": root_name,
+                "size_mm": void_size,
+            },
+        ]
+        config["materials"]["volume_material_map"]["VoidRegion"] = void_material or "G4_AIR"
+    elif structure == "multi_layer_stack":
+        half = max(1.0, dimensions[2] * 0.5)
+        second = "G4_POLYETHYLENE" if material != "G4_POLYETHYLENE" else "G4_Pb"
+        config["geometry"]["layers"] = [
+            {"name": "LayerA", "material": material, "thickness_mm": half, "role": "shield"},
+            {"name": "LayerB", "material": second, "thickness_mm": half, "role": "shield"},
+        ]
+        config["materials"]["selected_materials"] = [material, second]
+        config["materials"]["volume_material_map"].update({"LayerA": material, "LayerB": second})
     if detector_enabled:
         config["simulation"] = {
             "detector": {
                 "enabled": True,
+                "name": "Detector",
                 "material": "G4_Si",
+                "position": {"type": "vector", "value": [0.0, 0.0, max(40.0, dimensions[2] + 20.0)]},
+                "size_triplet_mm": [max(20.0, dimensions[0]), max(20.0, dimensions[1]), 2.0],
             }
         }
+        config["materials"]["volume_material_map"]["Detector"] = "G4_Si"
+    observables = set(str(item) for item in candidate.get("observables", []) if str(item))
+    scoring: dict[str, Any] = {"target_edep": True}
+    if detector_enabled:
+        scoring["detector_crossings"] = True
+    if "plane_crossing_count" in observables:
+        scoring["plane_crossings"] = True
+        scoring["plane"] = {"name": "ExitPlane", "z_mm": max(40.0, dimensions[2] + 10.0)}
+    if structure == "step_wedge":
+        scoring["volume_names"] = ["ThinStep", "MidStep", "ThickStep"]
+        scoring["volume_roles"] = {"region_a": ["ThinStep"], "target": ["MidStep"], "region_b": ["ThickStep"]}
+    elif structure == "embedded_void":
+        scoring["volume_names"] = [root_name, "VoidRegion"]
+        scoring["volume_roles"] = {"target": [root_name], "region_a": ["VoidRegion"], "region_b": [root_name]}
+    elif structure == "multi_layer_stack":
+        scoring["volume_names"] = ["LayerA", "LayerB"]
+        scoring["volume_roles"] = {"target": ["LayerA", "LayerB"], "shield": ["LayerA", "LayerB"]}
+    config["scoring"] = scoring
     return config, assumptions
 
 
