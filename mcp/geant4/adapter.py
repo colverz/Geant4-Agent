@@ -71,6 +71,7 @@ def _load_run_summary_payload(
     if role_stats:
         payload["scoring"]["role_stats"] = role_stats
         payload["result_summary"] = build_result_summary_payload(result, role_stats_override=role_stats)
+    _attach_runtime_depth_bins(payload, runtime_payload)
     payload["artifact_dir"] = str(artifact_dir)
     payload["run_summary_path"] = str(summary_path)
     return payload
@@ -84,6 +85,88 @@ def _runtime_volume_roles(runtime_payload: dict[str, Any] | None) -> dict[str, A
         return None
     volume_roles = scoring.get("volume_roles")
     return volume_roles if isinstance(volume_roles, dict) else None
+
+
+def _attach_runtime_depth_bins(payload: dict[str, Any], runtime_payload: dict[str, Any] | None) -> None:
+    if not isinstance(runtime_payload, dict):
+        return
+    result_summary = payload.get("result_summary")
+    scoring_payload = payload.get("scoring")
+    if not isinstance(result_summary, dict) or not isinstance(scoring_payload, dict):
+        return
+    scoring_summary = result_summary.get("scoring")
+    if not isinstance(scoring_summary, dict):
+        return
+    volume_stats = scoring_payload.get("volume_stats")
+    if not isinstance(volume_stats, dict):
+        return
+    scoring_config = runtime_payload.get("scoring")
+    geometry_config = runtime_payload.get("geometry")
+    if not isinstance(scoring_config, dict) or not isinstance(geometry_config, dict):
+        return
+    roles = scoring_config.get("volume_roles")
+    if not isinstance(roles, dict):
+        return
+    raw_depth_names = roles.get("depth_bin")
+    if not isinstance(raw_depth_names, list) or not raw_depth_names:
+        return
+    volumes = geometry_config.get("volumes")
+    if not isinstance(volumes, list):
+        return
+    volume_by_name = {
+        str(volume.get("name")): volume
+        for volume in volumes
+        if isinstance(volume, dict) and str(volume.get("name") or "").strip()
+    }
+    bins: list[dict[str, Any]] = []
+    for index, raw_name in enumerate(raw_depth_names):
+        name = str(raw_name)
+        stats = volume_stats.get(name)
+        if not isinstance(stats, dict):
+            continue
+        volume = volume_by_name.get(name) if isinstance(volume_by_name.get(name), dict) else {}
+        position = volume.get("position_mm") if isinstance(volume, dict) else None
+        size = volume.get("size_mm") if isinstance(volume, dict) else None
+        center_mm = None
+        width_mm = None
+        if isinstance(position, list) and len(position) >= 3:
+            center_mm = float(position[2] or 0.0)
+        if isinstance(size, list) and len(size) >= 3:
+            width_mm = float(size[2] or 0.0)
+        bins.append(
+            {
+                "index": int(index),
+                "name": name,
+                "center_mm": center_mm,
+                "width_mm": width_mm,
+                "edep_total_mev": float(stats.get("edep_total_mev", 0.0) or 0.0),
+                "hit_events": int(stats.get("hit_events", 0) or 0),
+                "step_count": int(stats.get("step_count", 0) or 0),
+                "track_entries": int(stats.get("track_entries", 0) or 0),
+            }
+        )
+    if not bins:
+        return
+    peak = max(bins, key=lambda item: float(item.get("edep_total_mev", 0.0) or 0.0))
+    edep_values = [round(float(item["edep_total_mev"]), 9) for item in bins]
+    edep_crc = int(hashlib.sha256(json.dumps(edep_values, sort_keys=True).encode("utf-8")).hexdigest()[:12], 16)
+    depth_payload = {
+        "axis": "z",
+        "count": len(bins),
+        "bins": bins,
+        "peak_bin": int(peak["index"]),
+        "peak_depth_mm": peak.get("center_mm"),
+        "peak_edep_total_mev": float(peak.get("edep_total_mev", 0.0) or 0.0),
+        "edep_crc32": edep_crc,
+    }
+    scoring_payload["depth_bins"] = deepcopy(depth_payload)
+    scoring_summary["depth_bins"] = depth_payload
+    derived = scoring_summary.get("derived_metrics")
+    if not isinstance(derived, dict):
+        derived = {}
+        scoring_summary["derived_metrics"] = derived
+    derived["peak_depth_mm"] = depth_payload["peak_depth_mm"]
+    derived["depth_bin_edep_hash"] = depth_payload["edep_crc32"]
 
 
 def _is_missing(value: Any) -> bool:

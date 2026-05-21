@@ -356,8 +356,6 @@ def _assumptions(text: str) -> tuple[str, ...]:
 
 def _simplifications(text: str) -> tuple[str, ...]:
     simplifications: list[str] = []
-    if "step wedge" in text or "wedge" in text:
-        simplifications.append("Approximate step wedge as a single slab or require a future multi-run thickness sweep.")
     if "pipe" in text or "corrosion" in text:
         simplifications.append("Approximate curved pipe wall as slab thickness paths only if the user approves.")
     return tuple(simplifications)
@@ -365,17 +363,10 @@ def _simplifications(text: str) -> tuple[str, ...]:
 
 def _unsupported_capabilities(text: str) -> tuple[str, ...]:
     unsupported: list[str] = []
-    if "void" in text or "空洞" in text or "孔洞" in text:
-        unsupported.append("embedded_void_geometry")
-        unsupported.append("region_contrast_scoring")
-    if "inclusion" in text or "夹杂" in text:
-        unsupported.append("embedded_inclusion_geometry")
-    if "depth" in text or "bragg" in text or "dose" in text or "深度" in text or "剂量" in text:
-        unsupported.append("depth_binned_scoring")
-    if "isotropic" in text:
-        unsupported.append("isotropic_source_sampling")
     if "cad" in text:
         unsupported.append("cad_import")
+    if "moving" in text or "motion" in text:
+        unsupported.append("moving_geometry")
     return tuple(dict.fromkeys(unsupported))
 
 

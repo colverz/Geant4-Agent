@@ -10,6 +10,7 @@ from core.simulation.spec import (
     GeometryRuntimeSpec,
     PhysicsRuntimeSpec,
     RunControlSpec,
+    RuntimeVolumeSpec,
     ScoringPlaneSpec,
     ScoringSpec,
     SimulationSpec,
@@ -120,6 +121,223 @@ def _root_volume_name(config: dict[str, Any]) -> str:
     return "Target"
 
 
+def _coerce_int(value: Any, fallback: int = 0) -> int:
+    try:
+        if value is None:
+            return int(fallback)
+        return int(value)
+    except (TypeError, ValueError):
+        return int(fallback)
+
+
+def _shape_name(value: Any, fallback: str = "box") -> str:
+    raw = str(value or fallback).strip().lower()
+    aliases = {
+        "single_box": "box",
+        "box": "box",
+        "cube": "box",
+        "single_tubs": "tubs",
+        "tubs": "tubs",
+        "tube": "tubs",
+        "cylinder": "tubs",
+    }
+    return aliases.get(raw, fallback)
+
+
+def _volume_from_dict(raw: dict[str, Any], *, fallback_name: str, fallback_material: str) -> RuntimeVolumeSpec:
+    size = raw.get("size_mm", raw.get("size_triplet_mm"))
+    size_mm = _coerce_vector3(size, (50.0, 50.0, 50.0)) if size is not None else None
+    return RuntimeVolumeSpec(
+        name=str(raw.get("name") or fallback_name),
+        shape=_shape_name(raw.get("shape", raw.get("type")), "box"),
+        material=str(raw.get("material") or fallback_material),
+        role=str(raw.get("role") or "").strip().lower(),
+        parent=str(raw.get("parent") or "World"),
+        position_mm=_coerce_vector3(raw.get("position_mm", raw.get("position")), (0.0, 0.0, 0.0)),
+        rotation_deg=_coerce_vector3(raw.get("rotation_deg", raw.get("rotation")), (0.0, 0.0, 0.0)),
+        size_mm=size_mm,
+        radius_mm=_coerce_float(raw.get("radius_mm", raw.get("outer_radius_mm")), 25.0)
+        if raw.get("radius_mm", raw.get("outer_radius_mm")) is not None
+        else None,
+        inner_radius_mm=_nonnegative_float(raw.get("inner_radius_mm"), 0.0),
+        half_length_mm=_coerce_float(raw.get("half_length_mm"), 50.0)
+        if raw.get("half_length_mm") is not None
+        else None,
+        copy_no=_coerce_int(raw.get("copy_no"), 0),
+    )
+
+
+def _volume_roles(volumes: tuple[RuntimeVolumeSpec, ...], root_volume_name: str) -> dict[str, tuple[str, ...]]:
+    roles: dict[str, list[str]] = {}
+    for volume in volumes:
+        role = str(volume.role or "").strip().lower()
+        if not role:
+            continue
+        roles.setdefault(role, [])
+        if volume.name not in roles[role]:
+            roles[role].append(volume.name)
+    if "target" not in roles:
+        if any(volume.name == root_volume_name for volume in volumes):
+            roles["target"] = [root_volume_name]
+        else:
+            roles["target"] = [volume.name for volume in volumes if volume.role != "detector"]
+    return {role: tuple(names) for role, names in roles.items() if names}
+
+
+def _layer_stack_volumes(
+    geometry: dict[str, Any],
+    *,
+    root_volume_name: str,
+    fallback_material: str,
+    size_x_mm: float,
+    size_y_mm: float,
+) -> tuple[RuntimeVolumeSpec, ...]:
+    raw_layers = geometry.get("layers")
+    if not isinstance(raw_layers, list) or not raw_layers:
+        return ()
+    total_thickness = 0.0
+    parsed: list[tuple[dict[str, Any], float]] = []
+    for layer in raw_layers:
+        if not isinstance(layer, dict):
+            continue
+        thickness = _nonnegative_float(layer.get("thickness_mm"), 0.0)
+        if thickness <= 0.0:
+            continue
+        parsed.append((layer, thickness))
+        total_thickness += thickness
+    if total_thickness <= 0.0:
+        return ()
+    volumes: list[RuntimeVolumeSpec] = []
+    z_cursor = -0.5 * total_thickness
+    for index, (layer, thickness) in enumerate(parsed):
+        center_z = z_cursor + thickness * 0.5
+        z_cursor += thickness
+        name = str(layer.get("name") or f"{root_volume_name}_Layer{index + 1}")
+        volumes.append(
+            RuntimeVolumeSpec(
+                name=name,
+                shape="box",
+                material=str(layer.get("material") or fallback_material),
+                role=str(layer.get("role") or "shield").strip().lower(),
+                parent="World",
+                position_mm=(0.0, 0.0, center_z),
+                size_mm=(size_x_mm, size_y_mm, thickness),
+                copy_no=index,
+            )
+        )
+    return tuple(volumes)
+
+
+def _step_wedge_volumes(
+    geometry: dict[str, Any],
+    *,
+    root_volume_name: str,
+    fallback_material: str,
+    size_y_mm: float,
+) -> tuple[RuntimeVolumeSpec, ...]:
+    raw_steps = geometry.get("steps")
+    if not isinstance(raw_steps, list) or not raw_steps:
+        return ()
+    widths: list[float] = []
+    heights: list[float] = []
+    for step in raw_steps:
+        if not isinstance(step, dict):
+            continue
+        widths.append(_nonnegative_float(step.get("width_mm"), 0.0))
+        heights.append(_nonnegative_float(step.get("thickness_mm", step.get("height_mm")), 0.0))
+    if not widths or any(value <= 0.0 for value in widths) or any(value <= 0.0 for value in heights):
+        return ()
+    total_width = sum(widths)
+    x_cursor = -0.5 * total_width
+    volumes: list[RuntimeVolumeSpec] = []
+    for index, step in enumerate(raw_steps):
+        if not isinstance(step, dict):
+            continue
+        width = widths[index]
+        thickness = heights[index]
+        center_x = x_cursor + width * 0.5
+        x_cursor += width
+        role = str(step.get("role") or ("region_a" if index == 0 else "region_b")).strip().lower()
+        volumes.append(
+            RuntimeVolumeSpec(
+                name=str(step.get("name") or f"{root_volume_name}_Step{index + 1}"),
+                shape="box",
+                material=str(step.get("material") or fallback_material),
+                role=role,
+                parent="World",
+                position_mm=(center_x, 0.0, 0.0),
+                size_mm=(width, size_y_mm, thickness),
+                copy_no=index,
+            )
+        )
+    return tuple(volumes)
+
+
+def _geometry_volumes(
+    geometry: dict[str, Any],
+    *,
+    structure: str,
+    root_volume_name: str,
+    material: str,
+    size_x_mm: float,
+    size_y_mm: float,
+    size_z_mm: float,
+    radius_mm: float,
+    half_length_mm: float,
+    detector_spec: DetectorRuntimeSpec | None,
+) -> tuple[RuntimeVolumeSpec, ...]:
+    raw_volumes = geometry.get("volumes")
+    if isinstance(raw_volumes, list) and raw_volumes:
+        volumes = tuple(
+            _volume_from_dict(item, fallback_name=f"Volume{index + 1}", fallback_material=material)
+            for index, item in enumerate(raw_volumes)
+            if isinstance(item, dict)
+        )
+    elif structure == "multi_layer_stack":
+        volumes = _layer_stack_volumes(
+            geometry,
+            root_volume_name=root_volume_name,
+            fallback_material=material,
+            size_x_mm=size_x_mm,
+            size_y_mm=size_y_mm,
+        )
+    elif structure == "step_wedge":
+        volumes = _step_wedge_volumes(
+            geometry,
+            root_volume_name=root_volume_name,
+            fallback_material=material,
+            size_y_mm=size_y_mm,
+        )
+    else:
+        root_shape = _shape_name(structure, "box")
+        volumes = (
+            RuntimeVolumeSpec(
+                name=root_volume_name,
+                shape=root_shape,
+                material=material,
+                role="target",
+                parent="World",
+                size_mm=(size_x_mm, size_y_mm, size_z_mm) if root_shape == "box" else None,
+                radius_mm=radius_mm if root_shape == "tubs" else None,
+                half_length_mm=half_length_mm if root_shape == "tubs" else None,
+            ),
+        )
+    if detector_spec is not None and all(volume.name != detector_spec.volume_name for volume in volumes):
+        volumes = (
+            *volumes,
+            RuntimeVolumeSpec(
+                name=detector_spec.volume_name,
+                shape="box",
+                material=detector_spec.material,
+                role="detector",
+                parent="World",
+                position_mm=detector_spec.position_mm,
+                size_mm=(detector_spec.size_x_mm, detector_spec.size_y_mm, detector_spec.size_z_mm),
+            ),
+        )
+    return volumes
+
+
 def _detector_spec(config: dict[str, Any]) -> DetectorRuntimeSpec | None:
     raw_detector = config.get("simulation", {}) if isinstance(config.get("simulation"), dict) else {}
     if isinstance(raw_detector, dict):
@@ -156,6 +374,8 @@ def _scoring_spec(
     config: dict[str, Any],
     root_volume_name: str,
     detector_spec: DetectorRuntimeSpec | None,
+    geometry_roles: dict[str, tuple[str, ...]] | None = None,
+    geometry_volume_names: tuple[str, ...] = (),
 ) -> ScoringSpec:
     scoring = config.get("scoring", {}) if isinstance(config.get("scoring"), dict) else {}
     scoring_enabled = bool(scoring.get("target_edep", True))
@@ -174,7 +394,9 @@ def _scoring_spec(
     else:
         cleaned = ()
 
-    role_map: dict[str, tuple[str, ...]] = {"target": (root_volume_name,)}
+    role_map: dict[str, tuple[str, ...]] = dict(geometry_roles or {"target": (root_volume_name,)})
+    if "target" not in role_map:
+        role_map["target"] = (root_volume_name,)
     if detector_spec is not None:
         role_map["detector"] = (detector_spec.volume_name,)
     raw_roles = scoring.get("volume_roles")
@@ -193,6 +415,9 @@ def _scoring_spec(
                 role_map[role_name] = names
 
     all_names: list[str] = []
+    for name in geometry_volume_names:
+        if name not in all_names:
+            all_names.append(name)
     for names in role_map.values():
         for name in names:
             if name not in all_names:
@@ -208,6 +433,13 @@ def _scoring_spec(
         scoring_plane=scoring_plane,
         volume_names=tuple(all_names) or (root_volume_name,),
         volume_roles=role_map,
+        requests=tuple(item for item in scoring.get("requests", ()) if isinstance(item, dict))
+        if isinstance(scoring.get("requests"), (list, tuple))
+        else (),
+        depth_bins=scoring.get("depth_bins") if isinstance(scoring.get("depth_bins"), dict) else None,
+        derived_metrics=tuple(str(item) for item in scoring.get("derived_metrics", ()) if str(item).strip())
+        if isinstance(scoring.get("derived_metrics"), (list, tuple))
+        else (),
     )
 
 
@@ -220,21 +452,48 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
     structure = str(geometry.get("structure") or "single_box")
     root_volume_name = _root_volume_name(raw)
     detector_spec = _detector_spec(raw)
+    material = _first_material(raw)
+    size_x_mm = (
+        _coerce_float(geometry.get("size_triplet_mm", [None, None, None])[0], _coerce_float(params.get("module_x"), 50.0))
+        if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 1
+        else _coerce_float(params.get("module_x"), 50.0)
+    )
+    size_y_mm = (
+        _coerce_float(geometry.get("size_triplet_mm", [None, None, None])[1], _coerce_float(params.get("module_y"), 50.0))
+        if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 2
+        else _coerce_float(params.get("module_y"), 50.0)
+    )
+    size_z_mm = (
+        _coerce_float(geometry.get("size_triplet_mm", [None, None, None])[2], _coerce_float(params.get("module_z"), 50.0))
+        if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 3
+        else _coerce_float(params.get("module_z"), 50.0)
+    )
+    radius_mm = _coerce_float(params.get("child_rmax") or geometry.get("radius_mm"), 25.0)
+    half_length_mm = _coerce_float(params.get("child_hz") or geometry.get("half_length_mm"), 50.0)
+    volumes = _geometry_volumes(
+        geometry,
+        structure=structure,
+        root_volume_name=root_volume_name,
+        material=material,
+        size_x_mm=size_x_mm,
+        size_y_mm=size_y_mm,
+        size_z_mm=size_z_mm,
+        radius_mm=radius_mm,
+        half_length_mm=half_length_mm,
+        detector_spec=detector_spec,
+    )
+    geometry_roles = _volume_roles(volumes, root_volume_name)
     geometry_spec = GeometryRuntimeSpec(
         structure=structure,
-        material=_first_material(raw),
+        material=material,
         root_volume_name=root_volume_name,
-        size_x_mm=_coerce_float(geometry.get("size_triplet_mm", [None, None, None])[0], _coerce_float(params.get("module_x"), 50.0))
-        if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 1
-        else _coerce_float(params.get("module_x"), 50.0),
-        size_y_mm=_coerce_float(geometry.get("size_triplet_mm", [None, None, None])[1], _coerce_float(params.get("module_y"), 50.0))
-        if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 2
-        else _coerce_float(params.get("module_y"), 50.0),
-        size_z_mm=_coerce_float(geometry.get("size_triplet_mm", [None, None, None])[2], _coerce_float(params.get("module_z"), 50.0))
-        if isinstance(geometry.get("size_triplet_mm"), (list, tuple)) and len(geometry.get("size_triplet_mm")) >= 3
-        else _coerce_float(params.get("module_z"), 50.0),
-        radius_mm=_coerce_float(params.get("child_rmax") or geometry.get("radius_mm"), 25.0),
-        half_length_mm=_coerce_float(params.get("child_hz") or geometry.get("half_length_mm"), 50.0),
+        size_x_mm=size_x_mm,
+        size_y_mm=size_y_mm,
+        size_z_mm=size_z_mm,
+        radius_mm=radius_mm,
+        half_length_mm=half_length_mm,
+        volumes=volumes,
+        roles=geometry_roles,
     )
 
     source_spec = SourceRuntimeSpec(
@@ -282,6 +541,12 @@ def build_simulation_spec(config: dict[str, Any], *, events: int = 1, mode: str 
         source=source_spec,
         physics=PhysicsRuntimeSpec(physics_list=_physics_list_name(raw)),
         run=_run_control_spec(raw, events=events, mode=mode),
-        scoring=_scoring_spec(raw, root_volume_name, detector_spec),
+        scoring=_scoring_spec(
+            raw,
+            root_volume_name,
+            detector_spec,
+            geometry_roles=geometry_roles,
+            geometry_volume_names=tuple(volume.name for volume in volumes),
+        ),
         detector=detector_spec,
     )

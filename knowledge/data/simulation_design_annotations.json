@@ -57,8 +57,8 @@
       "notes": "Supported as a localized source model when explicit source position is available."
     },
     "isotropic": {
-      "tags": ["unsupported_isotropic_runtime", "requires_sampling_support"],
-      "notes": "Do not claim isotropic source support unless runtime sampling support is added."
+      "tags": ["supported", "isotropic_sampling_supported"],
+      "notes": "Supported by runtime source sampling for point-position isotropic emission."
     }
   },
   "scoring": {
@@ -79,12 +79,12 @@
       "notes": "Supported for a simple downstream scoring plane."
     },
     "region_contrast": {
-      "tags": ["unsupported", "region_contrast_unsupported"],
-      "notes": "Requires region scoring and structured detector bins; not supported by current runtime summary."
+      "tags": ["supported", "role_region_contrast_supported"],
+      "notes": "Supported as role-based region aggregation when region_a and region_b scoring volumes are present."
     },
     "depth_bins": {
-      "tags": ["unsupported", "depth_bins_unsupported"],
-      "notes": "Requires depth-binned scoring; not supported by current runtime summary."
+      "tags": ["supported", "depth_bins_supported"],
+      "notes": "Supported through generated thin scoring slices along the configured depth axis."
     }
   },
   "geometry": {
@@ -93,39 +93,32 @@
       "notes": "Supported by current runtime payload and suitable for slab/block approximations."
     },
     "step_wedge": {
-      "tags": ["approximation_required", "single_box_or_multi_run_required"],
-      "notes": "A single-box approximation or multi-run thickness sweep requires explicit user approval."
+      "tags": ["supported", "step_wedge_supported", "multi_volume_box_stack"],
+      "notes": "Supported as a set of adjacent box steps with region roles."
     },
     "pipe": {
       "tags": ["approximation_required", "slab_approximation_requires_user_approval"],
       "notes": "Curved pipe geometry is not supported; slab approximation requires user approval."
     },
     "void": {
-      "tags": ["unsupported", "unsupported_without_region_geometry"],
-      "notes": "Embedded void geometry requires region geometry support."
+      "tags": ["supported", "embedded_void_supported", "region_geometry_supported"],
+      "notes": "Supported as an embedded daughter volume for simplified void contrast studies."
     },
     "inclusion": {
-      "tags": ["unsupported", "unsupported_without_region_geometry"],
-      "notes": "Embedded inclusion geometry requires region geometry support."
+      "tags": ["supported", "embedded_inclusion_supported", "region_geometry_supported"],
+      "notes": "Supported as an embedded daughter volume for simplified inclusion contrast studies."
     },
     "multi_layer": {
-      "tags": ["unsupported", "multi_layer_geometry_not_supported"],
-      "notes": "Sequential multi-layer geometry is not supported by current runtime payload."
+      "tags": ["supported", "multi_layer_stack_supported"],
+      "notes": "Supported as sequential slab layers with shield/region roles."
     }
   },
   "runtime": {
-    "supported_geometry": ["single_box"],
-    "supported_sources": ["beam", "point"],
-    "supported_scoring": ["target_edep", "detector_crossing_count", "detector_edep", "plane_crossing_count"],
+    "supported_geometry": ["single_box", "step_wedge", "void", "inclusion", "multi_layer", "slab_pair"],
+    "supported_sources": ["beam", "point", "isotropic"],
+    "supported_scoring": ["target_edep", "detector_crossing_count", "detector_edep", "plane_crossing_count", "region_contrast", "depth_bins", "transmission_factor"],
     "unsupported_capabilities": [
       "curved_pipe_geometry",
-      "embedded_void_geometry",
-      "embedded_inclusion_geometry",
-      "multi_layer_geometry",
-      "region_contrast_scoring",
-      "depth_binned_scoring",
-      "paired_runtime_runs",
-      "isotropic_source_sampling",
       "cad_import",
       "moving_geometry"
     ]

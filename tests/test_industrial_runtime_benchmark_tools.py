@@ -125,25 +125,60 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
         self.assertEqual(result["metric_plan"]["unsupported"], {})
         self.assertIn("transmission_factor", result["metric_plan"]["supported"])
 
-    def test_runtime_compiler_exposes_structural_gaps_instead_of_simplifying_them(self) -> None:
+    def test_runtime_compiler_builds_embedded_void_region_case(self) -> None:
         case = _case_by_id("ndt_aluminum_block_void_contrast")
         result = compile_industrial_case_to_runtime(case, runtime_defaults=_benchmark()["runtime_defaults"])
 
-        self.assertEqual(result["status"], "unsupported_capability")
-        self.assertIn("embedded_void_geometry_not_supported_by_current_single_volume_runtime", result["unsupported_features"])
-        self.assertFalse(result.get("runtime_payload"))
+        self.assertEqual(result["status"], "compiled")
+        self.assertEqual(result["unsupported_features"], [])
+        volume_names = [item["name"] for item in result["runtime_payload"]["geometry"]["volumes"]]
+        self.assertIn("AluminumBlock", volume_names)
+        self.assertIn("AirVoid", volume_names)
+        self.assertEqual(result["runtime_payload"]["scoring"]["volume_roles"]["region_a"], ["AirVoid"])
+        self.assertIn("contrast_ratio", result["metric_plan"]["supported"])
+
+    def test_runtime_compiler_builds_paired_run_for_concrete_transmission(self) -> None:
+        case = _case_by_id("shielding_concrete_gamma_transmission")
+        result = compile_industrial_case_to_runtime(case, runtime_defaults=_benchmark()["runtime_defaults"])
+
+        self.assertEqual(result["status"], "compiled")
+        self.assertEqual(result["run_mode"], "paired_run")
+        self.assertEqual(sorted(result["paired_configs"].keys()), ["shielded", "unshielded"])
+        self.assertIn("attenuation_ratio", result["metric_plan"]["supported"])
+        self.assertEqual(result["metric_plan"]["unsupported"], {})
+
+    def test_paired_runtime_executor_extracts_ratio_metrics(self) -> None:
+        case = _case_by_id("shielding_concrete_gamma_transmission")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            artifact_dir = root / "artifacts"
+            artifact_dir.mkdir()
+            script = _write_fake_runtime_script(root, artifact_dir)
+            execution = execute_industrial_case(
+                case,
+                runtime_defaults=_benchmark()["runtime_defaults"],
+                env={
+                    "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, str(script)]),
+                },
+            )
+
+        self.assertEqual(execution["status"], "completed")
+        self.assertEqual(execution["result_summary"]["run"]["mode"], "paired_run")
+        self.assertEqual(execution["actual_metrics"]["unshielded_detector_crossing_count"], 2500)
+        self.assertEqual(execution["actual_metrics"]["shielded_detector_crossing_count"], 2500)
+        self.assertAlmostEqual(execution["actual_metrics"]["attenuation_ratio"], 1.0)
 
     def test_runtime_compiler_marks_metric_gaps_for_partial_runtime_support(self) -> None:
-        case = _case_by_id("medical_proton_water_depth_dose")
+        case = _case_by_id("beam_gaussian_spread_plane")
         result = compile_industrial_case_to_runtime(case, runtime_defaults=_benchmark()["runtime_defaults"])
 
         self.assertEqual(result["status"], "compiled_with_gaps")
         self.assertTrue(result["runtime_payload"])
-        self.assertIn("peak_depth_mm", result["metric_plan"]["unsupported"])
-        self.assertIn("depth_bin_edep_hash", result["metric_plan"]["unsupported"])
+        self.assertIn("plane_spread_sigma_x_mm", result["metric_plan"]["unsupported"])
+        self.assertIn("plane_spread_sigma_y_mm", result["metric_plan"]["unsupported"])
         summary = summarize_compile_results([result])
         self.assertEqual(summary["status_counts"]["compiled_with_gaps"], 1)
-        self.assertEqual(summary["unsupported_metrics"]["peak_depth_mm"], 1)
+        self.assertEqual(summary["unsupported_metrics"]["plane_spread_sigma_x_mm"], 1)
 
     def test_metric_extractor_supports_direct_and_derived_metrics(self) -> None:
         case = _case_by_id("shielding_lead_gamma_transmission")
@@ -338,7 +373,7 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertFalse(report["stage_summary"]["runtime_ready"])
-        self.assertEqual(report["stage_summary"]["compile_status_counts"]["compiled"], 4)
+        self.assertEqual(report["stage_summary"]["compile_status_counts"]["compiled"], 15)
         self.assertTrue(report["stage_summary"]["review_required_for_official_eval"])
         self.assertGreater(report["stage_summary"]["evaluation_status"]["not_evaluable"], 0)
         self.assertGreater(len(report["stage_summary"]["top_blockers"]), 0)

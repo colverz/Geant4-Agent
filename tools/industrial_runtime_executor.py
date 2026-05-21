@@ -65,10 +65,27 @@ def _runtime_fingerprint(runtime_payload: dict[str, Any], run_payload: dict[str,
     }
 
 
+def _derived_metric_value(metric: str, inputs: list[str], values: dict[str, float | int]) -> float | None:
+    if len(inputs) < 2:
+        return None
+    if metric in {"transmission_factor", "transmission_ratio", "acceptance_fraction"}:
+        numerator = _numeric(values.get(inputs[1]))
+        denominator = _numeric(values.get(inputs[0]))
+    else:
+        numerator = _numeric(values.get(inputs[0]))
+        denominator = _numeric(values.get(inputs[1]))
+    if numerator is None or denominator is None or float(denominator) == 0.0:
+        return None
+    if metric in {"relative_transmission_change", "transmission_ratio_delta"}:
+        return (float(numerator) - float(denominator)) / float(denominator)
+    return float(numerator) / float(denominator)
+
+
 def extract_industrial_metrics(result_summary: dict[str, Any], metric_plan: dict[str, Any]) -> dict[str, Any]:
     supported = metric_plan.get("supported") if isinstance(metric_plan.get("supported"), dict) else {}
     actual: dict[str, Any] = {}
     missing: list[str] = []
+    deferred: list[tuple[str, dict[str, Any]]] = []
     for metric, spec in supported.items():
         if not isinstance(spec, dict):
             missing.append(str(metric))
@@ -76,31 +93,48 @@ def extract_industrial_metrics(result_summary: dict[str, Any], metric_plan: dict
         kind = spec.get("kind")
         if kind == "direct":
             value = _numeric(_get_path({"result_summary": result_summary}, str(spec.get("path") or "")))
+            if value is None:
+                missing.append(str(metric))
+            else:
+                actual[str(metric)] = value
         elif kind == "derived":
-            inputs = spec.get("inputs") if isinstance(spec.get("inputs"), list) else []
-            input_values: dict[str, float | int] = {}
-            for name in inputs:
-                if name == "events_completed":
-                    raw = _get_path({"result_summary": result_summary}, "result_summary.run.events_completed")
-                elif name == "detector_crossing_count":
-                    raw = _get_path(
-                        {"result_summary": result_summary},
-                        "result_summary.scoring.detector_crossing.detector_crossing_count",
-                    )
-                else:
-                    raw = None
-                numeric = _numeric(raw)
-                if numeric is not None:
-                    input_values[str(name)] = numeric
-            denominator = float(input_values.get("events_completed", 0) or 0)
-            numerator = float(input_values.get("detector_crossing_count", 0) or 0)
-            value = numerator / denominator if denominator > 0 else None
+            deferred.append((str(metric), spec))
         else:
-            value = None
-        if value is None:
             missing.append(str(metric))
+    for metric, spec in deferred:
+        inputs = [str(item) for item in spec.get("inputs") or [] if str(item)]
+        input_values: dict[str, float | int] = {}
+        for name in inputs:
+            if name in actual:
+                input_values[name] = actual[name]
+                continue
+            if name == "events_completed":
+                raw = _get_path({"result_summary": result_summary}, "result_summary.run.events_completed")
+            elif name == "detector_crossing_count":
+                raw = _get_path(
+                    {"result_summary": result_summary},
+                    "result_summary.scoring.detector_crossing.detector_crossing_count",
+                )
+            elif name == "region_a_count":
+                raw = _get_path(
+                    {"result_summary": result_summary},
+                    "result_summary.scoring.roles.region_a.crossing_count",
+                )
+            elif name == "region_b_count":
+                raw = _get_path(
+                    {"result_summary": result_summary},
+                    "result_summary.scoring.roles.region_b.crossing_count",
+                )
+            else:
+                raw = None
+            numeric = _numeric(raw)
+            if numeric is not None:
+                input_values[name] = numeric
+        value = _derived_metric_value(metric, inputs, input_values)
+        if value is None:
+            missing.append(metric)
         else:
-            actual[str(metric)] = value
+            actual[metric] = value
     return {"actual_metrics": actual, "missing_metrics": missing}
 
 
@@ -190,32 +224,16 @@ def execute_industrial_case(
         }
 
     server = Geant4McpServer(adapter=runtime_adapter)
-    config = compile_result["config"]
     events = int((runtime_defaults or {}).get("events", 10000) or 10000)
 
-    apply_obs = server.call_tool(ToolCallRequest(tool_name="apply_config_patch", arguments={"patch": config}))
-    if apply_obs.status != RuntimeActionStatus.COMPLETED:
-        return _runtime_failed(case, compile_result, "apply_config_patch_failed", apply_obs)
+    if compile_result.get("run_mode") == "paired_run":
+        return _execute_paired_industrial_case(case, compile_result, server, events)
 
-    init_obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
-    if init_obs.status != RuntimeActionStatus.COMPLETED:
-        return _runtime_failed(case, compile_result, "initialize_run_failed", init_obs)
-
-    run_obs = server.call_tool(ToolCallRequest(tool_name="run_beam", arguments={"events": events}))
-    if run_obs.status != RuntimeActionStatus.COMPLETED:
-        return _runtime_failed(case, compile_result, "run_beam_failed", run_obs)
-
-    result_summary = run_obs.payload.get("result_summary")
-    if not isinstance(result_summary, dict):
-        return {
-            "schema_version": INDUSTRIAL_RUNTIME_EXECUTION_SCHEMA_VERSION,
-            "case_id": case.get("id"),
-            "status": "failed",
-            "failure_category": "missing_metric",
-            "errors": ["missing_result_summary"],
-            "compile_result": compile_result,
-            "run_payload": run_obs.payload,
-        }
+    config = compile_result["config"]
+    run_result = _run_industrial_config(server, config, events)
+    if run_result.get("status") != "completed":
+        return _runtime_failed(case, compile_result, str(run_result.get("reason") or "run_beam_failed"), run_result.get("observation"))
+    result_summary = run_result["result_summary"]
 
     metrics = extract_industrial_metrics(result_summary, metric_plan)
     if metrics["missing_metrics"]:
@@ -226,7 +244,7 @@ def execute_industrial_case(
             "failure_category": "missing_metric",
             "errors": [f"missing_metric:{metric}" for metric in metrics["missing_metrics"]],
             "compile_result": compile_result,
-            "run_payload": run_obs.payload,
+            "run_payload": run_result["run_payload"],
             **metrics,
         }
 
@@ -236,10 +254,111 @@ def execute_industrial_case(
         "status": "completed",
         "failure_category": None,
         "compile_result": compile_result,
-        "runtime_fingerprint": _runtime_fingerprint(compile_result["runtime_payload"], run_obs.payload),
-        "run_payload": run_obs.payload,
+        "runtime_fingerprint": _runtime_fingerprint(compile_result["runtime_payload"], run_result["run_payload"]),
+        "run_payload": run_result["run_payload"],
         "result_summary": result_summary,
         **metrics,
+    }
+
+
+def _run_industrial_config(server: Geant4McpServer, config: dict[str, Any], events: int) -> dict[str, Any]:
+    apply_obs = server.call_tool(ToolCallRequest(tool_name="apply_config_patch", arguments={"patch": config}))
+    if apply_obs.status != RuntimeActionStatus.COMPLETED:
+        return {"status": "failed", "reason": "apply_config_patch_failed", "observation": apply_obs}
+
+    init_obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
+    if init_obs.status != RuntimeActionStatus.COMPLETED:
+        return {"status": "failed", "reason": "initialize_run_failed", "observation": init_obs}
+
+    run_obs = server.call_tool(ToolCallRequest(tool_name="run_beam", arguments={"events": events}))
+    if run_obs.status != RuntimeActionStatus.COMPLETED:
+        return {"status": "failed", "reason": "run_beam_failed", "observation": run_obs}
+
+    result_summary = run_obs.payload.get("result_summary")
+    if not isinstance(result_summary, dict):
+        return {"status": "failed", "reason": "missing_result_summary", "observation": run_obs, "run_payload": run_obs.payload}
+    return {"status": "completed", "result_summary": result_summary, "run_payload": run_obs.payload}
+
+
+def _execute_paired_industrial_case(
+    case: dict[str, Any],
+    compile_result: dict[str, Any],
+    server: Geant4McpServer,
+    events: int,
+) -> dict[str, Any]:
+    paired_configs = compile_result.get("paired_configs") if isinstance(compile_result.get("paired_configs"), dict) else {}
+    if not paired_configs:
+        return {
+            "schema_version": INDUSTRIAL_RUNTIME_EXECUTION_SCHEMA_VERSION,
+            "case_id": case.get("id"),
+            "status": "not_evaluable",
+            "failure_category": "spec_compile_error",
+            "errors": ["missing_paired_configs"],
+            "compile_result": compile_result,
+        }
+    paired_runs: dict[str, Any] = {}
+    run_payloads: dict[str, Any] = {}
+    for label, config in paired_configs.items():
+        result = _run_industrial_config(server, config, events)
+        if result.get("status") != "completed":
+            return _runtime_failed(
+                case,
+                compile_result,
+                f"paired_{label}_{result.get('reason') or 'run_failed'}",
+                result.get("observation"),
+            )
+        paired_runs[str(label)] = result["result_summary"]
+        run_payloads[str(label)] = result["run_payload"]
+    result_summary = _paired_result_summary(case, paired_runs, events)
+    metric_plan = compile_result.get("metric_plan") if isinstance(compile_result.get("metric_plan"), dict) else {}
+    metrics = extract_industrial_metrics(result_summary, metric_plan)
+    if metrics["missing_metrics"]:
+        return {
+            "schema_version": INDUSTRIAL_RUNTIME_EXECUTION_SCHEMA_VERSION,
+            "case_id": case.get("id"),
+            "status": "failed",
+            "failure_category": "missing_metric",
+            "errors": [f"missing_metric:{metric}" for metric in metrics["missing_metrics"]],
+            "compile_result": compile_result,
+            "run_payload": {"paired_run_payloads": run_payloads, "result_summary": result_summary},
+            **metrics,
+        }
+
+    return {
+        "schema_version": INDUSTRIAL_RUNTIME_EXECUTION_SCHEMA_VERSION,
+        "case_id": case.get("id"),
+        "status": "completed",
+        "failure_category": None,
+        "compile_result": compile_result,
+        "runtime_fingerprint": _runtime_fingerprint(compile_result.get("runtime_payloads") or {}, {"result_summary": result_summary}),
+        "run_payload": {"paired_run_payloads": run_payloads, "result_summary": result_summary},
+        "result_summary": result_summary,
+        **metrics,
+    }
+
+
+def _paired_result_summary(case: dict[str, Any], paired_runs: dict[str, dict[str, Any]], events: int) -> dict[str, Any]:
+    completed = min(
+        int((summary.get("run") or {}).get("events_completed", events) or events)
+        for summary in paired_runs.values()
+    ) if paired_runs else 0
+    return {
+        "run": {
+            "ok": bool(paired_runs),
+            "mode": "paired_run",
+            "events_requested": int(events),
+            "events_completed": int(completed),
+            "completion_fraction": 1.0 if completed == int(events) and events > 0 else 0.0,
+            "seed": None,
+        },
+        "configuration": {
+            "case_id": case.get("id"),
+            "paired_labels": sorted(paired_runs.keys()),
+        },
+        "paired_runs": paired_runs,
+        "scoring": {
+            "derived_metrics": {},
+        },
     }
 
 

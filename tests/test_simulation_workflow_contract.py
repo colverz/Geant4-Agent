@@ -279,6 +279,27 @@ class SimulationWorkflowContractTest(unittest.TestCase):
             self.assertIn(key, runtime_payload["scoring"])
             self.assertIn(f'"{key}"', main_cc)
 
+        geometry_keys = {
+            "volumes",
+            "name",
+            "shape",
+            "material",
+            "role",
+            "parent",
+            "position_mm",
+            "rotation_deg",
+            "size_mm",
+            "radius_mm",
+            "inner_radius_mm",
+            "half_length_mm",
+            "copy_no",
+        }
+        self.assertIn("volumes", runtime_payload["geometry"])
+        self.assertGreaterEqual(len(runtime_payload["geometry"]["volumes"]), 2)
+        for key in geometry_keys:
+            self.assertIn(f'"{key}"', main_cc)
+        self.assertIn("runtime_dsl.v1", main_cc)
+
 
 if __name__ == "__main__":
     unittest.main()

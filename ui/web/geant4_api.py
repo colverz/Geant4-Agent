@@ -8,14 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from core.agent.idempotency import IdempotencyDecision, IdempotencyReplayPolicy, build_action_id
+from core.agent import build_agent_state, build_critic_report
 from core.runtime.types import ActionSafetyClass, ToolCallRequest
 from core.simulation import build_runtime_smoke_report
 from mcp.geant4.adapter import LocalProcessGeant4Adapter, build_geant4_adapter_from_env
-from mcp.geant4.runtime_payload import build_runtime_payload
+from mcp.geant4.runtime_payload import build_runtime_payload, runtime_capabilities_payload
 from mcp.geant4.server import Geant4McpServer
 from planner.runtime_intent import classify_user_runtime_intent
 from planner.runtime_result import naturalize_runtime_result_message, naturalize_runtime_result_question_answer
-from ui.web.runtime_state import get_latest_recommended_config
+from ui.web.runtime_state import get_candidate_status, get_latest_agent_plan, get_latest_recommended_config, set_latest_agent_state
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -42,6 +43,7 @@ def geant4_state_payload() -> dict[str, Any]:
     payload["status"] = obs.status.value
     payload["message"] = obs.message
     payload["runtime_phase"] = obs.runtime_phase.value
+    payload["runtime_capabilities"] = runtime_capabilities_payload()
     return payload
 
 
@@ -290,6 +292,20 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
             report = build_runtime_smoke_report(events=events, run_payload=obs.payload)
             body["runtime_smoke_report"] = report
             body["runtime_result_explanation"] = _result_explanation(report, payload)
+            agent_plan = get_latest_agent_plan(payload.get("session_id"))
+            critic = build_critic_report(report, agent_plan)
+            body["critic_report"] = critic
+            if agent_plan:
+                set_latest_agent_state(
+                    payload.get("session_id"),
+                    build_agent_state(
+                        plan=agent_plan,
+                        candidate_status=get_candidate_status(payload.get("session_id")),
+                        runtime_ready=True,
+                        result_available=True,
+                        needs_revision=not bool(critic.get("satisfied")),
+                    ),
+                )
         status_code = 200 if obs.status.value in {"completed", "accepted"} else 400
         if action_id and status_code == 200:
             _IDEMPOTENCY_POLICY.record_result("run_beam", action_payload, body, action_id=action_id)
@@ -306,6 +322,9 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
             )
             body["runtime_smoke_report"] = report
             body["runtime_result_explanation"] = _result_explanation(report, payload)
+            agent_plan = get_latest_agent_plan(payload.get("session_id"))
+            if agent_plan:
+                body["critic_report"] = build_critic_report(report, agent_plan)
         return (200 if obs.status.value in {"completed", "accepted"} else 400), body
     elif path == "/api/geant4/log":
         obs = server.call_tool(ToolCallRequest(tool_name="get_last_log", arguments={}))

@@ -114,9 +114,12 @@ def handle_strict_config_summary(session_id: str, *, lang: str = "zh") -> dict:
 
 
 def handle_strict_accept_candidate(payload: dict) -> dict:
+    from core.agent import build_agent_state
     from ui.web.runtime_state import (
+        get_latest_agent_plan,
         get_latest_recommended_config,
         mark_latest_candidate_accepted,
+        set_latest_agent_state,
         set_latest_recommended_config,
     )
 
@@ -162,12 +165,24 @@ def handle_strict_accept_candidate(payload: dict) -> dict:
     if result.get("ok"):
         set_latest_recommended_config(session_id, result.get("config") or config)
         accepted = mark_latest_candidate_accepted(session_id, committed=True) or accepted
+        plan = get_latest_agent_plan(session_id)
+        set_latest_agent_state(
+            session_id,
+            build_agent_state(plan=plan, candidate_status=accepted, runtime_ready=True),
+        )
     result["candidate_status"] = accepted
     return result
 
 
 def handle_strict_simulation_design(payload: dict, progress_cb=None) -> dict:
-    from ui.web.runtime_state import get_candidate_status, get_latest_simulation_design, set_latest_simulation_design
+    from core.agent import build_agent_plan, build_agent_state
+    from ui.web.runtime_state import (
+        get_candidate_status,
+        get_latest_simulation_design,
+        set_latest_agent_plan,
+        set_latest_agent_state,
+        set_latest_simulation_design,
+    )
 
     design_payload = dict(payload)
     session_id = payload.get("session_id")
@@ -194,5 +209,12 @@ def handle_strict_simulation_design(payload: dict, progress_cb=None) -> dict:
         recommended_config=body.get("recommended_config"),
         source=str(body.get("simulation_design_source") or ""),
     )
-    body["candidate_status"] = get_candidate_status(body.get("session_id") or session_id)
+    agent_plan = build_agent_plan(body.get("simulation_design"), recommended_config=body.get("recommended_config"))
+    set_latest_agent_plan(body.get("session_id") or session_id, agent_plan)
+    candidate_status = get_candidate_status(body.get("session_id") or session_id)
+    agent_state = build_agent_state(plan=agent_plan, candidate_status=candidate_status)
+    set_latest_agent_state(body.get("session_id") or session_id, agent_state)
+    body["agent_plan"] = agent_plan
+    body["agent_state"] = agent_state
+    body["candidate_status"] = candidate_status
     return body

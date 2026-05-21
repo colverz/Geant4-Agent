@@ -20,6 +20,8 @@ _RECOMMENDED_CONFIG_LOCK = threading.RLock()
 _RECOMMENDED_CONFIG_BY_SESSION: dict[str, dict[str, Any]] = {}
 _SIMULATION_DESIGN_BY_SESSION: dict[str, dict[str, Any]] = {}
 _CANDIDATE_STATUS_BY_SESSION: dict[str, dict[str, Any]] = {}
+_AGENT_PLAN_BY_SESSION: dict[str, dict[str, Any]] = {}
+_AGENT_STATE_BY_SESSION: dict[str, dict[str, Any]] = {}
 
 
 def get_ollama_config_path() -> str:
@@ -91,6 +93,38 @@ def get_candidate_status(session_id: str | None) -> dict[str, Any]:
         return record
 
 
+def set_latest_agent_plan(session_id: str | None, plan: dict[str, Any] | None) -> None:
+    key = str(session_id or "").strip()
+    if not key or not isinstance(plan, dict) or not plan:
+        return
+    with _RECOMMENDED_CONFIG_LOCK:
+        _AGENT_PLAN_BY_SESSION[key] = deepcopy(plan)
+
+
+def get_latest_agent_plan(session_id: str | None) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        return deepcopy(_AGENT_PLAN_BY_SESSION.get(key) or {})
+
+
+def set_latest_agent_state(session_id: str | None, state: dict[str, Any] | None) -> None:
+    key = str(session_id or "").strip()
+    if not key or not isinstance(state, dict) or not state:
+        return
+    with _RECOMMENDED_CONFIG_LOCK:
+        _AGENT_STATE_BY_SESSION[key] = deepcopy(state)
+
+
+def get_latest_agent_state(session_id: str | None) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        return deepcopy(_AGENT_STATE_BY_SESSION.get(key) or {})
+
+
 def mark_latest_candidate_accepted(session_id: str | None, *, committed: bool = False) -> dict[str, Any]:
     key = str(session_id or "").strip()
     if not key:
@@ -120,6 +154,8 @@ def clear_latest_recommended_config(session_id: str | None) -> None:
         _RECOMMENDED_CONFIG_BY_SESSION.pop(key, None)
         _SIMULATION_DESIGN_BY_SESSION.pop(key, None)
         _CANDIDATE_STATUS_BY_SESSION.pop(key, None)
+        _AGENT_PLAN_BY_SESSION.pop(key, None)
+        _AGENT_STATE_BY_SESSION.pop(key, None)
 
 
 def set_ollama_config_path(path: str) -> tuple[bool, str]:

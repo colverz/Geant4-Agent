@@ -17,7 +17,16 @@ KnowledgeSourceType = Literal[
 ]
 
 
-SUPPORTED_GEOMETRY = ["single_box", "single_tubs", "single_sphere", "water_phantom"]
+SUPPORTED_GEOMETRY = [
+    "single_box",
+    "single_tubs",
+    "multi_layer_stack",
+    "step_wedge",
+    "embedded_void",
+    "embedded_inclusion",
+    "slab_pair",
+    "water_phantom",
+]
 UNSUPPORTED_GEOMETRY = [
     "arbitrary_cad_import",
     "ct_scanner_from_free_text",
@@ -25,8 +34,15 @@ UNSUPPORTED_GEOMETRY = [
     "free_form_boolean_solids",
 ]
 SUPPORTED_PARTICLES = ["gamma", "electron", "proton", "neutron"]
-SUPPORTED_SOURCE_TYPES = ["point", "beam", "plane", "isotropic"]
-SUPPORTED_SCORING = ["target_edep", "detector_crossings", "plane_crossings"]
+SUPPORTED_SOURCE_TYPES = ["point", "beam", "isotropic"]
+SUPPORTED_SCORING = [
+    "target_edep",
+    "detector_crossings",
+    "plane_crossings",
+    "region_contrast",
+    "depth_bins",
+    "transmission_factor",
+]
 SUPPORTED_RUNTIME_ACTIONS = ["validate_config", "apply_config_patch", "initialize_run", "run_beam", "summarize_last_result"]
 ALLOWED_CONFIG_PATH_PREFIXES = [
     "geometry.",

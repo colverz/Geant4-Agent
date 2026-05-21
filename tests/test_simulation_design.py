@@ -32,10 +32,11 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
             with self.subTest(material=material):
                 self.assertTrue(annotations["materials"][material]["tags"])
         self.assertIn("beam_for_transmission", annotations["sources"]["beam"]["tags"])
-        self.assertIn("unsupported_isotropic_runtime", annotations["sources"]["isotropic"]["tags"])
+        self.assertIn("isotropic_sampling_supported", annotations["sources"]["isotropic"]["tags"])
         self.assertIn("target_edep_supported", annotations["scoring"]["target_edep"]["tags"])
-        self.assertIn("depth_bins_unsupported", annotations["scoring"]["depth_bins"]["tags"])
+        self.assertIn("depth_bins_supported", annotations["scoring"]["depth_bins"]["tags"])
         self.assertIn("single_box_supported", annotations["geometry"]["single_box"]["tags"])
+        self.assertIn("step_wedge_supported", annotations["geometry"]["step_wedge"]["tags"])
         self.assertIn("slab_approximation_requires_user_approval", annotations["geometry"]["pipe"]["tags"])
 
     def test_reference_pack_selects_relevant_capabilities(self) -> None:
@@ -74,14 +75,15 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertTrue(candidate["user_decisions_required"])
         self.assertEqual(candidate["capability_check"]["requires_user_approval"], True)
 
-    def test_water_phantom_depth_dose_is_marked_unsupported(self) -> None:
+    def test_water_phantom_depth_dose_can_build_supported_depth_bins_candidate(self) -> None:
         candidate = build_simulation_design_candidate(
             "Send a proton beam into a water phantom and score depth-binned dose."
         ).to_dict()
 
-        self.assertEqual(candidate["next_action"], "unsupported_capability")
-        self.assertIn("depth_binned_scoring", candidate["unsupported_capabilities"])
-        self.assertFalse(candidate["capability_check"]["supported"])
+        self.assertEqual(candidate["next_action"], "build_candidate_config")
+        self.assertIn("depth_bins", candidate["observables"])
+        self.assertEqual(candidate["unsupported_capabilities"], [])
+        self.assertTrue(candidate["capability_check"]["supported"])
 
     def test_detector_response_prefers_detector_observables_not_region_contrast(self) -> None:
         candidate = build_simulation_design_candidate(
@@ -93,7 +95,7 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertIn("detector_edep", candidate["observables"])
         self.assertNotIn("region_contrast", candidate["observables"])
 
-    def test_chinese_void_contrast_selects_void_references_and_unsupported(self) -> None:
+    def test_chinese_void_contrast_selects_void_references_and_supported_region_scoring(self) -> None:
         pack = build_simulation_design_reference_pack("铝块内部空洞缺陷的区域 contrast 模拟")
         candidate = build_simulation_design_candidate("铝块内部空洞缺陷的区域 contrast 模拟").to_dict()
 
@@ -103,11 +105,11 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         self.assertIn("G4_Al", material_ids)
         self.assertIn("void", geometry_ids)
         self.assertIn("region_contrast", scoring_ids)
-        self.assertEqual(candidate["next_action"], "unsupported_capability")
-        self.assertIn("embedded_void_geometry", candidate["unsupported_capabilities"])
-        self.assertIn("region_contrast_scoring", candidate["unsupported_capabilities"])
+        self.assertEqual(candidate["next_action"], "build_candidate_config")
+        self.assertEqual(candidate["unsupported_capabilities"], [])
+        self.assertTrue(candidate["capability_check"]["supported"])
 
-    def test_capability_checker_rejects_unsupported_observable(self) -> None:
+    def test_capability_checker_accepts_region_contrast_observable(self) -> None:
         report = check_simulation_design_capability(
             {
                 "recommended_setup": {"geometry": "single_box", "source": "beam"},
@@ -117,8 +119,8 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
             }
         )
 
-        self.assertFalse(report["supported"])
-        self.assertIn("region_contrast", report["unsupported_capabilities"])
+        self.assertTrue(report["supported"])
+        self.assertEqual(report["unsupported_capabilities"], [])
 
 
 class SimulationDesignWorkflowTest(unittest.TestCase):

@@ -4,6 +4,7 @@ from typing import Any, Callable
 
 from ui.web.geant4_api import handle_geant4_post
 from ui.web.runtime_state import runtime_config_payload, set_ollama_config_path
+from ui.web.runtime_state import get_candidate_status, get_latest_agent_plan, get_latest_agent_state
 from ui.web.strict_api import (
     handle_strict_audit,
     handle_strict_accept_candidate,
@@ -25,6 +26,7 @@ POST_PATHS = {
     "/api/config/summary",
     "/api/simulation/design",
     "/api/simulation/accept",
+    "/api/agent/state",
     "/api/geant4/apply",
     "/api/geant4/validate",
     "/api/geant4/initialize",
@@ -77,6 +79,17 @@ def handle_post_request(
     if path == "/api/simulation/accept":
         body = handle_strict_accept_candidate(payload)
         return (200 if body.get("ok") else 400), body
+
+    if path == "/api/agent/state":
+        session_id = str(payload.get("session_id", "")).strip()
+        return 200, {
+            "ok": True,
+            "session_id": session_id,
+            "agent_state": get_latest_agent_state(session_id),
+            "agent_plan": get_latest_agent_plan(session_id),
+            "candidate_status": get_candidate_status(session_id),
+            "action_safety_class": "read_only",
+        }
 
     if path == "/api/runtime":
         cfg_path = str(payload.get("ollama_config_path", "")).strip()

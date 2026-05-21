@@ -7,7 +7,12 @@ import tempfile
 import unittest
 
 from core.runtime.types import Geant4RuntimePhase, RuntimeActionStatus, ToolCallRequest
-from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter, build_geant4_adapter_from_env
+from mcp.geant4.adapter import (
+    InMemoryGeant4Adapter,
+    LocalProcessGeant4Adapter,
+    _load_run_summary_payload,
+    build_geant4_adapter_from_env,
+)
 from mcp.geant4.server import Geant4McpServer
 
 
@@ -311,6 +316,56 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(summary_obs.status, RuntimeActionStatus.COMPLETED)
         self.assertEqual(summary_obs.payload["result_summary"]["scoring"]["roles"]["detector"]["track_entries"], 1)
         self.assertEqual(summary_obs.payload["run_summary_path"], str(summary_path))
+
+    def test_load_run_summary_derives_depth_bin_metrics_from_runtime_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            artifact_dir = Path(tmpdir) / "artifacts"
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            summary_path = artifact_dir / "run_summary.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "run_ok": True,
+                        "events_requested": 2,
+                        "events_completed": 2,
+                        "geometry_structure": "single_box",
+                        "material": "G4_WATER",
+                        "particle": "proton",
+                        "source_type": "beam",
+                        "physics_list": "FTFP_BERT",
+                        "events": 2,
+                        "mode": "batch",
+                        "scoring": {
+                            "target_edep_enabled": True,
+                            "target_edep_total_mev": 4.0,
+                            "volume_stats": {
+                                "WaterPhantom": {"edep_total_mev": 4.0},
+                                "DepthBin00": {"edep_total_mev": 0.5},
+                                "DepthBin01": {"edep_total_mev": 1.5},
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runtime_payload = {
+                "geometry": {
+                    "volumes": [
+                        {"name": "DepthBin00", "position_mm": [0.0, 0.0, -12.5], "size_mm": [10.0, 10.0, 25.0]},
+                        {"name": "DepthBin01", "position_mm": [0.0, 0.0, 12.5], "size_mm": [10.0, 10.0, 25.0]},
+                    ]
+                },
+                "scoring": {"volume_roles": {"target": ["WaterPhantom"], "depth_bin": ["DepthBin00", "DepthBin01"]}},
+            }
+            payload = _load_run_summary_payload([f"artifact_dir={artifact_dir}"], [], runtime_payload)
+
+        self.assertIsNotNone(payload)
+        depth_bins = payload["result_summary"]["scoring"]["depth_bins"]
+        self.assertEqual(depth_bins["count"], 2)
+        self.assertEqual(depth_bins["peak_bin"], 1)
+        self.assertAlmostEqual(depth_bins["peak_depth_mm"], 12.5)
+        self.assertIsInstance(depth_bins["edep_crc32"], int)
+        self.assertEqual(payload["result_summary"]["scoring"]["derived_metrics"]["peak_depth_mm"], 12.5)
 
 
 if __name__ == "__main__":

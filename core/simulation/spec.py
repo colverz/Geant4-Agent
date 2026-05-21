@@ -4,6 +4,22 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class RuntimeVolumeSpec:
+    name: str
+    shape: str = "box"
+    material: str = "G4_AIR"
+    role: str = ""
+    parent: str = "World"
+    position_mm: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    rotation_deg: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    size_mm: tuple[float, float, float] | None = None
+    radius_mm: float | None = None
+    inner_radius_mm: float = 0.0
+    half_length_mm: float | None = None
+    copy_no: int = 0
+
+
+@dataclass(frozen=True)
 class GeometryRuntimeSpec:
     structure: str
     material: str
@@ -13,6 +29,8 @@ class GeometryRuntimeSpec:
     size_z_mm: float | None = None
     radius_mm: float | None = None
     half_length_mm: float | None = None
+    volumes: tuple[RuntimeVolumeSpec, ...] = field(default_factory=tuple)
+    roles: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -105,6 +123,9 @@ class ScoringSpec:
     scoring_plane: ScoringPlaneSpec | None = None
     volume_names: tuple[str, ...] = field(default_factory=lambda: ("Target",))
     volume_roles: dict[str, tuple[str, ...]] = field(default_factory=lambda: {"target": ("Target",)})
+    requests: tuple[dict[str, object], ...] = field(default_factory=tuple)
+    depth_bins: dict[str, object] | None = None
+    derived_metrics: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)

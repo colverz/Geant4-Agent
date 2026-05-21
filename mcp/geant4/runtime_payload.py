@@ -6,10 +6,45 @@ from typing import Any
 from core.simulation import SimulationSpec, build_simulation_spec
 
 
+RUNTIME_DSL_SCHEMA_VERSION = "runtime_dsl.v1"
+
+
+def runtime_capabilities_payload() -> dict[str, Any]:
+    return {
+        "schema_version": RUNTIME_DSL_SCHEMA_VERSION,
+        "geometry_primitives": [
+            "box",
+            "tubs",
+            "cylinder",
+            "multi_layer_stack",
+            "step_wedge",
+            "embedded_void",
+            "embedded_inclusion",
+            "slab_pair",
+        ],
+        "source_types": ["beam", "point", "isotropic"],
+        "source_features": ["gaussian_spot", "uniform_disk_spot", "gaussian_divergence", "uniform_cone_divergence"],
+        "scoring_types": [
+            "volume_edep",
+            "detector_crossing",
+            "plane_crossing",
+            "role_contrast",
+            "depth_bins",
+            "paired_run_metric",
+        ],
+        "run_modes": ["single_run", "paired_run"],
+        "paired_run_support": True,
+        "depth_bin_support": True,
+        "region_scoring_support": True,
+    }
+
+
 def _build_run_manifest(spec: SimulationSpec) -> dict[str, Any]:
     return {
         "bridge": "simulation_bridge",
+        "runtime_dsl_schema_version": RUNTIME_DSL_SCHEMA_VERSION,
         "geometry_root_volume": spec.geometry.root_volume_name,
+        "geometry_volume_names": [volume.name for volume in spec.geometry.volumes],
         "detector_enabled": spec.detector is not None,
         "detector_volume_name": spec.detector.volume_name if spec.detector is not None else None,
         "scoring_plane_name": spec.scoring.scoring_plane.name if spec.scoring.scoring_plane is not None else None,
@@ -71,6 +106,34 @@ def _physics_list_name(config: dict[str, Any]) -> str:
     return "FTFP_BERT"
 
 
+def _volume_payload(volume) -> dict[str, Any]:
+    shape = "tubs" if volume.shape == "cylinder" else volume.shape
+    return {
+        "name": volume.name,
+        "shape": shape,
+        "material": volume.material,
+        "role": volume.role,
+        "parent": volume.parent,
+        "position_mm": list(volume.position_mm),
+        "rotation_deg": list(volume.rotation_deg),
+        "size_mm": list(volume.size_mm) if volume.size_mm is not None else None,
+        "radius_mm": volume.radius_mm,
+        "inner_radius_mm": volume.inner_radius_mm,
+        "half_length_mm": volume.half_length_mm,
+        "copy_no": volume.copy_no,
+    }
+
+
+def _placement_payload(volume) -> dict[str, Any]:
+    return {
+        "volume": volume.name,
+        "parent": volume.parent,
+        "position_mm": list(volume.position_mm),
+        "rotation_deg": list(volume.rotation_deg),
+        "copy_no": volume.copy_no,
+    }
+
+
 def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, Any]:
     if isinstance(config, SimulationSpec):
         spec = config
@@ -80,6 +143,8 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
         spec = build_simulation_spec(raw_config)
 
     payload = {
+        "schema_version": RUNTIME_DSL_SCHEMA_VERSION,
+        "runtime_capabilities": runtime_capabilities_payload(),
         "geometry": {
             "structure": spec.geometry.structure,
             "material": spec.geometry.material,
@@ -89,6 +154,9 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
             "size_z_mm": spec.geometry.size_z_mm,
             "radius_mm": spec.geometry.radius_mm,
             "half_length_mm": spec.geometry.half_length_mm,
+            "volumes": [_volume_payload(volume) for volume in spec.geometry.volumes],
+            "placements": [_placement_payload(volume) for volume in spec.geometry.volumes],
+            "roles": {role: list(names) for role, names in spec.geometry.roles.items()},
         },
         "detector": (
             {
@@ -139,6 +207,9 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
             ),
             "volume_names": list(spec.scoring.volume_names),
             "volume_roles": {role: list(names) for role, names in spec.scoring.volume_roles.items()},
+            "requests": [dict(item) for item in spec.scoring.requests],
+            "depth_bins": dict(spec.scoring.depth_bins) if isinstance(spec.scoring.depth_bins, dict) else None,
+            "derived_metrics": list(spec.scoring.derived_metrics),
         },
         # Legacy flat fields kept for compatibility with current wrappers and tests.
         "structure": spec.geometry.structure,

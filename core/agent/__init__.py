@@ -29,6 +29,15 @@ from .simulation_design import (
     build_simulation_design_reference_pack,
     check_simulation_design_capability,
 )
+from .agent_plan import (
+    AGENT_PLAN_SCHEMA_VERSION,
+    AGENT_STATE_SCHEMA_VERSION,
+    AgentPlan,
+    AgentState,
+    build_agent_plan,
+    build_agent_state,
+)
+from .result_critic import CRITIC_REPORT_SCHEMA_VERSION, CriticReport, build_critic_report
 from .idempotency import (
     IdempotencyActionClass,
     IdempotencyDecision,
@@ -70,8 +79,14 @@ __all__ = [
     "LLM_CANDIDATE_ROLE",
     "LlmCandidateContract",
     "ALLOWED_NEXT_ACTIONS",
+    "AGENT_PLAN_SCHEMA_VERSION",
+    "AGENT_STATE_SCHEMA_VERSION",
+    "CRITIC_REPORT_SCHEMA_VERSION",
+    "AgentPlan",
+    "AgentState",
     "SIMULATION_DESIGN_SCHEMA_VERSION",
     "SimulationDesignCandidate",
+    "CriticReport",
     "KnowledgeSnippet",
     "NluTurnTrace",
     "PatchEvidence",
@@ -86,6 +101,9 @@ __all__ = [
     "build_llm_candidate_contract",
     "build_workflow_llm_candidate_report",
     "build_simulation_design_candidate",
+    "build_agent_plan",
+    "build_agent_state",
+    "build_critic_report",
     "build_simulation_design_reference_pack",
     "build_llm_simulation_design_candidate",
     "build_action_id",

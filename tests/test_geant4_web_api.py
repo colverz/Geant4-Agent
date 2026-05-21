@@ -64,6 +64,9 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertIsInstance(adapter, InMemoryGeant4Adapter)
         self.assertIn("metadata", state)
         self.assertEqual(state["metadata"]["adapter"], "in_memory")
+        self.assertIn("runtime_capabilities", state)
+        self.assertIn("step_wedge", state["runtime_capabilities"]["geometry_primitives"])
+        self.assertTrue(state["runtime_capabilities"]["region_scoring_support"])
 
     def test_web_server_uses_local_process_when_runtime_env_is_configured(self) -> None:
         with mock.patch.dict(
@@ -250,13 +253,15 @@ class Geant4WebApiTest(unittest.TestCase):
             init_status, _ = handle_post_request("/api/geant4/initialize", {}, **common)
             run_status, run_body = handle_post_request(
                 "/api/geant4/run",
-                {"events": 1, "action_id": "design-runtime-chain-run"},
+                {"session_id": session_id, "events": 1, "action_id": "design-runtime-chain-run"},
                 **common,
             )
             summary_status, summary_body = handle_post_request("/api/geant4/summary", {"lang": "en"}, **common)
 
             self.assertEqual(design_status, 200)
             self.assertTrue(config)
+            self.assertIn("agent_plan", design_body)
+            self.assertEqual(design_body["agent_state"]["plan_proposed"], True)
             self.assertEqual(validate_status, 200)
             self.assertTrue(validate_body["payload"]["ok"])
             self.assertEqual(validate_body["payload"]["missing_paths"], [])
@@ -264,8 +269,13 @@ class Geant4WebApiTest(unittest.TestCase):
             self.assertEqual(init_status, 200)
             self.assertEqual(run_status, 200)
             self.assertEqual(run_body["runtime_smoke_report"]["events_completed"], 1)
+            self.assertIn("critic_report", run_body)
             self.assertEqual(summary_status, 200)
             self.assertEqual(summary_body["runtime_smoke_report"]["events_completed"], 1)
+            state_status, state_body = handle_post_request("/api/agent/state", {"session_id": session_id}, **common)
+            self.assertEqual(state_status, 200)
+            self.assertTrue(state_body["agent_state"]["result_available"])
+            self.assertEqual(state_body["agent_plan"]["selected_candidate_id"], "candidate_1")
         finally:
             reset_session(session_id)
 

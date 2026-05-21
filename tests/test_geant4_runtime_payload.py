@@ -116,6 +116,71 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         self.assertEqual(payload["source"]["spot_profile"], "uniform_disk")
         self.assertEqual(payload["source"]["divergence_profile"], "uniform_cone")
 
+    def test_runtime_dsl_payload_preserves_multi_volume_geometry(self) -> None:
+        payload = build_runtime_payload(
+            {
+                "geometry": {
+                    "structure": "multi_layer_stack",
+                    "root_name": "ShieldStack",
+                    "size_triplet_mm": [120.0, 120.0, 0.0],
+                    "layers": [
+                        {"name": "LeadLayer", "material": "G4_Pb", "thickness_mm": 10.0, "role": "shield"},
+                        {"name": "PolyLayer", "material": "G4_POLYETHYLENE", "thickness_mm": 30.0, "role": "shield"},
+                    ],
+                },
+                "source": {
+                    "type": "beam",
+                    "particle": "gamma",
+                    "energy": 1.25,
+                    "position": [0.0, 0.0, -100.0],
+                    "direction": [0.0, 0.0, 1.0],
+                },
+                "physics": {"physics_list": "FTFP_BERT"},
+                "scoring": {
+                    "volume_roles": {"region_a": ["LeadLayer"], "region_b": ["PolyLayer"]},
+                    "derived_metrics": ["region_contrast"],
+                },
+            }
+        )
+
+        self.assertEqual(payload["schema_version"], "runtime_dsl.v1")
+        self.assertEqual(payload["geometry"]["structure"], "multi_layer_stack")
+        self.assertEqual([v["name"] for v in payload["geometry"]["volumes"]], ["LeadLayer", "PolyLayer"])
+        self.assertEqual(payload["geometry"]["volumes"][0]["size_mm"], [120.0, 120.0, 10.0])
+        self.assertEqual(payload["geometry"]["volumes"][1]["position_mm"][2], 5.0)
+        self.assertEqual(payload["geometry"]["roles"]["shield"], ["LeadLayer", "PolyLayer"])
+        self.assertEqual(payload["scoring"]["volume_roles"]["region_a"], ["LeadLayer"])
+        self.assertEqual(payload["scoring"]["volume_roles"]["region_b"], ["PolyLayer"])
+        self.assertIn("LeadLayer", payload["scoring"]["volume_names"])
+        self.assertIn("PolyLayer", payload["run_manifest"]["geometry_volume_names"])
+        self.assertEqual(payload["runtime_capabilities"]["paired_run_support"], True)
+        self.assertIn("depth_bins", payload["runtime_capabilities"]["scoring_types"])
+
+    def test_step_wedge_generates_scoring_regions_without_flat_payload_regression(self) -> None:
+        payload = build_runtime_payload(
+            {
+                "geometry": {
+                    "structure": "step_wedge",
+                    "root_name": "SteelWedge",
+                    "params": {"module_y": 80.0},
+                    "steps": [
+                        {"name": "ThinStep", "width_mm": 20.0, "thickness_mm": 5.0, "material": "G4_Fe"},
+                        {"name": "ThickStep", "width_mm": 20.0, "thickness_mm": 20.0, "material": "G4_Fe"},
+                    ],
+                },
+                "source": {"type": "isotropic", "particle": "gamma", "energy": 1.0},
+                "physics_list": {"name": "FTFP_BERT"},
+            }
+        )
+
+        self.assertEqual(payload["source_type"], "isotropic")
+        self.assertEqual(payload["structure"], "step_wedge")
+        self.assertEqual([v["shape"] for v in payload["geometry"]["volumes"]], ["box", "box"])
+        self.assertEqual(payload["geometry"]["volumes"][0]["role"], "region_a")
+        self.assertEqual(payload["geometry"]["volumes"][1]["role"], "region_b")
+        self.assertEqual(payload["scoring"]["volume_roles"]["target"], ["ThinStep", "ThickStep"])
+        self.assertIn("ThinStep", payload["scoring"]["volume_names"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,7 @@
 #include "G4ParticleTable.hh"
 #include "G4PhysListFactory.hh"
 #include "G4PVPlacement.hh"
+#include "G4RotationMatrix.hh"
 #include "G4RunManagerFactory.hh"
 #include "G4Step.hh"
 #include "G4SystemOfUnits.hh"
@@ -45,6 +46,27 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 constexpr const char* kResultSchemaVersion = "2026-04-14.v7";
+
+struct RuntimeVolumeConfig {
+  std::string name = "Target";
+  std::string shape = "box";
+  std::string material = "G4_Cu";
+  std::string role = "target";
+  std::string parent = "World";
+  double x_mm = 0.0;
+  double y_mm = 0.0;
+  double z_mm = 0.0;
+  double rot_x_deg = 0.0;
+  double rot_y_deg = 0.0;
+  double rot_z_deg = 0.0;
+  double size_x_mm = 50.0;
+  double size_y_mm = 50.0;
+  double size_z_mm = 50.0;
+  double radius_mm = 25.0;
+  double inner_radius_mm = 0.0;
+  double half_length_mm = 50.0;
+  int copy_no = 0;
+};
 
 struct RuntimeConfig {
   std::string geometry_structure = "single_box";
@@ -90,6 +112,7 @@ struct RuntimeConfig {
   std::vector<std::string> scoring_volume_names = {"Target"};
   std::map<std::string, std::vector<std::string>> scoring_volume_roles = {{"target", {"Target"}}};
   std::vector<std::string> detector_scoring_volume_names;
+  std::vector<RuntimeVolumeConfig> runtime_volumes;
   std::string payload_sha256;
   std::string artifact_dir;
   std::string mode = "batch";
@@ -131,6 +154,61 @@ std::vector<std::string> json_string_list(const json& node, const char* key, con
     }
   }
   return values.empty() ? fallback : values;
+}
+
+std::vector<double> json_number_array3(const json& node, const char* key, const std::vector<double>& fallback) {
+  if (!node.is_object() || !node.contains(key) || !node.at(key).is_array() || node.at(key).size() < 3) {
+    return fallback;
+  }
+  try {
+    return {
+        node.at(key).at(0).get<double>(),
+        node.at(key).at(1).get<double>(),
+        node.at(key).at(2).get<double>()};
+  } catch (const json::exception&) {
+    return fallback;
+  }
+}
+
+std::string normalized_shape(std::string value) {
+  for (auto& c : value) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  if (value == "single_tubs" || value == "tube" || value == "cylinder") {
+    return "tubs";
+  }
+  if (value == "single_box" || value == "cube") {
+    return "box";
+  }
+  return value == "tubs" ? "tubs" : "box";
+}
+
+RuntimeVolumeConfig parse_runtime_volume(const json& node, const RuntimeConfig& cfg, int index) {
+  RuntimeVolumeConfig volume;
+  volume.name = json_value<std::string>(node, "name", "Volume" + std::to_string(index + 1));
+  volume.shape = normalized_shape(json_value<std::string>(node, "shape", "box"));
+  volume.material = json_value<std::string>(node, "material", cfg.material);
+  volume.role = json_value<std::string>(node, "role", "");
+  volume.parent = json_value<std::string>(node, "parent", "World");
+  const auto position = json_number_array3(node, "position_mm", {0.0, 0.0, 0.0});
+  const auto rotation = json_number_array3(node, "rotation_deg", {0.0, 0.0, 0.0});
+  volume.x_mm = position[0];
+  volume.y_mm = position[1];
+  volume.z_mm = position[2];
+  volume.rot_x_deg = rotation[0];
+  volume.rot_y_deg = rotation[1];
+  volume.rot_z_deg = rotation[2];
+  if (node.contains("size_mm") && node.at("size_mm").is_array() && node.at("size_mm").size() >= 3) {
+    const auto size = json_number_array3(node, "size_mm", {cfg.size_x_mm, cfg.size_y_mm, cfg.size_z_mm});
+    volume.size_x_mm = size[0];
+    volume.size_y_mm = size[1];
+    volume.size_z_mm = size[2];
+  }
+  volume.radius_mm = json_value<double>(node, "radius_mm", cfg.radius_mm);
+  volume.inner_radius_mm = std::max(0.0, json_value<double>(node, "inner_radius_mm", 0.0));
+  volume.half_length_mm = json_value<double>(node, "half_length_mm", cfg.half_length_mm);
+  volume.copy_no = json_value<int>(node, "copy_no", index);
+  return volume;
 }
 
 struct VolumeScoringMetrics {
@@ -372,6 +450,27 @@ RuntimeConfig load_runtime_config(const fs::path& config_path, int events, const
   cfg.size_z_mm = json_value<double>(payload, "size_z", cfg.size_z_mm);
   cfg.radius_mm = json_value<double>(payload, "radius", cfg.radius_mm);
   cfg.half_length_mm = json_value<double>(payload, "half_length", cfg.half_length_mm);
+  if (payload.contains("geometry") && payload.at("geometry").is_object()) {
+    const auto& geometry = payload.at("geometry");
+    cfg.geometry_structure = json_value<std::string>(geometry, "structure", cfg.geometry_structure);
+    cfg.material = json_value<std::string>(geometry, "material", cfg.material);
+    cfg.root_volume_name = json_value<std::string>(geometry, "root_volume_name", cfg.root_volume_name);
+    cfg.size_x_mm = json_value<double>(geometry, "size_x_mm", cfg.size_x_mm);
+    cfg.size_y_mm = json_value<double>(geometry, "size_y_mm", cfg.size_y_mm);
+    cfg.size_z_mm = json_value<double>(geometry, "size_z_mm", cfg.size_z_mm);
+    cfg.radius_mm = json_value<double>(geometry, "radius_mm", cfg.radius_mm);
+    cfg.half_length_mm = json_value<double>(geometry, "half_length_mm", cfg.half_length_mm);
+    if (geometry.contains("volumes") && geometry.at("volumes").is_array()) {
+      cfg.runtime_volumes.clear();
+      int index = 0;
+      for (const auto& item : geometry.at("volumes")) {
+        if (item.is_object()) {
+          cfg.runtime_volumes.push_back(parse_runtime_volume(item, cfg, index));
+          ++index;
+        }
+      }
+    }
+  }
 
   cfg.detector_enabled = json_value<bool>(payload, "detector_enabled", cfg.detector_enabled);
   cfg.detector_name = json_value<std::string>(payload, "detector_name", cfg.detector_name);
@@ -452,73 +551,100 @@ class RuntimeDetectorConstruction : public G4VUserDetectorConstruction {
   G4VPhysicalVolume* Construct() override {
     auto* nist = G4NistManager::Instance();
     auto* air = nist->FindOrBuildMaterial("G4_AIR");
-    auto* target_material = nist->FindOrBuildMaterial(config_.material, false);
-    if (!target_material) {
-      target_material = air;
-    }
 
     auto* solid_world = new G4Box("World", 200 * mm, 200 * mm, 200 * mm);
     auto* logic_world = new G4LogicalVolume(solid_world, air, "World");
-
-    G4VSolid* solid_target = nullptr;
-    if (config_.geometry_structure == "single_tubs") {
-      solid_target = new G4Tubs(
-          "Target",
-          0.0,
-          config_.radius_mm * mm,
-          config_.half_length_mm * mm,
-          0.0,
-          360.0 * deg);
-    } else {
-      solid_target = new G4Box(
-          "Target",
-          (config_.size_x_mm * 0.5) * mm,
-          (config_.size_y_mm * 0.5) * mm,
-          (config_.size_z_mm * 0.5) * mm);
-    }
-
-    auto* logic_target = new G4LogicalVolume(solid_target, target_material, "Target");
-    auto* vis = new G4VisAttributes(G4Colour(0.86, 0.42, 0.16));
-    vis->SetForceSolid(true);
-    logic_target->SetVisAttributes(vis);
 
     auto* world_vis = new G4VisAttributes(G4Colour(0.92, 0.94, 0.98));
     world_vis->SetVisibility(false);
     logic_world->SetVisAttributes(world_vis);
 
-    new G4PVPlacement(
-        nullptr,
-        G4ThreeVector(),
-        logic_target,
-        config_.root_volume_name,
-        logic_world,
-        false,
-        0,
-        true);
-
-    if (config_.detector_enabled) {
-      auto* detector_material = nist->FindOrBuildMaterial(config_.detector_material, false);
-      if (!detector_material) {
-        detector_material = air;
+    std::vector<RuntimeVolumeConfig> volumes = config_.runtime_volumes;
+    if (volumes.empty()) {
+      RuntimeVolumeConfig target;
+      target.name = config_.root_volume_name;
+      target.shape = config_.geometry_structure == "single_tubs" ? "tubs" : "box";
+      target.material = config_.material;
+      target.role = "target";
+      target.size_x_mm = config_.size_x_mm;
+      target.size_y_mm = config_.size_y_mm;
+      target.size_z_mm = config_.size_z_mm;
+      target.radius_mm = config_.radius_mm;
+      target.half_length_mm = config_.half_length_mm;
+      volumes.push_back(target);
+      if (config_.detector_enabled) {
+        RuntimeVolumeConfig detector;
+        detector.name = config_.detector_name;
+        detector.shape = "box";
+        detector.material = config_.detector_material;
+        detector.role = "detector";
+        detector.x_mm = config_.detector_x_mm;
+        detector.y_mm = config_.detector_y_mm;
+        detector.z_mm = config_.detector_z_mm;
+        detector.size_x_mm = config_.detector_size_x_mm;
+        detector.size_y_mm = config_.detector_size_y_mm;
+        detector.size_z_mm = config_.detector_size_z_mm;
+        volumes.push_back(detector);
       }
-      auto* solid_detector = new G4Box(
-          "Detector",
-          (config_.detector_size_x_mm * 0.5) * mm,
-          (config_.detector_size_y_mm * 0.5) * mm,
-          (config_.detector_size_z_mm * 0.5) * mm);
-      auto* logic_detector = new G4LogicalVolume(solid_detector, detector_material, "Detector");
-      auto* detector_vis = new G4VisAttributes(G4Colour(0.12, 0.65, 0.32));
-      detector_vis->SetForceSolid(true);
-      logic_detector->SetVisAttributes(detector_vis);
+    }
+
+    std::map<std::string, G4LogicalVolume*> logical_by_name;
+    logical_by_name["World"] = logic_world;
+    for (const auto& volume : volumes) {
+      auto* material = nist->FindOrBuildMaterial(volume.material, false);
+      if (!material) {
+        material = air;
+      }
+      const auto solid_name = volume.name + "Solid";
+      G4VSolid* solid = nullptr;
+      if (volume.shape == "tubs") {
+        solid = new G4Tubs(
+            solid_name,
+            std::max(0.0, volume.inner_radius_mm) * mm,
+            std::max(0.001, volume.radius_mm) * mm,
+            std::max(0.001, volume.half_length_mm) * mm,
+            0.0,
+            360.0 * deg);
+      } else {
+        solid = new G4Box(
+            solid_name,
+            std::max(0.001, volume.size_x_mm * 0.5) * mm,
+            std::max(0.001, volume.size_y_mm * 0.5) * mm,
+            std::max(0.001, volume.size_z_mm * 0.5) * mm);
+      }
+      auto* logic = new G4LogicalVolume(solid, material, volume.name);
+      G4Colour colour(0.86, 0.42, 0.16);
+      if (volume.role == "detector") {
+        colour = G4Colour(0.12, 0.65, 0.32);
+      } else if (volume.role == "void") {
+        colour = G4Colour(0.70, 0.82, 0.94);
+      } else if (volume.role == "shield") {
+        colour = G4Colour(0.34, 0.36, 0.38);
+      } else if (volume.role == "region_a" || volume.role == "region_b") {
+        colour = G4Colour(0.93, 0.67, 0.20);
+      }
+      auto* vis = new G4VisAttributes(colour);
+      vis->SetForceSolid(true);
+      logic->SetVisAttributes(vis);
+      auto parent_it = logical_by_name.find(volume.parent.empty() ? "World" : volume.parent);
+      auto* parent_logic = parent_it == logical_by_name.end() ? logic_world : parent_it->second;
+      G4RotationMatrix* rotation = nullptr;
+      if (volume.rot_x_deg != 0.0 || volume.rot_y_deg != 0.0 || volume.rot_z_deg != 0.0) {
+        rotation = new G4RotationMatrix();
+        rotation->rotateX(volume.rot_x_deg * deg);
+        rotation->rotateY(volume.rot_y_deg * deg);
+        rotation->rotateZ(volume.rot_z_deg * deg);
+      }
       new G4PVPlacement(
-          nullptr,
-          G4ThreeVector(config_.detector_x_mm * mm, config_.detector_y_mm * mm, config_.detector_z_mm * mm),
-          logic_detector,
-          config_.detector_name,
-          logic_world,
+          rotation,
+          G4ThreeVector(volume.x_mm * mm, volume.y_mm * mm, volume.z_mm * mm),
+          logic,
+          volume.name,
+          parent_logic,
           false,
-          0,
+          volume.copy_no,
           true);
+      logical_by_name[volume.name] = logic;
     }
 
     const auto marker_radius_mm = 2.0;
@@ -589,6 +715,9 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
     if (config_.source_type == "beam") {
       sampled_position = sample_beam_position();
       sampled_direction = sample_beam_direction();
+    } else if (config_.source_type == "isotropic") {
+      sampled_position = nominal_position_;
+      sampled_direction = sample_isotropic_direction();
     } else {
       sampled_position = nominal_position_;
       sampled_direction = nominal_direction_;
@@ -650,6 +779,13 @@ class RuntimePrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction {
     const auto sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
     const auto phi = CLHEP::twopi * G4UniformRand();
     return (nominal_direction_ * cos_theta + u * (sin_theta * std::cos(phi)) + v * (sin_theta * std::sin(phi))).unit();
+  }
+
+  G4ThreeVector sample_isotropic_direction() const {
+    const auto cos_theta = 2.0 * G4UniformRand() - 1.0;
+    const auto sin_theta = std::sqrt(std::max(0.0, 1.0 - cos_theta * cos_theta));
+    const auto phi = CLHEP::twopi * G4UniformRand();
+    return G4ThreeVector(sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta).unit();
   }
 
   RuntimeConfig config_;
@@ -871,6 +1007,7 @@ int main(int argc, char** argv) {
   }
 
   fs::create_directories(artifact_dir);
+  std::cout << "artifact_dir=" << artifact_dir.string() << std::endl;
   auto cfg = load_runtime_config(config_path, events, artifact_dir);
   cfg.mode = mode;
   CLHEP::HepRandom::setTheSeed(static_cast<long>(cfg.seed));
@@ -886,7 +1023,12 @@ int main(int argc, char** argv) {
   run_manager->SetUserInitialization(physics);
   RuntimeScoringState scoring_state;
   RuntimeSourceSamplingState source_sampling_state;
-  scoring_state.target_volume_name = cfg.root_volume_name;
+  const auto target_role_it = cfg.scoring_volume_roles.find("target");
+  if (target_role_it != cfg.scoring_volume_roles.end() && !target_role_it->second.empty()) {
+    scoring_state.target_volume_name = target_role_it->second.front();
+  } else {
+    scoring_state.target_volume_name = cfg.root_volume_name;
+  }
   scoring_state.scoring_plane_name = cfg.scoring_plane_name;
   scoring_state.scoring_plane_z_mm = cfg.scoring_plane_z_mm;
   for (const auto& volume_name : cfg.scoring_volume_names) {
@@ -958,6 +1100,12 @@ int main(int argc, char** argv) {
       sampling_rms(source_sampling_state.direction_sum_y, source_sampling_state.direction_sq_sum_y, primary_count);
   const auto sampled_dir_rms_z =
       sampling_rms(source_sampling_state.direction_sum_z, source_sampling_state.direction_sq_sum_z, primary_count);
+  std::vector<std::string> runtime_volume_names;
+  for (const auto& volume : cfg.runtime_volumes) {
+    if (!volume.name.empty()) {
+      runtime_volume_names.push_back(volume.name);
+    }
+  }
   summary << "{\n"
           << "  \"schema_version\": \"" << kResultSchemaVersion << "\",\n"
           << "  \"run_ok\": true,\n"
@@ -994,7 +1142,11 @@ int main(int argc, char** argv) {
           << "  \"mode\": \"" << cfg.mode << "\",\n"
           << "  \"run_manifest\": {\n"
           << "    \"bridge\": \"simulation_bridge\",\n"
+          << "    \"runtime_dsl_schema_version\": \"runtime_dsl.v1\",\n"
           << "    \"geometry_root_volume\": \"" << cfg.root_volume_name << "\",\n"
+          << "    \"geometry_volume_names\": ";
+  write_string_array(summary, runtime_volume_names.empty() ? cfg.scoring_volume_names : runtime_volume_names);
+  summary << ",\n"
           << "    \"detector_enabled\": " << (cfg.detector_enabled ? "true" : "false") << ",\n"
           << "    \"detector_volume_name\": " << (cfg.detector_enabled ? ("\"" + cfg.detector_name + "\"") : "null") << ",\n"
           << "    \"scoring_plane_name\": " << (cfg.score_plane_crossings ? ("\"" + cfg.scoring_plane_name + "\"") : "null") << ",\n"
