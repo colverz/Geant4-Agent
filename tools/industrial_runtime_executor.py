@@ -209,7 +209,8 @@ def execute_industrial_case(
             "compile_result": compile_result,
         }
 
-    runtime_adapter = adapter or build_geant4_adapter_from_env(env or os.environ)
+    env_map = dict(os.environ if env is None else env)
+    runtime_adapter = adapter or build_geant4_adapter_from_env(env_map)
     snapshot = runtime_adapter.snapshot()
     adapter_name = snapshot.metadata.get("adapter") if isinstance(snapshot.metadata, dict) else None
     if require_local_process and adapter_name != "local_process":
@@ -227,7 +228,14 @@ def execute_industrial_case(
     events = int((runtime_defaults or {}).get("events", 10000) or 10000)
 
     if compile_result.get("run_mode") == "paired_run":
-        return _execute_paired_industrial_case(case, compile_result, server, events)
+        return _execute_paired_industrial_case(
+            case,
+            compile_result,
+            server,
+            events,
+            env_map=env_map,
+            reuse_server=adapter is not None,
+        )
 
     config = compile_result["config"]
     run_result = _run_industrial_config(server, config, events)
@@ -285,6 +293,9 @@ def _execute_paired_industrial_case(
     compile_result: dict[str, Any],
     server: Geant4McpServer,
     events: int,
+    *,
+    env_map: dict[str, str] | None = None,
+    reuse_server: bool = False,
 ) -> dict[str, Any]:
     paired_configs = compile_result.get("paired_configs") if isinstance(compile_result.get("paired_configs"), dict) else {}
     if not paired_configs:
@@ -299,7 +310,8 @@ def _execute_paired_industrial_case(
     paired_runs: dict[str, Any] = {}
     run_payloads: dict[str, Any] = {}
     for label, config in paired_configs.items():
-        result = _run_industrial_config(server, config, events)
+        run_server = server if reuse_server else Geant4McpServer(adapter=build_geant4_adapter_from_env(env_map or os.environ))
+        result = _run_industrial_config(run_server, config, events)
         if result.get("status") != "completed":
             return _runtime_failed(
                 case,

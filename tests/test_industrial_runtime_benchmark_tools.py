@@ -168,6 +168,24 @@ class IndustrialRuntimeBenchmarkToolsTest(unittest.TestCase):
         self.assertEqual(execution["actual_metrics"]["shielded_detector_crossing_count"], 2500)
         self.assertAlmostEqual(execution["actual_metrics"]["attenuation_ratio"], 1.0)
 
+    def test_paired_runtime_executor_isolates_variant_configs(self) -> None:
+        case = _case_by_id("shielding_concrete_gamma_transmission")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            script = _write_config_sensitive_fake_runtime_script(root)
+            execution = execute_industrial_case(
+                case,
+                runtime_defaults={**_benchmark()["runtime_defaults"], "events": 200},
+                env={
+                    "GEANT4_RUNTIME_COMMAND_JSON": json.dumps([sys.executable, str(script)]),
+                },
+            )
+
+        self.assertEqual(execution["status"], "completed")
+        self.assertEqual(execution["actual_metrics"]["unshielded_detector_crossing_count"], 200)
+        self.assertEqual(execution["actual_metrics"]["shielded_detector_crossing_count"], 100)
+        self.assertAlmostEqual(execution["actual_metrics"]["attenuation_ratio"], 0.5)
+
     def test_runtime_compiler_marks_metric_gaps_for_partial_runtime_support(self) -> None:
         case = _case_by_id("beam_gaussian_spread_plane")
         result = compile_industrial_case_to_runtime(case, runtime_defaults=_benchmark()["runtime_defaults"])
@@ -460,6 +478,58 @@ def _write_fake_runtime_script(root: Path, artifact_dir: Path) -> Path:
                 "    'position_mm': [0, 0, 50],",
                 "    'size_mm': [20, 20, 2]",
                 "  }",
+                "}",
+                "(artifact_dir / 'run_summary.json').write_text(json.dumps(summary), encoding='utf-8')",
+                "print(f'artifact_dir={artifact_dir}')",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return script
+
+
+def _write_config_sensitive_fake_runtime_script(root: Path) -> Path:
+    script = root / "fake_config_sensitive_geant4_runtime.py"
+    script.write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "import argparse, json",
+                "parser = argparse.ArgumentParser()",
+                "parser.add_argument('--events', type=int, default=1)",
+                "parser.add_argument('--config', required=True)",
+                "args = parser.parse_args()",
+                "cfg = json.loads(Path(args.config).read_text(encoding='utf-8'))",
+                "material = cfg.get('material') or (cfg.get('geometry') or {}).get('material') or 'G4_AIR'",
+                "count = 100 if material == 'G4_CONCRETE' else 200",
+                "artifact_dir = Path(args.config).with_suffix('')",
+                "artifact_dir.mkdir(parents=True, exist_ok=True)",
+                "summary = {",
+                "  'run_ok': True,",
+                "  'events_requested': args.events,",
+                "  'events_completed': args.events,",
+                "  'geometry_structure': 'single_box',",
+                "  'material': material,",
+                "  'particle': 'gamma',",
+                "  'source_type': 'beam',",
+                "  'physics_list': 'FTFP_BERT',",
+                "  'events': args.events,",
+                "  'mode': 'batch',",
+                "  'run_seed': 1337,",
+                "  'scoring': {",
+                "    'target_edep_enabled': True,",
+                "    'target_edep_total_mev': 0.0,",
+                "    'detector_crossings_enabled': True,",
+                "    'detector_crossing_count': count,",
+                "    'detector_crossing_events': count,",
+                "    'volume_stats': {",
+                "      'Detector': {'edep_total_mev': 0.0, 'hit_events': 0, 'crossing_count': count, 'crossing_events': count, 'step_count': count, 'track_entries': count}",
+                "    },",
+                "    'role_stats': {",
+                "      'detector': {'edep_total_mev': 0.0, 'hit_events': 0, 'crossing_count': count, 'crossing_events': count, 'step_count': count, 'track_entries': count}",
+                "    }",
+                "  },",
+                "  'detector': {'enabled': True, 'volume_name': 'Detector', 'material': 'G4_Si'}",
                 "}",
                 "(artifact_dir / 'run_summary.json').write_text(json.dumps(summary), encoding='utf-8')",
                 "print(f'artifact_dir={artifact_dir}')",
