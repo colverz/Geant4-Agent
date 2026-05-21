@@ -23,6 +23,7 @@ SUPPORTED_GEOMETRY_KINDS = set(GEOMETRY_KIND_TO_STRUCTURE.keys())
 
 GEOMETRY_SLOT_TARGET_TO_PATHS = {
     "geometry.kind": {"geometry.structure", "geometry.root_name"},
+    "geometry.root_name": {"geometry.root_name"},
     "geometry.size_triplet_mm": {
         "geometry.params.module_x",
         "geometry.params.module_y",

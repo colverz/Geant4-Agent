@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
 import os
+import threading
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +16,110 @@ CURRENT_OLLAMA_CONFIG = os.getenv("OLLAMA_CONFIG_PATH", "nlu/llm_support/configs
 _CURRENT_PATH_OBJ = Path(CURRENT_OLLAMA_CONFIG)
 if _CURRENT_PATH_OBJ.exists():
     CURRENT_OLLAMA_CONFIG = str(_CURRENT_PATH_OBJ.resolve()).replace("\\", "/")
+_RECOMMENDED_CONFIG_LOCK = threading.RLock()
+_RECOMMENDED_CONFIG_BY_SESSION: dict[str, dict[str, Any]] = {}
+_SIMULATION_DESIGN_BY_SESSION: dict[str, dict[str, Any]] = {}
+_CANDIDATE_STATUS_BY_SESSION: dict[str, dict[str, Any]] = {}
 
 
 def get_ollama_config_path() -> str:
     return CURRENT_OLLAMA_CONFIG
+
+
+def set_latest_recommended_config(session_id: str | None, config: dict[str, Any] | None) -> None:
+    key = str(session_id or "").strip()
+    if not key or not isinstance(config, dict) or not config:
+        return
+    with _RECOMMENDED_CONFIG_LOCK:
+        _RECOMMENDED_CONFIG_BY_SESSION[key] = deepcopy(config)
+
+
+def set_latest_simulation_design(
+    session_id: str | None,
+    *,
+    user_text: str,
+    candidate: dict[str, Any] | None,
+    recommended_config: dict[str, Any] | None,
+    source: str = "",
+) -> None:
+    key = str(session_id or "").strip()
+    if not key:
+        return
+    record = {
+        "user_text": str(user_text or ""),
+        "candidate": deepcopy(candidate or {}),
+        "recommended_config": deepcopy(recommended_config or {}),
+        "source": str(source or ""),
+        "status": "proposed",
+    }
+    with _RECOMMENDED_CONFIG_LOCK:
+        _SIMULATION_DESIGN_BY_SESSION[key] = record
+        _CANDIDATE_STATUS_BY_SESSION[key] = {
+            "status": "proposed",
+            "source": str(source or ""),
+            "has_recommended_config": bool(isinstance(recommended_config, dict) and recommended_config),
+        }
+        if isinstance(recommended_config, dict) and recommended_config:
+            _RECOMMENDED_CONFIG_BY_SESSION[key] = deepcopy(recommended_config)
+
+
+def get_latest_simulation_design(session_id: str | None) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        return deepcopy(_SIMULATION_DESIGN_BY_SESSION.get(key) or {})
+
+
+def get_latest_recommended_config(session_id: str | None) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        return deepcopy(_RECOMMENDED_CONFIG_BY_SESSION.get(key) or {})
+
+
+def get_candidate_status(session_id: str | None) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        record = deepcopy(_CANDIDATE_STATUS_BY_SESSION.get(key) or {})
+        design = _SIMULATION_DESIGN_BY_SESSION.get(key) or {}
+        if design and "candidate" not in record:
+            record["candidate"] = deepcopy(design.get("candidate") or {})
+        return record
+
+
+def mark_latest_candidate_accepted(session_id: str | None, *, committed: bool = False) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        design = _SIMULATION_DESIGN_BY_SESSION.get(key)
+        if not isinstance(design, dict) or not design:
+            return {}
+        status = "committed" if committed else "accepted"
+        design["status"] = status
+        _SIMULATION_DESIGN_BY_SESSION[key] = deepcopy(design)
+        record = {
+            "status": status,
+            "source": str(design.get("source") or ""),
+            "has_recommended_config": bool(design.get("recommended_config")),
+            "candidate": deepcopy(design.get("candidate") or {}),
+        }
+        _CANDIDATE_STATUS_BY_SESSION[key] = deepcopy(record)
+        return deepcopy(record)
+
+
+def clear_latest_recommended_config(session_id: str | None) -> None:
+    key = str(session_id or "").strip()
+    if not key:
+        return
+    with _RECOMMENDED_CONFIG_LOCK:
+        _RECOMMENDED_CONFIG_BY_SESSION.pop(key, None)
+        _SIMULATION_DESIGN_BY_SESSION.pop(key, None)
+        _CANDIDATE_STATUS_BY_SESSION.pop(key, None)
 
 
 def set_ollama_config_path(path: str) -> tuple[bool, str]:

@@ -185,6 +185,14 @@ golden numeric comparison.
    golden tolerances. Official scoring still requires a real local-process
    Geant4 runtime and reviewed goldens.
 
+8. Add live LLM-to-runtime stage runner.
+   Status: implemented in `tools/run_industrial_llm_runtime_stage.py`. This is
+   the first entrypoint that actually tests the LLM as the candidate
+   configuration producer before Geant4 execution. It does not let the LLM judge
+   results: the LLM output must match the typed runtime contract, then the
+   candidate config is executed by the local-process Geant4 adapter and compared
+   with reviewed golden metrics.
+
 ## Current Evaluator
 
 The current evaluator is intentionally strict:
@@ -238,6 +246,27 @@ docs/eval/golden/industrial_runtime/<case-id>.golden.json
 Generated files are marked `review.status="unreviewed"` and must be reviewed
 before they are treated as official baselines.
 
+Golden review is explicit and auditable. Review does not regenerate metrics and
+does not change expected values; it only marks an already generated real-runtime
+golden as accepted after the reviewer has checked the scenario, runtime
+fingerprint, artifacts, and metric reasonableness.
+
+```powershell
+.venv\Scripts\python.exe tools\review_industrial_golden.py `
+  --case-id shielding_lead_gamma_transmission `
+  --golden-dir docs\eval\golden\industrial_runtime `
+  --reviewer "<name>" `
+  --notes "Checked runtime payload, Geant4 version, seed, event count, artifacts, and metrics." `
+  --json
+```
+
+Use `--dry-run` first when checking a newly generated file. Dry-run validates
+the file and reports the metrics hash without changing `review.status`.
+
+The review tool refuses to approve files with missing numeric metrics, missing
+runtime fingerprint fields, missing reviewer identity, or an already reviewed
+status unless `--force` is used to update review metadata intentionally.
+
 Official evaluator policy:
 
 - Default: only `review.status="reviewed"` golden files can be used for a pass.
@@ -285,6 +314,35 @@ For wiring-only checks after generating unreviewed goldens:
 ```
 
 Do not use this flag for official readiness claims.
+
+Live LLM full-chain runner:
+
+```powershell
+$env:GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK="1"
+$env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
+.venv\Scripts\python.exe tools\run_industrial_llm_runtime_stage.py `
+  --live-llm `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --case-id shielding_lead_gamma_transmission `
+  --golden-dir docs\eval\golden\industrial_runtime `
+  --json
+```
+
+This runner has a stricter role split:
+
+- The LLM receives the raw industrial dialogue plus the benchmark scenario brief
+  and proposes a config.
+- Deterministic code converts that config into `SimulationSpec` and
+  `RuntimePayload`.
+- A contract check compares critical geometry/source/detector/scoring/runtime
+  fields against the benchmark runtime requirement.
+- Only a contract-passing candidate config is sent to Geant4.
+- The result is judged by structured metrics and reviewed golden values, never
+  by an LLM.
+
+By default, the runner refuses to call the live LLM if real runtime opt-in is
+missing. Use `--allow-llm-without-runtime` only for parser debugging; it is not a
+full-chain benchmark.
 
 The evaluator also includes a `compile_summary`:
 

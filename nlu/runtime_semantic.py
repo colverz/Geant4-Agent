@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from nlu.runtime_components.postprocess import merge_params
 ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE_DIR = ROOT / "knowledge" / "data"
 MODELS_DIR = ROOT / "nlu" / "training" / "bert_lab" / "models"
+NLP_BERT_MAINLINE_ENV = "GEANT4_AGENT_ENABLE_NLP_BERT"
 
 _CACHE: dict[str, list[str]] | None = None
 
@@ -165,6 +167,13 @@ def _pick_structure_model() -> str | None:
     return None
 
 
+def _nlp_bert_enabled(requested: bool | None = None) -> bool:
+    env_value = str(os.getenv(NLP_BERT_MAINLINE_ENV, "")).strip().lower()
+    if env_value:
+        return env_value in {"1", "true", "yes", "on"}
+    return True if requested is None else bool(requested)
+
+
 def _candidate_payload(candidate: Any) -> dict[str, Any]:
     return {
         "structure": candidate.summary,
@@ -276,15 +285,19 @@ def extract_runtime_semantic_frame(
     device: str = "auto",
     context_summary: str = "",
     apply_autofix: bool = False,
+    enable_nlp_bert_prior: bool | None = None,
 ) -> tuple[SemanticFrame, dict[str, Any]]:
     _ = context_summary
     frame = SemanticFrame()
     graph_text = text
     param_text = text
-    if normalized_text and normalized_text.strip():
-        param_text = f"{text} ; {normalized_text}".strip(" ;")
+    normalized_clean = str(normalized_text or "").strip()
+    if normalized_clean and normalized_clean != str(text or "").strip():
+        param_text = f"{text} ; {normalized_clean}".strip(" ;")
+    nlp_bert_prior_enabled = _nlp_bert_enabled(enable_nlp_bert_prior)
     debug: dict[str, Any] = {
-        "inference_backend": "runtime_semantic",
+        "inference_backend": "runtime_semantic_rules",
+        "nlp_bert_model_prior_enabled": nlp_bert_prior_enabled,
         "requires_llm_normalization": False,
         "normalized_text": normalized_text or text,
         "graph_text": graph_text,
@@ -293,14 +306,16 @@ def extract_runtime_semantic_frame(
     }
 
     params: dict[str, float] = {}
-    try:
-        params = extract_params(param_text, _pick_ner_model(), device)
-    except Exception as ex:
-        debug["ner_error"] = str(ex)
+    if debug["nlp_bert_model_prior_enabled"]:
+        debug["inference_backend"] = "runtime_semantic"
+        try:
+            params = extract_params(param_text, _pick_ner_model(), device)
+        except Exception as ex:
+            debug["ner_error"] = str(ex)
     params, notes = merge_params(param_text, params)
     frame.notes.extend(notes)
 
-    structure_model = _pick_structure_model()
+    structure_model = _pick_structure_model() if debug["nlp_bert_model_prior_enabled"] else None
     structure_prior_label = ""
     structure_prior_confidence = 0.0
     if structure_model:

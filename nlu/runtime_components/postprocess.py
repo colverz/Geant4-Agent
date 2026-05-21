@@ -3,9 +3,9 @@
 import re
 from typing import Dict, List, Tuple
 
-MM_WORDS = ("mm", "\u6beb\u7c73")
-CM_WORDS = ("cm", "\u5398\u7c73")
-M_WORDS = ("\u7c73",)
+MM_WORDS = ("mm", "millimeter", "millimeters", "millimetre", "millimetres", "\u6beb\u7c73")
+CM_WORDS = ("cm", "centimeter", "centimeters", "centimetre", "centimetres", "\u5398\u7c73")
+M_WORDS = ("meter", "meters", "metre", "metres", "\u7c73")
 
 
 INT_KEYS = {"nx", "ny", "n"}
@@ -176,7 +176,7 @@ def _first_match(pattern: str, text: str) -> float | None:
 
 
 def _module_triplet(text: str) -> Tuple[float, float, float] | None:
-    unit = r"(?:mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)"
+    unit = r"(?:millimeters?|millimetres?|centimeters?|centimetres?|meters?|metres?|mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)"
     sep = r"(?:x|X|\*|by|×)"
     m = re.search(
         rf"(\d*\.?\d+\s*{unit})\s*{sep}\s*"
@@ -209,7 +209,7 @@ def _module_triplet(text: str) -> Tuple[float, float, float] | None:
 
 
 def _all_triplet_matches(text: str) -> List[Tuple[int, int, Tuple[float, float, float]]]:
-    unit = r"(?:mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)"
+    unit = r"(?:millimeters?|millimetres?|centimeters?|centimetres?|meters?|metres?|mm|cm|m|\u6beb\u7c73|\u5398\u7c73|\u7c73)"
     sep = r"(?:x|X|\*|by|×)"
     pattern = re.compile(
         rf"(\d*\.?\d+\s*{unit})\s*{sep}\s*"

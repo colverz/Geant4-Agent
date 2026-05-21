@@ -102,6 +102,7 @@ def run_industrial_runtime_stage(
             env=env_map,
             golden_dir=golden_dir,
             allow_unreviewed_goldens=allow_unreviewed_goldens,
+            case_ids=selected,
         )
         if run_evaluation
         else None

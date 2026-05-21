@@ -81,6 +81,32 @@ _ZH_RUN_REQUEST_PATTERN = re.compile(r"(运行|再跑|开始跑|执行).*(geant4
 _ZH_VIEWER_REQUEST_PATTERN = re.compile(r"(打开|显示|启动).*(viewer|视窗|窗口|几何窗口|可视化)", flags=re.IGNORECASE)
 
 
+_ZH_CLEAN_CONFIG_DOMAIN_PATTERN = re.compile(
+    r"(配置|设置|方案|模拟|仿真|几何|材料|材质|源|粒子|能量|物理|输出|探测器|计分|靶|束流|点源|面源|方向|当前|geometry|material|source|particle|energy|physics|output|detector|scoring)",
+    flags=re.IGNORECASE,
+)
+_ZH_CLEAN_CONFIG_MUTATION_PATTERN = re.compile(
+    r"(创建|建立|设计|生成|设置|设为|改成|修改|更新|使用|加入|添加|删除|移除|清除|切换|配置|做一个|建一个)",
+    flags=re.IGNORECASE,
+)
+_ZH_CLEAN_CONFIG_READ_PATTERN = re.compile(
+    r"(当前|现在|已有|已经|配置了什么|方案是什么|还缺|缺少|摘要|状态|检查|看看|告诉我)",
+    flags=re.IGNORECASE,
+)
+_ZH_CLEAN_RESULT_READ_PATTERN = re.compile(
+    r"(结果|运行结果|模拟结果|剂量|沉积能量|能量沉积|计数|命中|crossing|hit|edep|输出文件|artifact|run_summary|上次|刚才)",
+    flags=re.IGNORECASE,
+)
+_ZH_CLEAN_RUN_REQUEST_PATTERN = re.compile(
+    r"(运行|再跑|开始跑|执行|启动).*(geant4|模拟|仿真|事件|event|束流)|跑\s*\d*\s*(个)?\s*(事件|event)",
+    flags=re.IGNORECASE,
+)
+_ZH_CLEAN_VIEWER_REQUEST_PATTERN = re.compile(
+    r"(打开|显示|启动).*(viewer|视窗|窗口|几何窗口|可视化)",
+    flags=re.IGNORECASE,
+)
+
+
 def _lang_key(lang: str) -> str:
     return "zh" if str(lang).lower() == "zh" else "en"
 
@@ -114,15 +140,19 @@ def _classify_rule(text: str, lang: str) -> RuntimeIntent:
         return RuntimeIntent.NORMAL_CHAT
 
     if _lang_key(lang) == "zh":
-        if _ZH_VIEWER_REQUEST_PATTERN.search(raw):
+        if _ZH_CLEAN_VIEWER_REQUEST_PATTERN.search(raw) or _ZH_VIEWER_REQUEST_PATTERN.search(raw):
             return RuntimeIntent.VIEWER_REQUESTED
-        if _ZH_RUN_REQUEST_PATTERN.search(raw):
+        if _ZH_CLEAN_RUN_REQUEST_PATTERN.search(raw) or _ZH_RUN_REQUEST_PATTERN.search(raw):
             return RuntimeIntent.RUN_REQUESTED
-        if _ZH_RESULT_READ_PATTERN.search(raw):
+        if _ZH_CLEAN_RESULT_READ_PATTERN.search(raw) or _ZH_RESULT_READ_PATTERN.search(raw):
             return RuntimeIntent.READ_SUMMARY
-        if _ZH_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CONFIG_READ_PATTERN.search(raw):
+        if (_ZH_CLEAN_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CLEAN_CONFIG_READ_PATTERN.search(raw)) or (
+            _ZH_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CONFIG_READ_PATTERN.search(raw)
+        ):
             return RuntimeIntent.READ_CONFIG
-        if _ZH_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CONFIG_MUTATION_PATTERN.search(raw):
+        if (_ZH_CLEAN_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CLEAN_CONFIG_MUTATION_PATTERN.search(raw)) or (
+            _ZH_CONFIG_DOMAIN_PATTERN.search(raw) and _ZH_CONFIG_MUTATION_PATTERN.search(raw)
+        ):
             return RuntimeIntent.CONFIG_MUTATION
         # Chinese UI can still receive English or mixed-language technical commands.
         return _classify_english_rule(raw)

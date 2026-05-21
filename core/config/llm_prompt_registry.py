@@ -15,7 +15,7 @@ def _build_strict_slot_prompt_v1(user_text: str, context_summary: str) -> str:
         '  "normalized_text": "semicolon-separated canonical clauses",\n'
         '  "target_slots": ["geometry.kind", "materials.primary"],\n'
         '  "slots": {\n'
-        '    "geometry": {"kind": "box|cylinder|sphere|orb|cons|trd|polycone|polyhedra|cuttubs|trap|para|torus|ellipsoid|elltube|null", "size_triplet_mm": [1000,1000,1000], "radius_mm": null, "half_length_mm": null, "radius1_mm": null, "radius2_mm": null, "x1_mm": null, "x2_mm": null, "y1_mm": null, "y2_mm": null, "z_mm": null, "z_planes_mm": [null,null,null], "radii_mm": [null,null,null], "polyhedra_sides": null, "trap_x1_mm": null, "trap_x2_mm": null, "trap_x3_mm": null, "trap_x4_mm": null, "trap_y1_mm": null, "trap_y2_mm": null, "trap_z_mm": null, "para_x_mm": null, "para_y_mm": null, "para_z_mm": null, "para_alpha_deg": null, "para_theta_deg": null, "para_phi_deg": null, "torus_major_radius_mm": null, "torus_minor_radius_mm": null, "ellipsoid_ax_mm": null, "ellipsoid_by_mm": null, "ellipsoid_cz_mm": null, "elltube_ax_mm": null, "elltube_by_mm": null, "elltube_hz_mm": null, "tilt_x_deg": null, "tilt_y_deg": null},\n'
+        '    "geometry": {"kind": "box|cylinder|sphere|orb|cons|trd|polycone|polyhedra|cuttubs|trap|para|torus|ellipsoid|elltube|null", "root_name": "Target|null", "size_triplet_mm": [1000,1000,1000], "radius_mm": null, "half_length_mm": null, "radius1_mm": null, "radius2_mm": null, "x1_mm": null, "x2_mm": null, "y1_mm": null, "y2_mm": null, "z_mm": null, "z_planes_mm": [null,null,null], "radii_mm": [null,null,null], "polyhedra_sides": null, "trap_x1_mm": null, "trap_x2_mm": null, "trap_x3_mm": null, "trap_x4_mm": null, "trap_y1_mm": null, "trap_y2_mm": null, "trap_z_mm": null, "para_x_mm": null, "para_y_mm": null, "para_z_mm": null, "para_alpha_deg": null, "para_theta_deg": null, "para_phi_deg": null, "torus_major_radius_mm": null, "torus_minor_radius_mm": null, "ellipsoid_ax_mm": null, "ellipsoid_by_mm": null, "ellipsoid_cz_mm": null, "elltube_ax_mm": null, "elltube_by_mm": null, "elltube_hz_mm": null, "tilt_x_deg": null, "tilt_y_deg": null},\n'
         '    "materials": {"primary": "G4_Cu|null"},\n'
         '    "source": {"kind": "point|beam|plane|isotropic|null", "particle": "gamma|e-|proton|neutron|null", "energy_mev": 1.0, "position_mm": [0,0,-100], "direction_vec": [0,0,1]},\n'
         '    "physics": {"explicit_list": "FTFP_BERT|null", "recommendation_intent": "gamma_attenuation|null"},\n'
@@ -78,6 +78,7 @@ def _build_strict_slot_prompt_v2(user_text: str, context_summary: str) -> str:
         "Hard rules:\n"
         "- Use slots, not config paths.\n"
         "- Fill only what the user explicitly states or explicitly changes in this turn.\n"
+        "- If the user explicitly gives a target/root volume name, preserve it exactly in geometry.root_name and include geometry.root_name in target_slots.\n"
         "- Do not restate unrelated slots from previous turns; leave them null when absent in the current turn.\n"
         "- If the turn is a narrow update (for example only output format, only one material change, or only source energy), keep other slot groups empty.\n"
         "- If the user asks for an explanation or recommendation reason, keep the turn as QUESTION unless they also explicitly change a value.\n"

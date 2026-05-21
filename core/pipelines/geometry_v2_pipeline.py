@@ -9,6 +9,45 @@ from core.orchestrator.types import Producer, UpdateOp
 from core.slots.slot_frame import SlotFrame
 
 
+GRAPH_STRUCTURES = {"ring", "grid", "nest", "stack", "shell", "boolean"}
+
+
+def _graph_geometry_updates_from_candidate(
+    updates: list[UpdateOp],
+    *,
+    turn_id: int,
+    confidence: float,
+) -> tuple[list[UpdateOp], list[str], dict[str, object]] | None:
+    structure = None
+    graph_updates: list[UpdateOp] = []
+    for update in updates:
+        if update.op != "set" or not str(update.path).startswith("geometry."):
+            continue
+        if update.path == "geometry.structure" and isinstance(update.value, str):
+            structure = update.value
+        graph_updates.append(
+            UpdateOp(
+                path=update.path,
+                op=update.op,
+                value=deepcopy(update.value),
+                producer=Producer.RUNTIME_SEMANTIC,
+                confidence=confidence,
+                turn_id=turn_id,
+            )
+        )
+    has_graph_program = any(update.path == "geometry.graph_program" for update in graph_updates)
+    if structure not in GRAPH_STRUCTURES or not has_graph_program:
+        return None
+    target_paths = [update.path for update in graph_updates]
+    return graph_updates, target_paths, {
+        "compile_ok": True,
+        "structure": structure,
+        "finalization_status": "ready",
+        "runtime_ready": True,
+        "bridge_mode": "graph_passthrough",
+    }
+
+
 def build_v2_geometry_updates(frame: SlotFrame, *, turn_id: int) -> tuple[list[UpdateOp], list[str], dict[str, object]]:
     result = compile_geometry_spec_from_slot_frame(frame)
     if not result.ok or result.spec is None or result.spec.finalization_status != "ready":
@@ -81,7 +120,7 @@ def build_v2_geometry_updates_from_config(
                 path="geometry.structure",
                 op="set",
                 value=structure,
-                producer=Producer.BERT_EXTRACTOR,
+                producer=Producer.RUNTIME_SEMANTIC,
                 confidence=confidence,
                 turn_id=turn_id,
             )
@@ -92,7 +131,7 @@ def build_v2_geometry_updates_from_config(
     for key, value in params.items():
         path = f"geometry.params.{key}"
         updates.append(
-            UpdateOp(path=path, op="set", value=value, producer=Producer.BERT_EXTRACTOR, confidence=confidence, turn_id=turn_id)
+            UpdateOp(path=path, op="set", value=value, producer=Producer.RUNTIME_SEMANTIC, confidence=confidence, turn_id=turn_id)
         )
         target_paths.append(path)
 
@@ -111,6 +150,10 @@ def build_v2_geometry_updates_from_candidate(
     turn_id: int,
     confidence: float = 0.8,
 ) -> tuple[list[UpdateOp], list[str], dict[str, object]]:
+    graph_result = _graph_geometry_updates_from_candidate(updates, turn_id=turn_id, confidence=confidence)
+    if graph_result is not None:
+        return graph_result
+
     temp_config = deepcopy(base_config)
     for update in updates:
         if update.op != "set":

@@ -84,7 +84,7 @@ def _sync_output(config: dict) -> dict[str, object]:
     return {"output.path": updated_path}
 
 
-def _sync_geometry(config: dict) -> dict[str, object]:
+def _sync_geometry(config: dict, recent_updates: list[UpdateOp] | None) -> dict[str, object]:
     structure = get_path(config, "geometry.structure")
     graph_program = get_path(config, "geometry.graph_program")
     chosen_skeleton = get_path(config, "geometry.chosen_skeleton")
@@ -96,6 +96,8 @@ def _sync_geometry(config: dict) -> dict[str, object]:
     elif not structure:
         return {}
     root_name = _infer_root_name(structure, graph_program if isinstance(graph_program, dict) else None)
+    if _latest_update_for_prefix(recent_updates, "geometry.root_name") is not None:
+        return updates
     if get_path(config, "geometry.root_name") != root_name:
         updates["geometry.root_name"] = root_name
     return updates
@@ -108,10 +110,11 @@ def _sync_materials(config: dict, recent_updates: list[UpdateOp] | None) -> dict
     # Keep volume-material binding anchored to structure-derived root so that
     # structure overwrite + semantic sync are internally consistent in one turn.
     graph_program = get_path(config, "geometry.graph_program")
-    root_name = (
+    explicit_root = get_path(config, "geometry.root_name")
+    root_name = explicit_root or (
         _infer_root_name(structure, graph_program if isinstance(graph_program, dict) else None)
         if structure
-        else (get_path(config, "geometry.root_name") or "target")
+        else "target"
     )
 
     if structure and isinstance(mats, list) and len(mats) == 1 and mats[0]:
@@ -207,7 +210,7 @@ def build_semantic_sync_candidate(
     updates: dict[str, object] = {}
     updates.update(_sync_output(config))
     updates.update(_sync_source(config, recent_updates))
-    updates.update(_sync_geometry(config))
+    updates.update(_sync_geometry(config, recent_updates))
     updates.update(_sync_materials(config, recent_updates))
     updates.update(_sync_physics(config, recent_updates))
 

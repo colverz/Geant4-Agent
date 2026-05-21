@@ -69,14 +69,97 @@ class SummarizeEvalRecordsTest(unittest.TestCase):
                 tool="llm_scenario_model_matrix",
                 run_id="matrix",
             )
+            save_eval_output(
+                {
+                    "ok": True,
+                    "report": {
+                        "schema_version": "geant4_agent_industrial_llm_runtime_stage.v1",
+                        "ok": True,
+                        "case_results": [
+                            {
+                                "id": "shielding",
+                                "domain": "shielding",
+                                "status": "passed",
+                                "actual_metrics": {
+                                    "detector_crossing_count": 4659,
+                                    "detector_edep_total_mev": 53.9888,
+                                    "transmission_factor": 0.4659,
+                                },
+                            }
+                        ],
+                        "stage_summary": {
+                            "passed": 1,
+                            "failed": 0,
+                            "not_evaluable": 0,
+                            "llm_contract_passed": 1,
+                            "runtime_completed": 1,
+                            "nlu_boundary": {
+                                "no_bert_prior_pass_rate": 1.0,
+                                "backend_check_pass_rate": 1.0,
+                            },
+                            "candidate_boundary": {
+                                "cases": 1,
+                                "role_counts": {"candidate_config_only": 1},
+                                "schema_counts": {"geant4_agent_llm_candidate_contract.v1": 1},
+                                "requires_confirmation_cases": 1,
+                                "uncertainty_cases": 0,
+                                "assumption_count": 4,
+                                "physics_rationale_count": 3,
+                            },
+                            "contract_alignment": {
+                                "applied_cases": 1,
+                                "correction_count": 9,
+                                "completion_count": 6,
+                                "override_count": 3,
+                                "risk_correction_count": 2,
+                                "correction_categories": {
+                                    "material_role": 2,
+                                    "runtime_default": 1,
+                                },
+                            },
+                            "simulation_design": {
+                                "supported_count": 2,
+                                "approximation_required_count": 1,
+                                "unsupported_count": 1,
+                                "user_decision_required_count": 2,
+                            },
+                        },
+                    },
+                },
+                outdir=outdir,
+                tool="industrial_llm_runtime_stage",
+                run_id="industrial",
+            )
+            save_eval_output(
+                {
+                    "ok": True,
+                    "report": {
+                        "schema_version": "geant4_agent_industrial_runtime_stage.v1",
+                        "ok": True,
+                        "stage_summary": {
+                            "evaluation_status": {
+                                "passed": 4,
+                                "failed": 0,
+                                "not_evaluable": 0,
+                                "unsupported": 0,
+                            }
+                        },
+                    },
+                },
+                outdir=outdir,
+                tool="industrial_runtime_stage",
+                run_id="runtime-stage",
+            )
 
             summary = summarize_eval_records(outdir)
 
-        self.assertEqual(summary["total"], 2)
-        self.assertEqual(summary["ok_count"], 1)
+        self.assertEqual(summary["total"], 4)
+        self.assertEqual(summary["ok_count"], 3)
         self.assertEqual(summary["failed_count"], 1)
         dry_run = next(record for record in summary["records"] if record["run_id"] == "dry-run")
         matrix = next(record for record in summary["records"] if record["run_id"] == "matrix")
+        industrial = next(record for record in summary["records"] if record["run_id"] == "industrial")
+        runtime_stage = next(record for record in summary["records"] if record["run_id"] == "runtime-stage")
         self.assertEqual(dry_run["key_metrics"]["applied_path_precision"], 1.0)
         self.assertEqual(matrix["model_summaries"][0]["model"], "offline_v2")
         self.assertEqual(matrix["model_summaries"][0]["elapsed_seconds"], 12.5)
@@ -86,6 +169,25 @@ class SummarizeEvalRecordsTest(unittest.TestCase):
         self.assertEqual(matrix["failure_summary"][0]["id"], "case-1")
         self.assertEqual(matrix["failure_summary"][0]["source"], "offline_v2")
         self.assertIn("missing_payload_key:particle", matrix["failure_summary"][0]["errors"][1])
+        self.assertEqual(industrial["key_metrics"]["runtime_completed"], 1)
+        self.assertEqual(industrial["key_metrics"]["no_bert_prior_pass_rate"], 1.0)
+        self.assertEqual(industrial["key_metrics"]["candidate_boundary.cases"], 1)
+        self.assertEqual(industrial["key_metrics"]["candidate_boundary.role.candidate_config_only"], 1)
+        self.assertEqual(industrial["key_metrics"]["candidate_boundary.requires_confirmation_cases"], 1)
+        self.assertEqual(industrial["key_metrics"]["candidate_boundary.assumption_count"], 4)
+        self.assertEqual(industrial["key_metrics"]["contract_alignment.correction_count"], 9)
+        self.assertEqual(industrial["key_metrics"]["contract_alignment.completion_count"], 6)
+        self.assertEqual(industrial["key_metrics"]["contract_alignment.override_count"], 3)
+        self.assertEqual(industrial["key_metrics"]["contract_alignment.risk_correction_count"], 2)
+        self.assertEqual(industrial["key_metrics"]["contract_alignment.material_role"], 2)
+        self.assertEqual(industrial["key_metrics"]["simulation_design.supported_count"], 2)
+        self.assertEqual(industrial["key_metrics"]["simulation_design.approximation_required_count"], 1)
+        self.assertEqual(industrial["key_metrics"]["simulation_design.unsupported_count"], 1)
+        self.assertEqual(industrial["key_metrics"]["simulation_design.user_decision_required_count"], 2)
+        self.assertEqual(industrial["key_metrics"]["actual.detector_crossing_count"], 4659)
+        self.assertEqual(industrial["key_metrics"]["actual.transmission_factor"], 0.4659)
+        self.assertEqual(runtime_stage["key_metrics"]["evaluation.passed"], 4)
+        self.assertEqual(runtime_stage["key_metrics"]["evaluation.not_evaluable"], 0)
 
     def test_latest_only_filters_to_latest_pointer_run_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -14,6 +14,21 @@ from .composite_intent import CompositeIntent, detect_composite_intent
 from .context_pack import ContextPack, KnowledgeSnippet, build_context_pack
 from .evidence_grounding import EvidenceGroundingContext, EvidenceGroundingResult, check_candidate_update_grounding
 from .intent_router import IntentDecision, route_user_turn
+from .llm_candidate_contract import (
+    LLM_CANDIDATE_CONTRACT_SCHEMA_VERSION,
+    LLM_CANDIDATE_ROLE,
+    LlmCandidateContract,
+    build_llm_candidate_contract,
+    build_workflow_llm_candidate_report,
+)
+from .simulation_design import (
+    ALLOWED_NEXT_ACTIONS,
+    SIMULATION_DESIGN_SCHEMA_VERSION,
+    SimulationDesignCandidate,
+    build_simulation_design_candidate,
+    build_simulation_design_reference_pack,
+    check_simulation_design_capability,
+)
 from .idempotency import (
     IdempotencyActionClass,
     IdempotencyDecision,
@@ -51,6 +66,12 @@ __all__ = [
     "InterruptResumeController",
     "InterruptResumeResult",
     "InterruptResumeStatus",
+    "LLM_CANDIDATE_CONTRACT_SCHEMA_VERSION",
+    "LLM_CANDIDATE_ROLE",
+    "LlmCandidateContract",
+    "ALLOWED_NEXT_ACTIONS",
+    "SIMULATION_DESIGN_SCHEMA_VERSION",
+    "SimulationDesignCandidate",
     "KnowledgeSnippet",
     "NluTurnTrace",
     "PatchEvidence",
@@ -62,9 +83,16 @@ __all__ = [
     "WorkflowNode",
     "WorkflowTerminalState",
     "build_context_pack",
+    "build_llm_candidate_contract",
+    "build_workflow_llm_candidate_report",
+    "build_simulation_design_candidate",
+    "build_simulation_design_reference_pack",
+    "build_llm_simulation_design_candidate",
     "build_action_id",
     "build_staged_patch_reference",
     "check_candidate_update_grounding",
+    "check_simulation_design_capability",
+    "SIMULATION_DESIGN_LLM_PROMPT_PROFILE_ID",
     "classify_idempotent_action",
     "detect_composite_intent",
     "envelope_to_candidate_update",
@@ -76,3 +104,15 @@ __all__ = [
     "apply_confirmation_candidate",
     "staged_patch_to_confirmation_candidate",
 ]
+
+
+def __getattr__(name: str):
+    if name == "build_llm_simulation_design_candidate":
+        from .simulation_design_llm import build_llm_simulation_design_candidate
+
+        return build_llm_simulation_design_candidate
+    if name == "SIMULATION_DESIGN_LLM_PROMPT_PROFILE_ID":
+        from .simulation_design_llm import PROMPT_PROFILE_ID
+
+        return PROMPT_PROFILE_ID
+    raise AttributeError(name)

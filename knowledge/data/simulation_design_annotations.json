@@ -1,0 +1,133 @@
+{
+  "schema_version": "geant4_agent_simulation_design_annotations.v1",
+  "materials": {
+    "G4_Pb": {
+      "tags": ["shielding", "high_z", "gamma_attenuation"],
+      "use_cases": ["gamma shielding", "transmission attenuation"],
+      "notes": "Useful for lead shielding and gamma attenuation studies."
+    },
+    "G4_WATER": {
+      "tags": ["phantom", "medical", "water_equivalent"],
+      "use_cases": ["water phantom", "dose deposition proxy"],
+      "notes": "Useful for simplified water phantom studies."
+    },
+    "G4_Si": {
+      "tags": ["detector", "semiconductor", "sensitive_volume"],
+      "use_cases": ["silicon detector", "downstream response"],
+      "notes": "Useful for simplified detector response and crossing counts."
+    },
+    "G4_AIR": {
+      "tags": ["air_gap", "environment", "low_density_gap"],
+      "use_cases": ["air gap", "world-like transport gap"],
+      "notes": "Useful for air gaps between source, target, and detector."
+    },
+    "G4_POLYETHYLENE": {
+      "tags": ["shielding", "moderator", "neutron_moderation"],
+      "use_cases": ["neutron shielding", "moderation slab"],
+      "notes": "Useful for simplified neutron moderation and shielding setups."
+    },
+    "G4_PLASTIC_SC_VINYLTOLUENE": {
+      "tags": ["detector", "scintillator", "gamma_response"],
+      "use_cases": ["plastic scintillator detector", "gamma detector response"],
+      "notes": "Useful for simplified scintillator response studies."
+    },
+    "G4_Cu": {
+      "tags": ["structural_metal", "target", "conductor"],
+      "use_cases": ["metal target", "generic block target"],
+      "notes": "Useful for simple metal target energy deposition studies."
+    },
+    "G4_Al": {
+      "tags": ["structural_metal", "light_metal", "ndt_target"],
+      "use_cases": ["aluminum block", "NDT approximation"],
+      "notes": "Useful for simplified aluminum target or block studies."
+    },
+    "G4_STAINLESS-STEEL": {
+      "tags": ["structural_metal", "ndt_target", "steel"],
+      "use_cases": ["steel slab", "pipe approximation"],
+      "notes": "Useful for steel targets; curved pipe geometry is not currently supported by the runtime."
+    }
+  },
+  "sources": {
+    "beam": {
+      "tags": ["supported", "beam_for_transmission", "directional"],
+      "notes": "Supported for transmission, shielding, detector response, and target energy deposition studies."
+    },
+    "point": {
+      "tags": ["supported", "point_source", "localized_source"],
+      "notes": "Supported as a localized source model when explicit source position is available."
+    },
+    "isotropic": {
+      "tags": ["unsupported_isotropic_runtime", "requires_sampling_support"],
+      "notes": "Do not claim isotropic source support unless runtime sampling support is added."
+    }
+  },
+  "scoring": {
+    "target_edep": {
+      "tags": ["supported", "target_edep_supported"],
+      "notes": "Supported for scoring total deposited energy in target/root volumes."
+    },
+    "detector_crossing_count": {
+      "tags": ["supported", "detector_crossing_supported"],
+      "notes": "Supported for detector crossing counts when detector volume exists."
+    },
+    "detector_edep": {
+      "tags": ["supported", "detector_edep_supported"],
+      "notes": "Supported through detector volume energy deposition summary."
+    },
+    "plane_crossing_count": {
+      "tags": ["supported", "plane_crossing_supported"],
+      "notes": "Supported for a simple downstream scoring plane."
+    },
+    "region_contrast": {
+      "tags": ["unsupported", "region_contrast_unsupported"],
+      "notes": "Requires region scoring and structured detector bins; not supported by current runtime summary."
+    },
+    "depth_bins": {
+      "tags": ["unsupported", "depth_bins_unsupported"],
+      "notes": "Requires depth-binned scoring; not supported by current runtime summary."
+    }
+  },
+  "geometry": {
+    "single_box": {
+      "tags": ["supported", "single_box_supported", "simplified_volume"],
+      "notes": "Supported by current runtime payload and suitable for slab/block approximations."
+    },
+    "step_wedge": {
+      "tags": ["approximation_required", "single_box_or_multi_run_required"],
+      "notes": "A single-box approximation or multi-run thickness sweep requires explicit user approval."
+    },
+    "pipe": {
+      "tags": ["approximation_required", "slab_approximation_requires_user_approval"],
+      "notes": "Curved pipe geometry is not supported; slab approximation requires user approval."
+    },
+    "void": {
+      "tags": ["unsupported", "unsupported_without_region_geometry"],
+      "notes": "Embedded void geometry requires region geometry support."
+    },
+    "inclusion": {
+      "tags": ["unsupported", "unsupported_without_region_geometry"],
+      "notes": "Embedded inclusion geometry requires region geometry support."
+    },
+    "multi_layer": {
+      "tags": ["unsupported", "multi_layer_geometry_not_supported"],
+      "notes": "Sequential multi-layer geometry is not supported by current runtime payload."
+    }
+  },
+  "runtime": {
+    "supported_geometry": ["single_box"],
+    "supported_sources": ["beam", "point"],
+    "supported_scoring": ["target_edep", "detector_crossing_count", "detector_edep", "plane_crossing_count"],
+    "unsupported_capabilities": [
+      "curved_pipe_geometry",
+      "embedded_void_geometry",
+      "embedded_inclusion_geometry",
+      "multi_layer_geometry",
+      "region_contrast_scoring",
+      "depth_binned_scoring",
+      "paired_runtime_runs",
+      "isotropic_source_sampling",
+      "cad_import",
+      "moving_geometry"
+    ]
+  }
+}

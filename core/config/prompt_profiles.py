@@ -69,6 +69,7 @@ _SLOT_SLOT_SECTIONS = {"geometry", "materials", "source", "detector", "scoring",
 _SLOT_FIELDS = {
     "geometry": {
         "kind",
+        "root_name",
         "size_triplet_mm",
         "radius_mm",
         "half_length_mm",

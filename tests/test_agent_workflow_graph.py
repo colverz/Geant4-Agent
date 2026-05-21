@@ -115,6 +115,12 @@ class AgentWorkflowGraphTest(unittest.TestCase):
             self.assertIn("geometry.structure", trace["applied_paths"])
             self.assertIn("source.particle", trace["applied_paths"])
             self.assertEqual(out["internal_trace"]["agent"]["nlu_turn_trace"], trace)
+            candidate_contract = out["llm_candidate_contract"]
+            self.assertEqual(candidate_contract["role"], "candidate_config_only")
+            self.assertEqual(candidate_contract["source"], "process_turn")
+            self.assertIn("geometry.structure", candidate_contract["candidate_boundary"]["applied_paths"])
+            self.assertTrue(candidate_contract["resolution"]["applied_to_session"])
+            self.assertEqual(out["internal_trace"]["nlu"]["llm_candidate_contract"], candidate_contract)
         finally:
             reset_session(session_id)
 
@@ -221,6 +227,10 @@ class AgentWorkflowGraphTest(unittest.TestCase):
             self.assertEqual(trace["applied_paths"], [])
             self.assertEqual(out.get("config", {}).get("materials", {}).get("selected_materials"), [])
             self.assertIn("geometry.structure", out.get("missing_fields", []))
+            candidate_contract = out["llm_candidate_contract"]
+            self.assertFalse(candidate_contract["resolution"]["applied_to_session"])
+            self.assertIn("materials.selected_materials", candidate_contract["candidate_boundary"]["rejected_paths"])
+            self.assertTrue(candidate_contract["uncertainties"])
         finally:
             reset_session(session_id)
 

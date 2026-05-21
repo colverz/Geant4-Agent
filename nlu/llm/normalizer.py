@@ -14,6 +14,19 @@ logger = logging.getLogger(__name__)
 
 
 _TARGET_HINTS = {
+    "geometry.root_name": [
+        "geometry.root_name",
+        "root_name",
+        "root volume",
+        "root volume name",
+        "volume named",
+        "named ",
+        "target name",
+        "volume name",
+        "体积名",
+        "根体积",
+        "几何名称",
+    ],
     "geometry.params.module_x": ["module_x", "x=", "x:", "size_x", "width", "\u5bbd", "\u5bbd\u5ea6"],
     "geometry.params.module_y": ["module_y", "y=", "y:", "size_y", "height", "\u9ad8", "\u9ad8\u5ea6"],
     "geometry.params.module_z": ["module_z", "z=", "z:", "size_z", "thickness", "\u539a", "\u539a\u5ea6"],
@@ -148,6 +161,7 @@ _BOOLEAN_HINTS = (
 
 _UNRESOLVED_SLOT_TO_TARGET_PATHS = {
     "geometry.kind": {"geometry.structure"},
+    "geometry.root_name": {"geometry.root_name"},
     "materials.primary": {"materials.selected_materials"},
     "source.kind": {"source.type"},
     "source.particle": {"source.particle"},
@@ -201,6 +215,10 @@ def _collect_target_paths(payload: str) -> list[str]:
     if "pointing" in low or re.search(r"\balong\s*[+-]?[xyz]\b", low):
         out.append("source.direction")
     if (
+        "geometry.size_triplet_mm" in low
+        or "geometry.size" in low
+        or "size_triplet_mm" in low
+        or
         re.search(r"\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:x|by)\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)\s*(?:x|by)\s*\d+(?:\.\d+)?\s*(?:mm|cm|m)", low)
         or "\u89c1\u65b9" in low
         or "\u8fb9\u957f" in low

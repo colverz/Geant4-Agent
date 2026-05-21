@@ -1,0 +1,41 @@
+{
+  "schema_version": "geant4_agent_industrial_golden.v1",
+  "case_id": "shielding_lead_gamma_transmission",
+  "created_at_utc": "2026-05-15T08:48:55Z",
+  "runtime_fingerprint": {
+    "geant4_version": "$Name: geant4-11-04 [MT]$",
+    "runtime_wrapper_hash": null,
+    "runtime_payload_hash": "e3eaa4a1f71adea100d38d68841673b8b67bbe7a8447f4d9c049b4bed4d37b25",
+    "physics_list": "FTFP_BERT",
+    "seed": 1337,
+    "events": 10000,
+    "threads": 1,
+    "platform": "Windows-10-10.0.22631-SP0"
+  },
+  "runtime_payload_hash": "e3eaa4a1f71adea100d38d68841673b8b67bbe7a8447f4d9c049b4bed4d37b25",
+  "metrics": {
+    "detector_crossing_count": {
+      "expected": 4659,
+      "tolerance": 0
+    },
+    "detector_edep_total_mev": {
+      "expected": 53.9888,
+      "tolerance": 0.0
+    },
+    "transmission_factor": {
+      "expected": 0.4659,
+      "tolerance": 0.0
+    }
+  },
+  "artifact_dir": "F:\\geant4agent\\runtime_artifacts",
+  "run_summary_path": "F:\\geant4agent\\runtime_artifacts\\run_summary.json",
+  "review": {
+    "status": "reviewed",
+    "reviewer": "codex-engineering-review",
+    "reviewed_at_utc": "2026-05-15T09:48:00Z",
+    "notes": "Engineering review passed: runtime payload hash matches deterministic compiler; run summary matches expected metrics; single-thread seed=1337 rerun reproduced detector_crossing_count=4659, detector_edep_total_mev=53.9888, transmission_factor=0.4659; 10 mm Pb / 1 MeV gamma transmission is consistent with NIST XCOM attenuation order of magnitude. Scope: internal benchmark baseline review, not external physics certification.",
+    "evidence": "NIST XCOM Pb mu/rho at 1 MeV = 7.102E-02 cm2/g; local Geant4 11.04 runtime; runtime_payload_hash=e3eaa4a1f71adea100d38d68841673b8b67bbe7a8447f4d9c049b4bed4d37b25",
+    "previous_status": "unreviewed",
+    "metrics_hash": "69898dcafae9dda00e6d9c1ad1f7421160c8e8488255cfb969c291967297228c"
+  }
+}

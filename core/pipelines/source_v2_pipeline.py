@@ -59,7 +59,7 @@ def build_v2_source_updates_from_config(
     for key, value in fragment.items():
         path = f"source.{key}"
         updates.append(
-            UpdateOp(path=path, op="set", value=value, producer=Producer.BERT_EXTRACTOR, confidence=confidence, turn_id=turn_id)
+            UpdateOp(path=path, op="set", value=value, producer=Producer.RUNTIME_SEMANTIC, confidence=confidence, turn_id=turn_id)
         )
         target_paths.append(path)
     return updates, target_paths, {

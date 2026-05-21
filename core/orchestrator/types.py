@@ -29,6 +29,7 @@ class Producer(str, Enum):
     USER_NORMALIZER = "user_normalizer"
     SLOT_MAPPER = "slot_mapper"
     LLM_SEMANTIC_FRAME = "llm_semantic_frame"
+    RUNTIME_SEMANTIC = "runtime_semantic"
     BERT_EXTRACTOR = "bert_extractor"
     LLM_RECOMMENDER = "llm_recommender"
     RULE_DEFAULT = "rule_default"

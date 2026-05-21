@@ -15,6 +15,7 @@ from mcp.geant4.runtime_payload import build_runtime_payload
 from mcp.geant4.server import Geant4McpServer
 from planner.runtime_intent import classify_user_runtime_intent
 from planner.runtime_result import naturalize_runtime_result_message, naturalize_runtime_result_question_answer
+from ui.web.runtime_state import get_latest_recommended_config
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -112,6 +113,20 @@ def _idempotency_replay_body(decision) -> tuple[int, dict[str, Any]] | None:
             "idempotency": decision.to_dict(),
         }
     return None
+
+
+def _has_config_payload(value: Any) -> bool:
+    return isinstance(value, dict) and any(bool(value.get(key)) for key in ("geometry", "source", "physics", "physics_list"))
+
+
+def _runtime_config_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    patch = payload.get("patch")
+    if _has_config_payload(patch):
+        return dict(patch)
+    config = payload.get("config")
+    if _has_config_payload(config):
+        return dict(config)
+    return get_latest_recommended_config(payload.get("session_id"))
 
 
 def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
@@ -223,12 +238,13 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
             ToolCallRequest(tool_name="apply_config_patch", arguments={"patch": payload.get("patch", {})})
         )
     elif path == "/api/geant4/validate":
+        fallback_config = _runtime_config_from_payload(payload)
         obs = server.call_tool(
             ToolCallRequest(
                 tool_name="validate_config",
                 arguments={
-                    "config": payload.get("config"),
-                    "patch": payload.get("patch"),
+                    "config": payload.get("config") if _has_config_payload(payload.get("config")) else fallback_config,
+                    "patch": payload.get("patch") if _has_config_payload(payload.get("patch")) else {},
                     "events": int(payload.get("events", 1) or 1),
                 },
             )
@@ -237,13 +253,34 @@ def handle_geant4_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[st
         obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
     elif path == "/api/geant4/run":
         events = int(payload.get("events", 1))
-        action_payload = {"events": events}
+        runtime_config = _runtime_config_from_payload(payload)
+        action_payload = {"events": events, "config": runtime_config}
         action_id = str(payload.get("action_id", "")).strip()
         if action_id:
             decision = _IDEMPOTENCY_POLICY.check_before_execute("run_beam", action_payload, action_id=action_id)
             replay = _idempotency_replay_body(decision)
             if replay is not None:
                 return replay
+        if runtime_config:
+            preflight_obs = server.call_tool(
+                ToolCallRequest(
+                    tool_name="validate_config",
+                    arguments={"config": runtime_config, "patch": {}, "events": events},
+                )
+            )
+            if not preflight_obs.payload.get("ok"):
+                body = _observation_body(preflight_obs)
+                body["action_safety_class"] = ActionSafetyClass.READ_ONLY.value
+                body["message"] = "Runtime preflight failed before run."
+                body["idempotency"] = _idempotency_metadata("run_beam", action_payload, action_id=action_id)
+                return 400, body
+            server.call_tool(ToolCallRequest(tool_name="apply_config_patch", arguments={"patch": runtime_config}))
+            init_obs = server.call_tool(ToolCallRequest(tool_name="initialize_run", arguments={}))
+            if init_obs.status.value not in {"completed", "accepted"}:
+                body = _observation_body(init_obs)
+                body["action_safety_class"] = ActionSafetyClass.EXPENSIVE_RUNTIME.value
+                body["idempotency"] = _idempotency_metadata("run_beam", action_payload, action_id=action_id)
+                return 400, body
         obs = server.call_tool(
             ToolCallRequest(tool_name="run_beam", arguments={"events": events})
         )

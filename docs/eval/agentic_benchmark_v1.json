@@ -58,7 +58,7 @@
     "suite": "runtime",
     "difficulty": "standard",
     "lang": "en",
-    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace", "model_routing"],
+    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace", "model_routing", "nlu_boundary"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -84,6 +84,10 @@
         "energy": 1.0,
         "physics_list": "FTFP_BERT"
       }
+    },
+    "expected_nlu": {
+      "must_disable_nlp_bert_prior": true,
+      "expected_inference_backend": "runtime_semantic_rules"
     },
     "expected_config_delta": {
       "must_apply_paths": ["geometry.structure", "source.energy", "source.particle"],
@@ -127,7 +131,7 @@
     "suite": "core",
     "difficulty": "standard",
     "lang": "en",
-    "capabilities": ["intent_routing", "config_extraction", "workflow_trace", "runtime_readiness", "model_routing"],
+    "capabilities": ["intent_routing", "config_extraction", "workflow_trace", "runtime_readiness", "model_routing", "nlu_boundary"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -153,6 +157,10 @@
         "energy": 150.0,
         "physics_list": "FTFP_BERT"
       }
+    },
+    "expected_nlu": {
+      "must_disable_nlp_bert_prior": true,
+      "expected_inference_backend": "runtime_semantic_rules"
     },
     "expected_config_delta": {
       "must_apply_paths": ["geometry.structure", "source.energy", "source.particle"],
@@ -724,7 +732,7 @@
     "suite": "trajectory",
     "difficulty": "standard",
     "lang": "en",
-    "capabilities": ["intent_routing", "workflow_trace", "tool_guard", "runtime_readiness"],
+    "capabilities": ["intent_routing", "workflow_trace", "tool_guard", "runtime_readiness", "nlu_boundary"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -755,6 +763,11 @@
       "after_turn_index": 0,
       "must_have_runtime_payload": true,
       "required_payload_keys": ["structure", "material", "source_type", "particle", "energy", "physics_list"]
+    },
+    "expected_nlu": {
+      "after_turn_index": 0,
+      "must_disable_nlp_bert_prior": true,
+      "expected_inference_backend": "runtime_semantic_rules"
     },
     "forbidden": {
       "runtime_side_effects": true
@@ -795,7 +808,7 @@
     "suite": "grounding",
     "difficulty": "adversarial",
     "lang": "en",
-    "capabilities": ["grounding", "workflow_trace", "config_extraction", "model_routing"],
+    "capabilities": ["grounding", "workflow_trace", "config_extraction", "model_routing", "nlu_boundary"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -819,6 +832,10 @@
         "source.particle": "gamma"
       }
     },
+    "expected_nlu": {
+      "must_disable_nlp_bert_prior": true,
+      "expected_inference_backend": "runtime_semantic_rules"
+    },
     "forbidden": {
       "session_mutation": true,
       "unsupported_capability_as_supported": true
@@ -834,7 +851,7 @@
     "suite": "grounding",
     "difficulty": "standard",
     "lang": "en",
-    "capabilities": ["grounding", "workflow_trace", "config_extraction", "runtime_readiness"],
+    "capabilities": ["grounding", "workflow_trace", "config_extraction", "runtime_readiness", "nlu_boundary"],
     "requires_live_llm": false,
     "requires_real_runtime": false,
     "turns": [
@@ -884,6 +901,11 @@
     "expected_runtime": {
       "after_turn_index": 0,
       "must_have_runtime_payload": false
+    },
+    "expected_nlu": {
+      "after_turn_index": 0,
+      "must_disable_nlp_bert_prior": true,
+      "expected_inference_backend": "runtime_semantic_rules"
     }
   },
   {
@@ -942,7 +964,7 @@
     "suite": "live_llm",
     "difficulty": "live",
     "lang": "en",
-    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace", "llm_reliability", "model_routing"],
+    "capabilities": ["config_extraction", "runtime_readiness", "workflow_trace", "llm_reliability", "model_routing", "nlu_boundary"],
     "requires_live_llm": true,
     "requires_real_runtime": false,
     "turns": [
@@ -969,6 +991,11 @@
         "energy": 1.0,
         "physics_list": "FTFP_BERT"
       }
+    },
+    "expected_nlu": {
+      "after_turn_index": 0,
+      "must_disable_nlp_bert_prior": true,
+      "expected_inference_backend": "runtime_semantic_rules"
     },
     "expected_model_route": {
       "label": "strong_model_candidate",

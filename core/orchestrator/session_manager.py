@@ -11,6 +11,9 @@ from core.audit.audit_log import append_audit_entry
 from core.agent.composite_intent import detect_composite_intent
 from core.agent.context_pack import build_context_pack
 from core.agent.intent_router import route_user_turn
+from core.agent.llm_candidate_contract import build_workflow_llm_candidate_report
+from core.agent.simulation_design import build_simulation_design_candidate
+from core.agent.simulation_design_llm import build_llm_simulation_design_candidate
 from core.agent.staged_patch import build_staged_patch_reference
 from core.agent.turn_trace import NluTurnTrace, stable_hash
 from core.agent.workflow_graph import graph_path_for_intent, terminal_state_for_intent
@@ -34,6 +37,7 @@ from core.geometry.resolver import (
 )
 from core.interpreter import merge_candidates, run_interpreter
 from core.pipelines import (
+    PIPELINE_LEGACY,
     build_v2_geometry_updates,
     build_v2_geometry_updates_from_candidate,
     build_v2_geometry_updates_from_config,
@@ -72,7 +76,7 @@ from core.orchestrator.confirmation_policy import (
 )
 from core.orchestrator.constraint_ledger import lock_from_candidate
 from core.orchestrator.graph_override_policy import should_prefer_extracted_graph
-from core.orchestrator.path_ops import deep_copy, get_path, remove_path, set_path
+from core.orchestrator.path_ops import deep_copy, diff_paths, get_path, remove_path, set_path
 from core.orchestrator.phase_machine import decide_phase_transition
 from core.orchestrator.pipeline_debug import merge_v2_meta, merge_v2_missing_paths, prioritize_spatial_questions, prioritize_v2_compile_questions
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
@@ -90,7 +94,7 @@ from core.validation.validator_gate import (
     validate_all,
     validate_layer_c_completeness,
 )
-from nlu.bert.extractor import extract_candidates_from_normalized_text
+from nlu.runtime_extractor import extract_candidates_from_normalized_text
 from nlu.llm.slot_frame import build_llm_slot_frame
 from nlu.llm.semantic_frame import build_llm_semantic_frame
 from nlu.llm.normalizer import infer_user_turn_controls, normalize_user_turn
@@ -203,6 +207,73 @@ def reset_session(session_id: str) -> None:
         SESSIONS.pop(session_id, None)
 
 
+def commit_recommended_config(
+    session_id: str | None,
+    config: dict[str, Any],
+    *,
+    source: str = "accepted_simulation_design",
+) -> dict[str, Any]:
+    sid = str(session_id or "").strip()
+    if not sid:
+        return {"ok": False, "error": "missing_session_id", "session_id": sid}
+    if not isinstance(config, dict) or not config:
+        return {"ok": False, "error": "missing_recommended_config", "session_id": sid}
+    allowed_top_level = {
+        "geometry",
+        "materials",
+        "source",
+        "physics",
+        "output",
+        "simulation",
+        "scoring",
+        "detector",
+    }
+    committed_paths: list[str] = []
+    with _SESSIONS_LOCK:
+        state = get_or_create_session(sid)
+        before = deep_copy(state.config)
+        for key in sorted(allowed_top_level):
+            value = config.get(key)
+            if value is None:
+                continue
+            set_path(state.config, key, deep_copy(value) if isinstance(value, dict) else value)
+            committed_paths.append(key)
+        physics_list = config.get("physics_list")
+        if isinstance(physics_list, dict) and physics_list.get("name"):
+            set_path(state.config, "physics.physics_list", str(physics_list["name"]))
+            committed_paths.append("physics.physics_list")
+        elif isinstance(physics_list, str) and physics_list:
+            set_path(state.config, "physics.physics_list", physics_list)
+            committed_paths.append("physics.physics_list")
+        state.semantic_missing_paths = []
+        state.pending_overwrite = []
+        state.last_dialogue_action = "accept_candidate"
+        for path in committed_paths:
+            state.field_sources[path] = source
+        report = validate_layer_c_completeness(state.config)
+        state.semantic_missing_paths = list(report.missing_required_paths)
+        audit_entry = {
+            "turn_id": state.turn_id,
+            "action": "accept_candidate",
+            "source": source,
+            "committed_paths": list(committed_paths),
+            "diff_paths": diff_paths(before, state.config),
+            "ok": bool(report.ok),
+        }
+        state.audit_trail.append(audit_entry)
+        config_out = deep_copy(state.config)
+    return {
+        "ok": True,
+        "session_id": sid,
+        "action": "accept_candidate",
+        "action_safety_class": ActionSafetyClass.CONFIG_MUTATION.value,
+        "committed_paths": committed_paths,
+        "missing_fields": list(report.missing_required_paths),
+        "is_complete": bool(report.ok),
+        "config": config_out,
+    }
+
+
 def _build_context_summary(state: SessionState) -> str:
     c = state.config
     parts = [
@@ -245,6 +316,8 @@ def _prune_slot_frame_to_targets(frame: SlotFrame, target_paths: list[str]) -> S
 
     if not _wanted("geometry.structure", "geometry.kind"):
         frame.geometry.kind = None
+    if not _wanted("geometry.root_name"):
+        frame.geometry.root_name = None
     if not any(path in targets for path in ("geometry.params.module_x", "geometry.params.module_y", "geometry.params.module_z")):
         frame.geometry.size_triplet_mm = None
     if not _wanted("geometry.params.child_rmax"):
@@ -397,6 +470,30 @@ def _build_v2_bridge_candidates(
         if source_candidate is not None:
             bridge_candidates.append(source_candidate)
     return bridge_candidates, bridge_meta
+
+
+def _drop_incomplete_graph_program_for_v2(
+    candidate: CandidateUpdate,
+    debug: dict[str, Any],
+    pipeline_selection: Any,
+) -> CandidateUpdate:
+    if pipeline_selection.geometry != "v2":
+        return candidate
+    graph_choice = debug.get("graph_choice") if isinstance(debug, dict) else None
+    missing_params = graph_choice.get("missing_params") if isinstance(graph_choice, dict) else None
+    if not missing_params:
+        return candidate
+    filtered_updates = [update for update in candidate.updates if update.path != "geometry.graph_program"]
+    if len(filtered_updates) == len(candidate.updates):
+        return candidate
+    return CandidateUpdate(
+        producer=candidate.producer,
+        intent=candidate.intent,
+        target_paths=[path for path in candidate.target_paths if path != "geometry.graph_program"],
+        updates=filtered_updates,
+        confidence=candidate.confidence,
+        rationale=f"{candidate.rationale}_incomplete_graph_program_stripped",
+    )
 
 
 def _build_geometry_evidence_from_slot_frame(frame: Any) -> dict[str, Any]:
@@ -936,6 +1033,165 @@ def _progress(progress_cb, stage: str, label: str, detail: str | None = None) ->
         progress_cb(stage, label, detail)
 
 
+def _render_simulation_design_message(candidate: dict[str, Any], *, lang: str) -> str:
+    setup = candidate.get("recommended_setup") if isinstance(candidate.get("recommended_setup"), dict) else {}
+    observables = [str(item).strip() for item in candidate.get("observables", []) if str(item).strip()]
+    simplifications = [str(item).strip() for item in candidate.get("simplifications", []) if str(item).strip()]
+    unsupported = [str(item).strip() for item in candidate.get("unsupported_capabilities", []) if str(item).strip()]
+    decisions = [str(item).strip() for item in candidate.get("user_decisions_required", []) if str(item).strip()]
+    next_action = str(candidate.get("next_action") or "needs_more_information")
+
+    def _short(value: Any, fallback: str) -> str:
+        text = str(value or "").strip()
+        return text if text else fallback
+
+    def _join(items: list[str], *, fallback: str, limit: int = 4) -> str:
+        if not items:
+            return fallback
+        head = items[:limit]
+        suffix = f" (+{len(items) - limit})" if len(items) > limit else ""
+        return "; ".join(head) + suffix
+
+    action_label_zh = {
+        "build_candidate_config": "可以基于这个方案生成配置草案。",
+        "ask_user_to_choose_approximation": "需要你先确认是否接受近似方案。",
+        "unsupported_capability": "当前 runtime 还不能可靠执行这个需求。",
+        "needs_more_information": "还需要补充关键信息后才能设计方案。",
+    }.get(next_action, next_action)
+    action_label_en = {
+        "build_candidate_config": "This can proceed to candidate config generation.",
+        "ask_user_to_choose_approximation": "Please approve or reject the proposed approximation first.",
+        "unsupported_capability": "This request needs capabilities the current runtime does not support yet.",
+        "needs_more_information": "More information is needed before a concrete setup can be designed.",
+    }.get(next_action, next_action)
+
+    if str(lang).lower().startswith("zh"):
+        risk_lines = []
+        if simplifications:
+            risk_lines.append(f"- 近似：{_join(simplifications, fallback='无')}")
+        if unsupported:
+            risk_lines.append(f"- 暂不支持：{_join(unsupported, fallback='无')}")
+        if decisions:
+            risk_lines.append(f"- 需要你裁定：{_join(decisions, fallback='无')}")
+        if not risk_lines:
+            risk_lines.append("- 暂未发现必须人工确认的近似或不支持项。")
+        lines = [
+            "我先把你的需求整理成一个模拟方案候选。此步骤只做设计，不写入配置，也不会启动 Geant4。",
+            "",
+            "推荐方案",
+            f"- 几何：{_short(setup.get('geometry'), '待定')}",
+            f"- 材料：{_short(setup.get('material'), '待定')}",
+            f"- 源：{_short(setup.get('source'), '待定')}",
+            f"- 观测量：{_join(observables, fallback='待定')}",
+            "",
+            "需要注意",
+            *risk_lines,
+            "",
+            f"下一步：{action_label_zh}",
+        ]
+        if next_action == "build_candidate_config":
+            lines.append("如果你接受这个方向，可以继续说“按这个方案生成配置”。")
+        return "\n".join(lines)
+
+    risk_lines = []
+    if simplifications:
+        risk_lines.append(f"- Approximation: {_join(simplifications, fallback='none')}")
+    if unsupported:
+        risk_lines.append(f"- Unsupported: {_join(unsupported, fallback='none')}")
+    if decisions:
+        risk_lines.append(f"- Decision needed: {_join(decisions, fallback='none')}")
+    if not risk_lines:
+        risk_lines.append("- No mandatory approximation or unsupported item was found.")
+    lines = [
+        "I turned your request into a simulation design candidate. This is design-only: no config was written and Geant4 was not started.",
+        "",
+        "Recommended setup",
+        f"- Geometry: {_short(setup.get('geometry'), 'to be decided')}",
+        f"- Material: {_short(setup.get('material'), 'to be decided')}",
+        f"- Source: {_short(setup.get('source'), 'to be decided')}",
+        f"- Observables: {_join(observables, fallback='to be decided')}",
+        "",
+        "Important checks",
+        *risk_lines,
+        "",
+        f"Next step: {action_label_en}",
+    ]
+    if next_action == "build_candidate_config":
+        lines.append("If this looks right, ask me to generate the concrete Geant4 configuration from this design.")
+    return "\n".join(lines)
+
+
+def _simulation_design_recommended_config(candidate: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    if candidate.get("next_action") != "build_candidate_config":
+        return {}, []
+    setup = candidate.get("recommended_setup") if isinstance(candidate.get("recommended_setup"), dict) else {}
+    goal = str(candidate.get("goal") or "")
+    low = goal.lower()
+    material = str(setup.get("material") or "").strip() or "G4_WATER"
+    geometry = str(setup.get("geometry") or "single_box").strip() or "single_box"
+    source_kind = str(setup.get("source") or "beam").strip() or "beam"
+    particle = "gamma"
+    for name in ("neutron", "proton", "electron", "gamma"):
+        if name in low:
+            particle = name
+            break
+    energy_mev = 1.0
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(kev|mev|gev)\b", low)
+    if match:
+        value = float(match.group(1))
+        unit = match.group(2)
+        energy_mev = value / 1000.0 if unit == "kev" else value * 1000.0 if unit == "gev" else value
+    dimensions = (10.0, 10.0, 10.0)
+    dim_match = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?\s*[x×]\s*"
+        r"(\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?\s*[x×]\s*"
+        r"(\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?",
+        low,
+    )
+    if dim_match:
+        dimensions = tuple(float(dim_match.group(i)) for i in range(1, 4))  # type: ignore[assignment]
+    assumptions = [
+        "single_box geometry is used for the runnable draft",
+        "default dimensions are 10 x 10 x 10 mm unless dimensions were provided",
+        "source starts at (0, 0, -20) mm and points along +z",
+        "physics list defaults to FTFP_BERT",
+    ]
+    detector_enabled = "detector" in " ".join(str(item) for item in candidate.get("observables", [])).lower() or bool(
+        isinstance(setup.get("detector"), dict) and setup.get("detector", {}).get("enabled")
+    )
+    config = {
+        "geometry": {
+            "structure": "single_box" if geometry in {"single_box", "slab"} else geometry,
+            "params": {
+                "module_x": dimensions[0],
+                "module_y": dimensions[1],
+                "module_z": dimensions[2],
+            },
+        },
+        "materials": {
+            "selected_materials": [material],
+            "volume_material_map": {"target": material},
+        },
+        "source": {
+            "type": "point" if source_kind == "point" else "beam",
+            "particle": particle,
+            "energy": energy_mev,
+            "position": {"type": "vector", "value": [0.0, 0.0, -20.0]},
+            "direction": {"type": "vector", "value": [0.0, 0.0, 1.0]},
+        },
+        "physics": {"physics_list": "FTFP_BERT"},
+        "output": {"format": "json"},
+    }
+    if detector_enabled:
+        config["simulation"] = {
+            "detector": {
+                "enabled": True,
+                "material": "G4_Si",
+            }
+        }
+    return config, assumptions
+
+
 def process_turn(
     payload: dict,
     *,
@@ -973,6 +1229,10 @@ def process_turn(
         geometry=str(payload.get("geometry_pipeline", "")).strip() or None,
         source=str(payload.get("source_pipeline", "")).strip() or None,
     )
+    enable_legacy_nlp_bert_prior = (
+        pipeline_selection.geometry == PIPELINE_LEGACY
+        or pipeline_selection.source == PIPELINE_LEGACY
+    )
     llm_router = bool(payload.get("llm_router", True))
     llm_question = bool(payload.get("llm_question", True))
     internal_temperature = 0.0
@@ -981,6 +1241,7 @@ def process_turn(
     apply_autofix = bool(payload.get("autofix", False))
     enable_compare = bool(payload.get("enable_compare", True))
     enable_interpreter = bool(payload.get("enable_interpreter", False))
+    enable_simulation_design = bool(payload.get("enable_simulation_design", False))
     enable_llm_first = bool(llm_router and normalize_input)
     llm_used = False
     fallback_reason = E_LLM_ROUTER_DISABLED if (not llm_router and normalize_input) else "E_LLM_DISABLED"
@@ -1008,6 +1269,97 @@ def process_turn(
         explicit_controls=explicit_controls,
     )
     _progress(progress_cb, "intent", "Interpreting intent", "User controls and overwrite intent parsed.")
+
+    if enable_simulation_design:
+        llm_design = None
+        llm_design_used = False
+        simulation_design_source = "deterministic"
+        design_fallback_reason = None
+        if bool(payload.get("llm_router", True)):
+            llm_design = build_llm_simulation_design_candidate(
+                text,
+                config_path=ollama_config_path,
+                lang=lang,
+            )
+            if llm_design.get("ok") and isinstance(llm_design.get("candidate"), dict):
+                simulation_design_payload = dict(llm_design["candidate"])
+                llm_design_used = True
+                simulation_design_source = "llm"
+            else:
+                design_fallback_reason = llm_design.get("fallback_reason") or "simulation_design_llm_failed"
+                simulation_design_payload = build_simulation_design_candidate(
+                    text,
+                    current_config=before_config,
+                ).to_dict()
+        else:
+            simulation_design_payload = build_simulation_design_candidate(
+                text,
+                current_config=before_config,
+            ).to_dict()
+            design_fallback_reason = "simulation_design_llm_disabled"
+        recommended_config, recommended_config_assumptions = _simulation_design_recommended_config(
+            simulation_design_payload
+        )
+        message = _render_simulation_design_message(simulation_design_payload, lang=lang)
+        state.history.append({"role": "assistant", "content": message})
+        raw_dialogue = build_raw_dialogue(state.history)
+        return {
+            "session_id": state.session_id,
+            "phase": state.phase.value,
+            "phase_title": phase_title(state.phase.value, lang),
+            "dialogue_action": "simulation_design",
+            "assistant_message": message,
+            "raw_dialogue": raw_dialogue,
+            "is_complete": False,
+            "simulation_design": simulation_design_payload,
+            "simulation_design_source": simulation_design_source,
+            "recommended_config": recommended_config,
+            "recommended_config_assumptions": recommended_config_assumptions,
+            "simulation_design_llm": {
+                "used": llm_design_used,
+                "fallback_reason": design_fallback_reason,
+                "prompt_profile_id": (llm_design or {}).get("prompt_profile_id"),
+                "prompt_validation": (llm_design or {}).get("prompt_validation"),
+                "raw_response": (llm_design or {}).get("raw_response", "") if llm_design_used else "",
+            },
+            "action_safety_class": ActionSafetyClass.READ_ONLY.value,
+            "config": before_config,
+            "field_sources": state.field_sources,
+            "nlu_turn_trace": {
+                "schema_version": "nlu_turn_trace.v1",
+                "turn_id_before": turn_id_before,
+                "turn_id_after": state.turn_id,
+                "intent": "simulation_design",
+                "action_safety_class": ActionSafetyClass.READ_ONLY.value,
+                "terminal_state": "read_only_answer",
+                "node_sequence": ["intent_route", "simulation_design"],
+                "llm_used": llm_design_used,
+                "fallback_reason": design_fallback_reason,
+                "tool_calls_allowed": [],
+                "tool_calls_blocked": ["run_beam", "viewer_open"],
+                "prompt_profile_id": (llm_design or {}).get("prompt_profile_id"),
+                "prompt_validation": (llm_design or {}).get("prompt_validation"),
+            },
+            "internal_trace": {
+                "agent": {
+                    "intent_decision": intent_decision.to_dict(),
+                    "composite_intent": composite_intent.to_dict(),
+                    "context_pack": context_pack.to_dict(),
+                },
+                "simulation_design": simulation_design_payload,
+                "recommended_config": recommended_config,
+                "recommended_config_assumptions": recommended_config_assumptions,
+                "simulation_design_llm": {
+                    "used": llm_design_used,
+                    "fallback_reason": design_fallback_reason,
+                    "prompt_profile_id": (llm_design or {}).get("prompt_profile_id"),
+                    "prompt_validation": (llm_design or {}).get("prompt_validation"),
+                    "reference_pack": (llm_design or {}).get("reference_pack"),
+                },
+            },
+            "history": state.history[-10:],
+            "audit_size": len(state.audit_trail),
+        }
 
     if enable_llm_first:
         _progress(progress_cb, "slot_frame", "Building slot frame", "Running LLM-first slot extraction.")
@@ -1079,7 +1431,9 @@ def process_turn(
                 context_summary=context_summary,
                 config_path=ollama_config_path,
                 apply_autofix=apply_autofix,
+                enable_nlp_bert_prior=enable_legacy_nlp_bert_prior,
             )
+            extracted_candidate = _drop_incomplete_graph_program_for_v2(extracted_candidate, debug, pipeline_selection)
             bridge_source_candidate = extracted_candidate
             slot_structure = _candidate_structure(slot_candidate)
             extracted_structure = _candidate_structure(extracted_candidate)
@@ -1189,14 +1543,16 @@ def process_turn(
                     context_summary=context_summary,
                     config_path=ollama_config_path,
                     apply_autofix=apply_autofix,
+                    enable_nlp_bert_prior=enable_legacy_nlp_bert_prior,
                 )
+                extracted_candidate = _drop_incomplete_graph_program_for_v2(extracted_candidate, debug, pipeline_selection)
                 semantic_candidate = filter_candidate_by_explicit_targets(
                     semantic_result.candidate,
                     list(user_candidate.target_paths),
                 )
                 bridge_updates = list(semantic_candidate.updates)
                 bridge_source_candidate = CandidateUpdate(
-                    producer=Producer.BERT_EXTRACTOR,
+                    producer=Producer.RUNTIME_SEMANTIC,
                     intent=user_candidate.intent,
                     target_paths=list(user_candidate.target_paths),
                     updates=bridge_updates,
@@ -1279,7 +1635,9 @@ def process_turn(
             context_summary=context_summary,
             config_path=ollama_config_path,
             apply_autofix=apply_autofix,
+            enable_nlp_bert_prior=enable_legacy_nlp_bert_prior,
         )
+        primary_candidate = _drop_incomplete_graph_program_for_v2(primary_candidate, debug, pipeline_selection)
         bridge_source_candidate = primary_candidate
         if pipeline_selection.geometry == "v2":
             primary_candidate = _strip_geometry_updates(primary_candidate)
@@ -1628,6 +1986,9 @@ def process_turn(
     candidate_patch_paths = _dedupe_paths([update.path for candidate in candidates for update in candidate.updates])
     applied_paths = _dedupe_paths([update.path for update in committed_updates])
     rejected_paths = _dedupe_paths([str(item.get("path", "")) for item in rejected_updates if str(item.get("path", ""))])
+    pending_confirmation_paths = _dedupe_paths(
+        [str(item.get("path", "")) for item in staged_pending_overwrite if str(item.get("path", ""))]
+    )
     trace_intent = intent_decision.intent
     if composite_intent.requires_staged_runtime_guard:
         trace_intent = "config_mutation"
@@ -1657,6 +2018,17 @@ def process_turn(
         trace_blocked_tools = ["run_beam"]
     elif trace_intent == "viewer_requested":
         trace_blocked_tools = ["viewer_open"]
+    llm_candidate_contract = build_workflow_llm_candidate_report(
+        user_goal=text,
+        llm_used=llm_used,
+        fallback_reason=fallback_reason,
+        prompt_profile_id=slot_debug.get("prompt_profile_id") or intent_decision.prompt_profile_id,
+        inference_backend=str(debug.get("inference_backend", "orchestrated")),
+        candidate_patch_paths=candidate_patch_paths,
+        applied_paths=applied_paths,
+        rejected_paths=rejected_paths,
+        pending_confirmation_paths=pending_confirmation_paths,
+    )
     nlu_turn_trace = NluTurnTrace(
         turn_id_before=turn_id_before,
         turn_id_after=state.turn_id,
@@ -1713,7 +2085,13 @@ def process_turn(
             "llm_used": llm_used,
             "fallback_reason": fallback_reason,
             "inference_backend": debug.get("inference_backend", "orchestrated"),
+            "semantic_debug": {
+                "inference_backend": debug.get("inference_backend", "orchestrated"),
+                "nlp_bert_model_prior_enabled": bool(debug.get("nlp_bert_model_prior_enabled", False)),
+                "graph_choice": debug.get("graph_choice", {}),
+            },
             "normalization": normalization_payload,
+            "llm_candidate_contract": llm_candidate_contract,
             "pipelines": {"geometry": pipeline_selection.geometry, "source": pipeline_selection.source},
             "slot_debug": slot_debug,
             "geometry_compare": geometry_compare,
@@ -1794,8 +2172,10 @@ def process_turn(
         "warnings": report.warnings,
         "graph_candidates": debug.get("graph_candidates", []),
         "graph_choice": debug.get("graph_choice", {}),
+        "nlp_bert_model_prior_enabled": bool(debug.get("nlp_bert_model_prior_enabled", False)),
         "inference_backend": debug.get("inference_backend", "orchestrated"),
         "nlu_turn_trace": nlu_turn_trace.to_dict(),
+        "llm_candidate_contract": llm_candidate_contract,
         "context_pack": final_context_pack.to_dict(),
         "internal_trace": internal_trace,
         "history": state.history[-10:],

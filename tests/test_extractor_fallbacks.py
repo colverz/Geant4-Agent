@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from nlu.bert.extractor import (
+from nlu.runtime_extractor import (
     _infer_material,
     _infer_source_type,
     _infer_structure_from_text,

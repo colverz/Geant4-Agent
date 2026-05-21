@@ -318,6 +318,7 @@ def _expand_update_paths(path: str, value: Any, structure_hint: str) -> tuple[li
         return [(canon, str(value or "").strip().lower())], [], False
 
     if canon.startswith("geometry.params.") or canon in {
+        "geometry.root_name",
         "source.energy",
         "source.position",
         "source.direction",

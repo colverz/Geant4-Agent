@@ -12,8 +12,9 @@ DEFAULT_PRODUCER_RANK = {
     Producer.USER_EXPLICIT: 100,
     Producer.SLOT_MAPPER: 90,
     Producer.LLM_SEMANTIC_FRAME: 85,
+    Producer.RUNTIME_SEMANTIC: 80,
     Producer.USER_NORMALIZER: 70,
-    Producer.BERT_EXTRACTOR: 80,
+    Producer.BERT_EXTRACTOR: 50,
     Producer.LLM_RECOMMENDER: 60,
     Producer.RULE_DEFAULT: 10,
 }
@@ -24,8 +25,9 @@ def _priority(p: Producer) -> int:
         Producer.USER_EXPLICIT: 5,
         Producer.SLOT_MAPPER: 4,
         Producer.LLM_SEMANTIC_FRAME: 4,
+        Producer.RUNTIME_SEMANTIC: 3,
         Producer.USER_NORMALIZER: 3,
-        Producer.BERT_EXTRACTOR: 3,
+        Producer.BERT_EXTRACTOR: 2,
         Producer.LLM_RECOMMENDER: 2,
         Producer.RULE_DEFAULT: 1,
     }[p]

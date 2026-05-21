@@ -1,0 +1,15 @@
+{
+  "name": "geant4-agent-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Chromium desktop shell for Geant4-Agent.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:dev": "electron .",
+    "start:bridge": "python -m ui.desktop.runtime_bridge --host 127.0.0.1 --port 8088"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3"
+  }
+}

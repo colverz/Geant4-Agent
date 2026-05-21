@@ -26,7 +26,19 @@ def has_explicit_graph_cue(text: str, structure: str | None) -> bool:
     if key == "grid":
         return any(token in low for token in ("grid", "array", "matrix", "\u9635\u5217", "\u7f51\u683c"))
     if key == "nest":
-        return any(token in low for token in ("inside", "nested", "embedded", "within", "\u5185\u5d4c", "\u5185\u90e8"))
+        return any(
+            token in low
+            for token in (
+                "inside",
+                "inner",
+                "nested",
+                "embedded",
+                "within",
+                "\u5185\u5d4c",
+                "\u5185\u90e8",
+                "\u5185\u7f6e",
+            )
+        )
     if key == "stack":
         return any(token in low for token in ("stack", "layer", "layered", "\u5806\u53e0", "\u5c42"))
     if key == "shell":

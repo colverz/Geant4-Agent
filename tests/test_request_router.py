@@ -13,6 +13,8 @@ class RequestRouterTest(unittest.TestCase):
         self.assertTrue(is_supported_post_path("/api/geant4/intent"))
         self.assertTrue(is_supported_post_path("/api/geant4/validate"))
         self.assertTrue(is_supported_post_path("/api/geant4/summary"))
+        self.assertTrue(is_supported_post_path("/api/simulation/design"))
+        self.assertTrue(is_supported_post_path("/api/simulation/accept"))
         self.assertFalse(is_supported_post_path("/api/unknown"))
 
     def test_reset_clears_legacy_session(self) -> None:

@@ -45,7 +45,12 @@ class Geant4AgentBenchmarkShapeTest(unittest.TestCase):
         self.assertEqual(report["suite_summary"]["tool_guard"]["pass_rate"], 1.0)
         self.assertEqual(report["capability_summary"]["workflow_trace"]["pass_rate"], 1.0)
         self.assertEqual(report["capability_summary"]["quantitative_result"]["pass_rate"], 1.0)
+        self.assertEqual(report["capability_summary"]["nlu_boundary"]["pass_rate"], 1.0)
         self.assertIn("adversarial", report["difficulty_summary"])
+        nlu_summary = report["nlu_boundary_summary"]
+        self.assertGreater(nlu_summary["cases"], 0)
+        self.assertEqual(nlu_summary["no_bert_prior_pass_rate"], 1.0)
+        self.assertEqual(nlu_summary["backend_check_pass_rate"], 1.0)
         route_summary = report["model_route_summary"]
         self.assertGreater(route_summary["cases"], 0)
         self.assertEqual(route_summary["runtime_allowed_count"], 0)

@@ -268,6 +268,13 @@ def _coerce_triplet_mm(value: Any) -> list[float] | None:
             _to_mm(float(m2.group(2)), m2.group(4)),
             _to_mm(float(m2.group(3)), m2.group(4)),
         ]
+    compact = text.strip("[]() ")
+    parts = [part.strip() for part in compact.split(",") if part.strip()]
+    if len(parts) == 3:
+        try:
+            return [float(parts[0]), float(parts[1]), float(parts[2])]
+        except ValueError:
+            return None
     return None
 
 
@@ -427,27 +434,31 @@ def _has_unknown_material_marker(text: str) -> bool:
 
 def _has_graph_family_cue(text: str) -> bool:
     low = text.lower()
+    ascii_tokens = (
+        "ring",
+        "annulus",
+        "circular array",
+        "grid",
+        "array",
+        "matrix",
+        "stack",
+        "layers",
+        "shell",
+        "concentric",
+        "coaxial",
+        "nest",
+        "inside",
+        "contains",
+        "boolean",
+        "union",
+        "subtraction",
+        "intersection",
+    )
+    if any(re.search(rf"(?<![a-z0-9_]){re.escape(token)}(?![a-z0-9_])", low) for token in ascii_tokens):
+        return True
     return any(
-        token in low
+        token in text
         for token in (
-            "ring",
-            "annulus",
-            "circular array",
-            "grid",
-            "array",
-            "matrix",
-            "stack",
-            "layers",
-            "shell",
-            "concentric",
-            "coaxial",
-            "nest",
-            "inside",
-            "contains",
-            "boolean",
-            "union",
-            "subtraction",
-            "intersection",
             "\u9635\u5217",
             "\u4e8c\u7ef4\u9635\u5217",
             "\u63a2\u6d4b\u677f",
@@ -467,6 +478,8 @@ def _present_slot_paths(frame: SlotFrame) -> set[str]:
     paths: set[str] = set()
     if frame.geometry.kind:
         paths.add("geometry.kind")
+    if frame.geometry.root_name:
+        paths.add("geometry.root_name")
     if frame.geometry.size_triplet_mm:
         paths.add("geometry.size_triplet_mm")
     if frame.geometry.radius_mm is not None:
@@ -973,6 +986,11 @@ def _apply_clause(frame: SlotFrame, key: str, raw_value: str) -> None:
     if k in {"geometry.kind", "geometry.type", "geometry.shape"}:
         frame.geometry.kind = _canonical_geometry_kind(v) or frame.geometry.kind
         return
+    if k in {"geometry.root_name", "geometry.root", "geometry.volume_name", "geometry.name"}:
+        root_name = _clean_scalar(v.strip("\"'"))
+        if root_name:
+            frame.geometry.root_name = root_name
+        return
     if k in {"geometry.size", "geometry.size_triplet_mm", "geometry.box", "geometry.dimensions"}:
         triplet = _coerce_triplet_mm(v)
         if triplet is not None:
@@ -1380,9 +1398,27 @@ def _backfill_from_normalized_text(frame: SlotFrame) -> None:
         _apply_clause(frame, key, raw_value)
 
 
+_EXPLICIT_SLOT_CLAUSE_PATTERN = re.compile(
+    r"\b("
+    r"geometry\.root_name|geometry\.kind|geometry\.size_triplet_mm|"
+    r"materials\.primary|"
+    r"source\.kind|source\.particle|source\.energy_mev|source\.position_mm|source\.direction_vec|"
+    r"detector\.enabled|detector\.name|detector\.material|detector\.position_mm|detector\.size_triplet_mm|"
+    r"scoring\.target_edep|scoring\.detector_crossings|scoring\.plane_crossings|scoring\.plane_name|scoring\.plane_z_mm|"
+    r"physics\.explicit_list"
+    r")\s*:\s*([^;\n\r]+)"
+)
+
+
+def _apply_explicit_slot_clauses_from_text(frame: SlotFrame, text: str) -> None:
+    for match in _EXPLICIT_SLOT_CLAUSE_PATTERN.finditer(text or ""):
+        _apply_clause(frame, match.group(1), match.group(2))
+
+
 def _backfill_from_user_text(frame: SlotFrame, user_text: str) -> None:
     text = user_text or ""
     low = text.lower()
+    _apply_explicit_slot_clauses_from_text(frame, text)
 
     if frame.geometry.kind is None:
         if any(token in low for token in ("box", "cube", "cuboid")) or any(token in text for token in ("\u7acb\u65b9\u4f53", "\u7acb\u65b9\u5757")):
@@ -1635,6 +1671,7 @@ def _coerce_slot_payload(payload: dict[str, Any]) -> tuple[SlotFrame, dict[str, 
     geometry = slots.get("geometry", {})
     if isinstance(geometry, dict):
         frame.geometry.kind = _canonical_geometry_kind(geometry.get("kind"))
+        frame.geometry.root_name = _clean_scalar(geometry.get("root_name"))
         frame.geometry.size_triplet_mm = _coerce_triplet_mm(geometry.get("size_triplet_mm"))
         frame.geometry.radius_mm = _coerce_length_mm(geometry.get("radius_mm"))
         frame.geometry.half_length_mm = _coerce_length_mm(geometry.get("half_length_mm"))

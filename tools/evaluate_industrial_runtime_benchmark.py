@@ -226,6 +226,7 @@ def evaluate_industrial_runtime_benchmark(
     env: dict[str, str] | None = None,
     golden_dir: Path = DEFAULT_INDUSTRIAL_GOLDEN_DIR,
     allow_unreviewed_goldens: bool = False,
+    case_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     env_map = dict(os.environ if env is None else env)
     shape_report = validate_industrial_benchmark_shape(path)
@@ -245,7 +246,12 @@ def evaluate_industrial_runtime_benchmark(
         }
 
     benchmark = _load_json(path)
-    cases = benchmark["cases"]
+    requested_ids = {str(case_id) for case_id in (case_ids or []) if str(case_id)}
+    cases = [
+        case
+        for case in benchmark["cases"]
+        if not requested_ids or str(case.get("id") or "") in requested_ids
+    ]
     runtime_defaults = benchmark.get("runtime_defaults") if isinstance(benchmark.get("runtime_defaults"), dict) else {}
     runtime_ready = _runtime_enabled(env_map) and _runtime_command_configured(env_map)
     runtime_reasons: list[str] = []

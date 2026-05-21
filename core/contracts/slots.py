@@ -8,6 +8,7 @@ from core.orchestrator.types import Intent
 @dataclass
 class GeometrySlots:
     kind: str | None = None
+    root_name: str | None = None
     size_triplet_mm: list[float] | None = None
     radius_mm: float | None = None
     half_length_mm: float | None = None
@@ -115,6 +116,7 @@ class SlotFrame:
         return any(
             [
                 self.geometry.kind,
+                self.geometry.root_name,
                 self.geometry.size_triplet_mm,
                 self.geometry.radius_mm is not None,
                 self.geometry.half_length_mm is not None,

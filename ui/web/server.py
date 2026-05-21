@@ -45,7 +45,8 @@ def step(payload: Dict[str, Any], progress_cb=None) -> Dict[str, Any]:
     strict_mode = bool(payload.get('strict_mode', True))
 
     if strict_mode:
-        return handle_strict_step(
+        strict_payload = dict(payload)
+        strict_payload.update(
             {
                 'text': text,
                 'session_id': session_id,
@@ -55,9 +56,9 @@ def step(payload: Dict[str, Any], progress_cb=None) -> Dict[str, Any]:
                 'autofix': autofix,
                 'lang': lang,
                 'min_confidence': min_conf,
-            },
-            progress_cb=progress_cb,
+            }
         )
+        return handle_strict_step(strict_payload, progress_cb=progress_cb)
 
     _, _, legacy_step = _load_legacy_api()
     return legacy_step(payload)

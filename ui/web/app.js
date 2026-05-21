@@ -3,268 +3,84 @@ const $ = (id) => document.getElementById(id);
 const state = {
   sessionId: localStorage.getItem("g4_session_id") || "",
   lang: localStorage.getItem("g4_lang") || "zh",
-  ollamaConfigPath: localStorage.getItem("g4_ollama_config_path") || "",
-  llmProvider: "",
-  ollamaModel: "",
-  modelPreflight: null,
-  lastMeta: null,
-  lastProcess: null,
-  geant4State: null,
-  lastRuntimeSmokeReport: null,
+  runtime: null,
+  modelConfigPath: localStorage.getItem("g4_ollama_config_path") || "",
+  lastDesign: null,
+  lastRecommendedConfig: null,
+  candidateStatus: null,
+  lastRuntimeState: null,
+  lastRuntimeReport: null,
+  lastTrace: null,
   sending: false,
-  activeThinkingNode: null,
-  activeThinkingProgress: [],
-  geometryPipeline: localStorage.getItem("g4_geometry_pipeline") || "legacy",
-  sourcePipeline: localStorage.getItem("g4_source_pipeline") || "legacy",
 };
 
-const i18n = {
+const copy = {
   zh: {
-    brand_subtitle: "面向 Geant4 规划与运行控制的对话工作台。",
-    session_title: "会话",
-    session_label: "会话",
-    phase_label: "阶段",
-    model_label: "模型",
-    controls_title: "控制",
-    model_config: "模型配置",
-    language: "语言",
-    confidence: "结构置信度",
-    autofix: "自动修正",
-    llm_routing: "LLM 路由",
-    llm_follow_up: "LLM 追问",
-    reset: "重置会话",
-    summary: "摘要",
-    conversation: "对话",
-    conversation_title: "实验规划对话",
-    send: "发送",
-    incomplete: "未完成",
-    complete: "已完成",
-    offline: "离线",
-    sync_config: "同步配置",
-    open_viewer: "打开几何窗口",
-    initialize: "初始化",
-    run_one: "运行 1 个事件",
-    run_ten: "运行 10 个事件",
-    refresh: "刷新",
-    input_placeholder: "描述你想构建的实验。按 Enter 发送，Shift+Enter 换行。",
-    composer_hint: "先在对话中收敛需求，再将配置同步到 Geant4。",
-    composer_busy: "正在逐步推进行内分析与配置生成...",
-    runtime_ready: "模型资源已就绪。",
-    runtime_incomplete: "模型资源不完整。",
-    empty_state: "从一句自然语言开始。Agent 会先整理实验结构，再在准备好后同步到 Geant4。",
-    you: "你",
-    agent: "Agent",
-    system: "系统",
-    config: "配置",
-    runtime_state: "运行状态",
-    runtime_log: "运行日志",
-    runtime_result: "运行结果",
-    no_runtime_result: "尚无运行结果。完成一次 Geant4 run 后这里会显示摘要。",
-    process: "过程",
-    internal_trace: "内部轨迹",
-    geometry_compare: "几何对比",
-    thinking: "思考过程",
-    thinking_hint: "我会实时告诉你当前正在处理什么，以及下一步准备推进到哪里。",
-    request_failed: "请求失败，未能完成本轮渲染。",
-    model_switched: "模型已切换",
-    geant4_prefix: "Geant4",
-    phase: "阶段",
-    complete_state: "完成",
-    geometry: "几何",
-    materials: "材料",
-    particle: "粒子",
-    source_type: "源类型",
-    physics_list: "物理过程",
-    output: "输出",
-    pending_asks: "待追问",
-    new_session: "新会话",
-    progress_labels: {
-      queued: "排队中",
-      loading_runtime: "唤起运行环境",
-      runtime_ready: "运行环境就绪",
-      start: "读取本轮请求",
-      intent: "理解你的目标",
-      slot_frame: "整理结构槽位",
-      semantic_frame: "补足语义骨架",
-      semantic_extract: "提取关键要素",
-      normalize: "统一内部表达",
-      candidate_merge: "合并更新候选",
-      arbitration: "处理冲突与优先级",
-      validation: "校验当前配置",
-      dialogue: "组织回复内容",
-      finalize: "写回会话状态",
-      completed: "已完成",
-      failed: "已失败",
-      runtime_unavailable: "运行环境不可用",
-    },
-    progress_details: {
-      queued: "请求已经进入处理队列，马上开始这一轮分析。",
-      loading_runtime: "正在准备本轮需要的 runtime 组件和模型资源。",
-      runtime_ready: "后端环境已经就绪，可以进入结构化分析。",
-      start: "先把你刚才的输入拆开，确认这一轮真正要处理的重点。",
-      intent: "判断你是在补充细节、覆盖旧设置，还是准备进入运行阶段。",
-      slot_frame: "把请求折叠成可更新的结构槽位，方便后续稳定落盘。",
-      semantic_frame: "当槽位信号还不够强时，先用更宽的语义骨架稳住上下文。",
-      semantic_extract: "从描述里抓取 geometry、material、source 和 physics 等关键内容。",
-      normalize: "把自然语言里的不同说法，统一成内部能持续处理的表达。",
-      candidate_merge: "把新识别到的内容和当前会话状态合并，避免信息断层。",
-      arbitration: "处理互相覆盖或冲突的字段，确定这轮最终应当采用的版本。",
-      validation: "检查当前配置是否仍缺关键项，或者存在不合理组合。",
-      dialogue: "把这一轮结果整理成你更容易读懂的回复和界面状态。",
-      finalize: "写回最新会话状态，让下一轮可以直接接着推进。",
-      completed: "这一轮已经处理完成。",
-      failed: "这一轮在完成前中断了，界面会停在最近一步。",
-      runtime_unavailable: "运行环境暂时没有准备好，因此这轮无法继续。",
-    },
+    welcome: "描述你的模拟目标。我会先整理方案并生成候选配置，确认后再进入 Geant4 运行。",
+    sendFailed: "这一轮请求失败",
+    noResult: "还没有 Geant4 运行结果。先运行一次模拟后再追问结果。",
+    noConfig: "还没有当前配置。请先描述一个模拟目标。",
+    generalQuestion: "这不像配置修改、结果追问或运行请求。我不会写入配置。你可以直接说明要修改的几何、材料、源、物理或输出。",
+    runIntent: (events) => `收到明确运行请求。我会先把候选配置同步到当前会话，再校验并运行 ${events} 个事件。`,
+    viewerIntent: "收到明确 viewer 请求。我会先校验配置，然后打开 Geant4 viewer。",
+    retained: "已确认当前方案，并写入当前配置。你可以继续修改，或直接运行模拟。",
+    validateOk: "配置预检通过，可以运行。",
+    validateFailed: "配置还不能运行",
+    runDone: "Geant4 运行完成",
+    viewerDone: "Viewer 请求已处理",
+    resetDone: "会话已重置。",
+    designTitle: "我先把需求整理成一个模拟方案：",
+    referenceTags: "参考标签",
+    nextAction: "下一步",
+    runnable: "可直接运行",
+    approval: "需要确认",
+    observables: "观测量",
+    model: "推荐模型",
+    goal: "目标",
   },
   en: {
-    brand_subtitle: "Dialogue workspace for simulation planning and runtime control.",
-    session_title: "Session",
-    session_label: "Session",
-    phase_label: "Phase",
-    model_label: "Model",
-    controls_title: "Controls",
-    model_config: "Model Config",
-    language: "Language",
-    confidence: "Structure Confidence",
-    autofix: "Auto-fix",
-    llm_routing: "LLM routing",
-    llm_follow_up: "LLM follow-up",
-    reset: "Reset session",
-    summary: "Summary",
-    conversation: "Conversation",
-    conversation_title: "Simulation Planning Chat",
-    send: "Send",
-    incomplete: "incomplete",
-    complete: "complete",
-    offline: "offline",
-    sync_config: "Sync Config",
-    open_viewer: "Open Viewer",
-    initialize: "Initialize",
-    run_one: "Run 1 Event",
-    run_ten: "Run 10 Events",
-    refresh: "Refresh",
-    input_placeholder: "Describe the experiment you want to build. Press Enter to send, Shift+Enter for a new line.",
-    composer_hint: "Build the requirement in dialogue first. Use the runtime buttons after the structure looks right.",
-    composer_busy: "Streaming live progress through the orchestration stages...",
-    runtime_ready: "Model assets look ready.",
-    runtime_incomplete: "Model assets are incomplete.",
-    empty_state: "Start with a natural-language request. The agent will convert it into a structured experiment plan, then you can sync it into Geant4 when ready.",
-    you: "You",
-    agent: "Agent",
-    system: "System",
-    config: "Config",
-    runtime_state: "Runtime State",
-    runtime_log: "Runtime Log",
-    runtime_result: "Runtime Result",
-    no_runtime_result: "No runtime result yet. Complete a Geant4 run to see the summary here.",
-    process: "Process",
-    internal_trace: "Internal Trace",
-    geometry_compare: "Geometry Compare",
-    thinking: "Thinking",
-    thinking_hint: "This panel updates live so you can see what is being processed now and what comes next.",
-    request_failed: "The request failed before a response could be rendered.",
-    model_switched: "Model switched",
-    geant4_prefix: "Geant4",
-    phase: "phase",
-    complete_state: "complete",
-    geometry: "geometry",
-    materials: "materials",
-    particle: "particle",
-    source_type: "source type",
-    physics_list: "physics list",
-    output: "output",
-    pending_asks: "pending asks",
-    new_session: "new",
-    progress_labels: {
-      queued: "Queued",
-      loading_runtime: "Warming up runtime",
-      runtime_ready: "Runtime ready",
-      start: "Reading request",
-      intent: "Understanding intent",
-      slot_frame: "Structuring slots",
-      semantic_frame: "Stabilizing semantics",
-      semantic_extract: "Extracting key signals",
-      normalize: "Normalizing phrasing",
-      candidate_merge: "Merging candidates",
-      arbitration: "Resolving conflicts",
-      validation: "Validating config",
-      dialogue: "Composing reply",
-      finalize: "Finalizing state",
-      completed: "Completed",
-      failed: "Failed",
-      runtime_unavailable: "Runtime unavailable",
-    },
-    progress_details: {
-      queued: "The request is in line and about to enter the orchestration flow.",
-      loading_runtime: "Preparing the runtime pieces and model resources needed for this turn.",
-      runtime_ready: "The backend environment is ready, so the structured pass can begin.",
-      start: "Reading the latest message and isolating what this turn is really changing.",
-      intent: "Deciding whether this turn adds detail, overrides prior settings, or prepares a run.",
-      slot_frame: "Packing the request into a stable slot layout for downstream updates.",
-      semantic_frame: "Using a broader semantic scaffold when the slot signal is still weak.",
-      semantic_extract: "Pulling geometry, material, source, and physics clues out of the prompt.",
-      normalize: "Converting different phrasings into one consistent internal representation.",
-      candidate_merge: "Merging newly extracted updates with the state already held in session.",
-      arbitration: "Resolving overlaps and priorities before anything is committed.",
-      validation: "Checking for missing requirements or invalid combinations in the current config.",
-      dialogue: "Turning the result into a concise assistant response and UI update.",
-      finalize: "Writing the newest state back so the next turn can continue from here.",
-      completed: "This turn has finished successfully.",
-      failed: "The turn stopped before completion, so the latest reachable stage is shown.",
-      runtime_unavailable: "The runtime is not ready, so this turn cannot proceed yet.",
-    },
+    welcome: "Describe the simulation goal. I will design an executable setup before Geant4 runtime.",
+    sendFailed: "This turn failed",
+    noResult: "No Geant4 runtime result is available yet. Run the simulation first, then ask about the result.",
+    noConfig: "No current configuration is available yet. Please describe a simulation goal first.",
+    generalQuestion: "This does not look like a config change, result question, or runtime request. I will not write config. Describe geometry, material, source, physics, or output changes directly.",
+    runIntent: (events) => `Confirmed runtime request. I will commit the candidate, validate the configuration, then run ${events} event${events === 1 ? "" : "s"}.`,
+    viewerIntent: "Confirmed viewer request. I will validate the configuration, then open the Geant4 viewer.",
+    retained: "The current design has been accepted and committed to the session. You can modify it or run the simulation.",
+    validateOk: "Runtime preflight passed.",
+    validateFailed: "The configuration is not runnable yet",
+    runDone: "Geant4 run completed",
+    viewerDone: "Viewer request handled",
+    resetDone: "Session reset.",
+    designTitle: "I have converted the request into a simulation design:",
+    referenceTags: "Reference tags",
+    nextAction: "Next",
+    runnable: "Directly runnable",
+    approval: "Needs approval",
+    observables: "Observables",
+    model: "Recommended model",
+    goal: "Goal",
   },
 };
 
-Object.assign(i18n.zh, {
-  config_overview: "配置概览",
-  completion_status: "完成情况",
-  filled_items: "已填项",
-  missing_items: "缺失项",
-  raw_config: "原始配置",
-  raw_runtime: "原始运行态",
-  terminal_log: "终端日志",
-  debug_panel: "调试信息",
-  geometry_compare: "几何对比",
-});
+const activityLabels = {
+  intent: { zh: "识别意图", en: "Classify intent" },
+  design: { zh: "生成模拟方案", en: "Build simulation design" },
+  capability: { zh: "校验能力边界", en: "Check capabilities" },
+  config: { zh: "生成推荐配置", en: "Draft config" },
+  accept: { zh: "写入当前配置", en: "Commit candidate" },
+  validate: { zh: "Runtime 预检", en: "Runtime preflight" },
+  run: { zh: "运行模拟", en: "Run simulation" },
+  summary: { zh: "读取结果", en: "Read result" },
+};
 
-Object.assign(i18n.en, {
-  config_overview: "Configuration Overview",
-  completion_status: "Completion Status",
-  filled_items: "Filled",
-  missing_items: "Missing",
-  raw_config: "Raw Config",
-  raw_runtime: "Raw Runtime",
-  terminal_log: "Terminal",
-  debug_panel: "Debug Panel",
-  geometry_compare: "Geometry Compare",
-});
-
-function t(key) {
-  return i18n[state.lang][key] || key;
+function text(key, ...args) {
+  const value = copy[state.lang]?.[key] || copy.en[key] || key;
+  return typeof value === "function" ? value(...args) : value;
 }
 
-function progressLabel(stage, fallback) {
-  return i18n[state.lang].progress_labels[stage] || fallback || stage;
-}
-
-function progressDetail(stage, fallback) {
-  return i18n[state.lang].progress_details?.[stage] || fallback || "";
-}
-
-function animateIn(element) {
-  element.animate(
-    [
-      { opacity: 0, transform: "translateY(10px)" },
-      { opacity: 1, transform: "translateY(0)" },
-    ],
-    { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" },
-  );
-}
-
-function escapeHtml(text) {
-  return String(text || "")
+function escapeHtml(value) {
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -272,1198 +88,561 @@ function escapeHtml(text) {
     .replaceAll("'", "&#39;");
 }
 
-function ensureEmptyState() {
-  const chat = $("chat");
-  if (chat.querySelector(".message") || chat.querySelector(".empty-state")) return;
-  const empty = document.createElement("div");
-  empty.className = "empty-state";
-  empty.textContent = t("empty_state");
-  chat.appendChild(empty);
+function asList(value) {
+  return Array.isArray(value) ? value.filter((item) => String(item || "").trim()) : [];
 }
 
-function addMessage(role, text, variant = "") {
-  const chat = $("chat");
-  const empty = chat.querySelector(".empty-state");
-  if (empty) empty.remove();
-
-  const item = document.createElement("article");
-  item.className = `message ${role} ${variant}`.trim();
-
-  const meta = document.createElement("div");
-  meta.className = "message-meta";
-  meta.textContent = role === "user" ? t("you") : variant === "system" ? t("system") : t("agent");
-
-  const body = document.createElement("div");
-  body.className = "message-body";
-  body.textContent = text;
-
-  item.appendChild(meta);
-  item.appendChild(body);
-  chat.appendChild(item);
-  animateIn(item);
-  chat.scrollTop = chat.scrollHeight;
-  return item;
+function boolText(value) {
+  if (value === undefined || value === null) return "-";
+  return state.lang === "zh" ? (value ? "是" : "否") : value ? "yes" : "no";
 }
 
-function createThinkingMessage() {
-  const item = addMessage("assistant", "", "thinking");
-  const body = item.querySelector(".message-body");
-  body.innerHTML = `
-    <div class="live-thinking-head">${t("thinking")}</div>
-    <div class="live-thinking-subhead">${t("thinking_hint")}</div>
-    <div class="live-thinking-focus">
-      <div class="live-thinking-focus-label">${progressLabel("queued")}</div>
-      <div class="live-thinking-focus-detail">${progressDetail("queued")}</div>
-      <div class="live-thinking-sheen"></div>
-    </div>
-    <div class="live-thinking-list"></div>
-  `;
-  state.activeThinkingNode = item;
-  state.activeThinkingProgress = [];
-  return item;
+function nextActionText(action) {
+  const zh = {
+    build_candidate_config: "可以生成候选配置",
+    ask_user_to_choose_approximation: "需要确认近似方案",
+    unsupported_capability: "当前 runtime 不支持",
+    needs_more_information: "需要补充信息",
+  };
+  const en = {
+    build_candidate_config: "candidate config can be built",
+    ask_user_to_choose_approximation: "approval is needed for approximation",
+    unsupported_capability: "unsupported by current runtime",
+    needs_more_information: "more information is required",
+  };
+  return (state.lang === "zh" ? zh : en)[action] || action || "-";
 }
 
-function renderThinkingProgress(progress = []) {
-  if (!state.activeThinkingNode) return;
-  state.activeThinkingProgress = Array.isArray(progress) ? [...progress] : [];
-  const latest = progress[progress.length - 1] || { stage: "queued" };
-  const focusLabel = state.activeThinkingNode.querySelector(".live-thinking-focus-label");
-  const focusDetail = state.activeThinkingNode.querySelector(".live-thinking-focus-detail");
-  const list = state.activeThinkingNode.querySelector(".live-thinking-list");
-  if (!list || !focusLabel || !focusDetail) return;
-  focusLabel.textContent = progressLabel(latest.stage, latest.label);
-  focusDetail.textContent = progressDetail(latest.stage, latest.detail);
-  list.innerHTML = "";
-  const recent = progress.slice(-5);
-  for (let i = 0; i < recent.length; i += 1) {
-    const item = recent[i];
-    const isCurrent = i === recent.length - 1;
-    const row = document.createElement("div");
-    row.className = `live-thinking-row ${isCurrent ? "current" : "done"}`;
-    row.innerHTML = `
-      <span class="live-thinking-dot"></span>
-      <div class="live-thinking-copy">
-        <div class="live-thinking-label">${progressLabel(item.stage, item.label)}</div>
-        <div class="live-thinking-detail">${progressDetail(item.stage, item.detail)}</div>
-      </div>
-    `;
-    list.appendChild(row);
+async function postJson(path, payload = {}) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const reason = data.message || data.error || data.errors?.join(", ") || `${response.status}`;
+    throw new Error(reason);
   }
+  return data;
 }
 
-function buildThinkingArchive(progress = []) {
-  if (!progress.length) return "";
-  const steps = progress
-    .slice(-6)
+async function getJson(path) {
+  const response = await fetch(path);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || data.error || `${response.status}`);
+  return data;
+}
+
+function setBusy(value) {
+  state.sending = value;
+  $("send-btn").disabled = value;
+  $("validate-btn").disabled = value;
+  $("run1-btn").disabled = value;
+  $("run10-btn").disabled = value;
+  $("viewer-btn").disabled = value;
+  $("activity-strip").hidden = !value;
+  if (value) $("activity-strip").textContent = state.lang === "zh" ? "Agent 正在处理..." : "Agent is working...";
+}
+
+function ensureSession(id) {
+  if (!id || id === state.sessionId) return;
+  state.sessionId = id;
+  localStorage.setItem("g4_session_id", id);
+  renderHeader();
+}
+
+function clearWelcome() {
+  const welcome = document.querySelector(".welcome");
+  if (welcome) welcome.remove();
+}
+
+function appendMessage(role, html, options = {}) {
+  clearWelcome();
+  const node = document.createElement("article");
+  node.className = `turn ${role}${options.variant ? ` ${options.variant}` : ""}`;
+  const label = role === "user" ? (state.lang === "zh" ? "你" : "You") : "Agent";
+  node.innerHTML = `
+    <div class="turn-label">${escapeHtml(label)}</div>
+    <div class="turn-body">${html}</div>
+  `;
+  $("timeline").appendChild(node);
+  node.scrollIntoView({ block: "end", behavior: "smooth" });
+  return node;
+}
+
+function activityHtml(items = []) {
+  if (!items.length) return "";
+  const rows = items
     .map((item) => {
-      const label = escapeHtml(progressLabel(item.stage, item.label));
-      const detail = escapeHtml(progressDetail(item.stage, item.detail));
+      const label = activityLabels[item.stage]?.[state.lang] || item.stage;
       return `
-        <div class="thinking-archive-row">
-          <span class="thinking-archive-dot"></span>
-          <div class="thinking-archive-copy">
-            <div class="thinking-archive-label">${label}</div>
-            <div class="thinking-archive-detail">${detail}</div>
+        <div class="activity-step ${item.status || "done"}">
+          <span class="activity-dot"></span>
+          <div>
+            <strong>${escapeHtml(label)}</strong>
+            <p>${escapeHtml(item.detail || "")}</p>
           </div>
         </div>
       `;
     })
     .join("");
-  return `
-    <details class="thinking-archive">
-      <summary class="thinking-archive-summary">
-        <span class="thinking-archive-title">${t("thinking")}</span>
-        <span class="thinking-archive-caption">${escapeHtml(progressLabel(progress[progress.length - 1].stage))}</span>
-      </summary>
-      <div class="thinking-archive-list">${steps}</div>
-    </details>
+  return `<section class="activity-trace" data-agent-activity="visible"><div class="activity-title">Agent Activity</div>${rows}</section>`;
+}
+
+function appendAgent(markdownText, activity = [], variant = "") {
+  const body = `<div class="agent-answer">${formatPlainText(markdownText)}</div>${activityHtml(activity)}`;
+  return appendMessage("agent", body, { variant });
+}
+
+function formatPlainText(value) {
+  return escapeHtml(value).replace(/\n/g, "<br />");
+}
+
+function renderHeader() {
+  $("session-pill").textContent = state.sessionId ? `session: ${state.sessionId.slice(0, 12)}` : "new session";
+  const metadata = state.lastRuntimeState?.metadata || {};
+  $("adapter-pill").textContent = `adapter: ${metadata.adapter || "unknown"}`;
+  $("phase-pill").textContent = state.lastRuntimeState?.runtime_phase || "idle";
+  if (state.runtime?.current_model) {
+    $("adapter-pill").textContent = `${state.runtime.current_provider || "llm"}: ${state.runtime.current_model}`;
+  }
+}
+
+function renderDesignSummary() {
+  const candidate = state.lastDesign || {};
+  if (!state.lastDesign) {
+    $("design-state").textContent = "none";
+    $("design-summary").textContent = state.lang === "zh" ? "还没有方案。先描述一个模拟目标。" : "No design yet.";
+    return;
+  }
+  const setup = candidate.recommended_setup || {};
+  const check = candidate.capability_check || {};
+  const status = state.candidateStatus?.status ? ` / ${state.candidateStatus.status}` : "";
+  $("design-state").textContent = `${nextActionText(candidate.next_action)}${status}`;
+  $("design-summary").innerHTML = `
+    <div><span>${text("goal")}</span><strong>${escapeHtml(candidate.goal || "-")}</strong></div>
+    <div><span>${text("model")}</span><strong>${escapeHtml([setup.geometry, setup.material, setup.source].filter(Boolean).join(" / ") || "-")}</strong></div>
+    <div><span>${text("runnable")}</span><strong>${escapeHtml(boolText(check.supported))}</strong></div>
+    <div><span>${text("approval")}</span><strong>${escapeHtml(boolText(check.requires_user_approval))}</strong></div>
   `;
 }
 
-function finalizeThinkingMessage(finalText) {
-  if (!state.activeThinkingNode) {
-    addMessage("assistant", finalText);
-    return;
-  }
-  const node = state.activeThinkingNode;
-  const body = node.querySelector(".message-body");
-  const archive = buildThinkingArchive(state.activeThinkingProgress);
-  node.querySelector(".message-meta").textContent = t("agent");
-  node.className = "message assistant settling";
-  const finish = () => {
-    body.innerHTML = `
-      <div class="message-answer">${escapeHtml(finalText)}</div>
-      ${archive}
-    `;
-    node.className = "message assistant";
-    const archiveNode = body.querySelector(".thinking-archive");
-    if (archiveNode) {
-      archiveNode.animate(
-        [
-          { opacity: 0, transform: "translateY(-4px)" },
-          { opacity: 1, transform: "translateY(0)" },
-        ],
-        { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" },
-      );
-    }
-  };
-  const animation = body.animate(
-    [
-      { opacity: 1, transform: "translateY(0) scale(1)" },
-      { opacity: 0.35, transform: "translateY(-2px) scale(0.995)" },
-    ],
-    { duration: 180, easing: "ease-out", fill: "forwards" },
-  );
-  animation.onfinish = finish;
-  state.activeThinkingNode = null;
-  state.activeThinkingProgress = [];
-}
-
-function failThinkingMessage(errorText) {
-  if (!state.activeThinkingNode) {
-    addMessage("assistant", errorText, "error");
-    return;
-  }
-  const node = state.activeThinkingNode;
-  node.className = "message assistant error";
-  node.querySelector(".message-meta").textContent = t("agent");
-  node.querySelector(".message-body").textContent = errorText;
-  state.activeThinkingNode = null;
-  state.activeThinkingProgress = [];
-}
-
-function setComposerStatus(text, mode = "neutral") {
-  const el = $("composer-status");
-  el.textContent = text;
-  el.dataset.mode = mode;
-}
-
-function setSending(next) {
-  state.sending = next;
-  $("run-btn").disabled = next;
-  $("input-text").disabled = next;
-  $("thinking-indicator").hidden = !next;
-  setComposerStatus(next ? t("composer_busy") : t("composer_hint"), next ? "busy" : "neutral");
-}
-
-function summarizeConfig(cfg) {
-  if (!cfg) return "";
-  const meta = state.lastMeta || {};
-  const lines = [
-    `${t("phase")}: ${meta.phase_title || "unknown"}`,
-    `${t("complete_state")}: ${meta.is_complete ? "true" : "false"}`,
-    `${t("geometry")}: ${cfg.geometry?.structure || cfg.geometry?.chosen_skeleton || "unknown"}`,
-    `${t("materials")}: ${(cfg.materials?.selected_materials || []).join(", ") || "missing"}`,
-    `${t("particle")}: ${cfg.source?.particle || "missing"}`,
-    `${t("source_type")}: ${cfg.source?.type || "missing"}`,
-    `${t("physics_list")}: ${cfg.physics?.physics_list || "missing"}`,
-    `${t("output")}: ${cfg.output?.format || "missing"}`,
+function renderConfigReadiness(config = state.lastRecommendedConfig) {
+  const checks = [
+    ["geometry", !!config?.geometry?.structure],
+    ["material", asList(config?.materials?.selected_materials).length > 0],
+    ["source", !!config?.source?.type && !!config?.source?.particle],
+    ["energy", config?.source?.energy !== undefined],
+    ["physics", !!(config?.physics?.physics_list || config?.physics_list?.name || config?.physics_list)],
   ];
-  const asked = (meta.asked_fields_friendly || []).join(", ");
-  if (asked) lines.push(`${t("pending_asks")}: ${asked}`);
-  return lines.join("\n");
+  $("config-state").textContent = checks.every(([, ok]) => ok) ? "ready" : "pending";
+  $("config-readiness").innerHTML = checks
+    .map(([name, ok]) => `<div class="readiness-item ${ok ? "ok" : "missing"}"><span>${name}</span><strong>${ok ? "ok" : "missing"}</strong></div>`)
+    .join("");
 }
 
-function summarizeProcess(proc) {
-  if (!proc) return "";
-  const rejected = Array.isArray(proc.rejected_updates) ? proc.rejected_updates : [];
-  const violations = Array.isArray(proc.violations) ? proc.violations : [];
-  const rules = Array.isArray(proc.applied_rules) ? proc.applied_rules : [];
-  return [
-    `llm_used: ${proc.llm_used ? "true" : "false"}`,
-    `fallback_reason: ${proc.fallback_reason || "none"}`,
-    `phase: ${proc.phase_title || proc.phase || "unknown"}`,
-    `asked: ${(proc.asked_fields_friendly || []).join(", ") || "none"}`,
-    "rejected_updates:",
-    ...(rejected.length ? rejected.slice(0, 6).map((x) => `${x.path || "?"} :: ${x.reason_code || "unknown"}`) : ["none"]),
-    "violations:",
-    ...(violations.length ? violations.slice(0, 6).map((x) => `${x.path || "?"} :: ${x.code || "unknown"}`) : ["none"]),
-    "applied_rules:",
-    ...(rules.length ? rules.slice(0, 6).map((x) => `${x.path || "?"} <- ${x.producer || x.rule || "rule"}`) : ["none"]),
-  ].join("\n");
-}
-
-function summarizeInternalTrace(trace) {
-  return trace ? JSON.stringify(trace, null, 2) : "";
-}
-
-function parseConfigFromResponse() {
-  try {
-    return JSON.parse($("response").textContent || "{}");
-  } catch (_) {
-    return {};
-  }
-}
-
-function isFilled(value) {
-  if (value == null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (typeof value === "number" || typeof value === "boolean") return true;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value).length > 0;
-  return false;
-}
-
-function primaryMaterial(cfg) {
-  const selected = cfg.materials?.selected_materials;
-  if (Array.isArray(selected) && selected.length) return selected.join(", ");
-  return cfg.geometry?.material || "";
-}
-
-function outputFormat(cfg) {
-  return cfg.output?.format || cfg.output?.mode || "";
-}
-
-function uiWord(key) {
-  const zh = {
-    not_set: "未设置",
-    waiting: "待补充",
-    none: "暂无",
-    offline: "离线",
-    ready: "就绪",
-    pending: "待准备",
-    last_action: "最近动作",
-    status: "状态",
-  };
-  const en = {
-    not_set: "not set",
-    waiting: "waiting",
-    none: "none",
-    offline: "offline",
-    ready: "ready",
-    pending: "pending",
-    last_action: "Last Action",
-    status: "Status",
-    adapter: "Adapter",
-  };
-  return (state.lang === "zh" ? zh : en)[key] || key;
-}
-
-function buildConfigOverview(cfg = {}) {
-  const meta = state.lastMeta || {};
-  return [
-    { label: t("phase_label"), value: meta.phase_title || "idle" },
-    { label: t("geometry"), value: cfg.geometry?.structure || cfg.geometry?.chosen_skeleton || uiWord("not_set") },
-    { label: t("materials"), value: primaryMaterial(cfg) || uiWord("not_set") },
-    { label: t("particle"), value: cfg.source?.particle || uiWord("not_set") },
-    { label: t("source_type"), value: cfg.source?.type || uiWord("not_set") },
-    { label: t("physics_list"), value: cfg.physics?.physics_list || uiWord("not_set") },
-    { label: t("output"), value: outputFormat(cfg) || uiWord("not_set") },
-  ];
-}
-
-function buildCompletionBuckets(cfg = {}) {
-  const items = [
-    { label: t("geometry"), filled: isFilled(cfg.geometry?.structure || cfg.geometry?.chosen_skeleton) },
-    { label: t("materials"), filled: isFilled(primaryMaterial(cfg)) },
-    { label: t("particle"), filled: isFilled(cfg.source?.particle) },
-    { label: t("source_type"), filled: isFilled(cfg.source?.type) },
-    { label: t("physics_list"), filled: isFilled(cfg.physics?.physics_list) },
-    { label: t("output"), filled: isFilled(outputFormat(cfg)) },
-  ];
-  const asked = (state.lastMeta?.asked_fields_friendly || []).map((x) => String(x).trim()).filter(Boolean);
-  const filled = items.filter((item) => item.filled).map((item) => item.label);
-  const missing = [...new Set([...items.filter((item) => !item.filled).map((item) => item.label), ...asked])];
-  return { filled, missing };
-}
-
-function buildRuntimeOverview(runtimePayload = {}) {
-  const metadata = runtimePayload.metadata || {};
-  return [
-    { label: uiWord("status"), value: runtimePayload.status || uiWord("offline") },
-    { label: uiWord("adapter"), value: metadata.adapter || "unknown" },
-    { label: t("phase_label"), value: runtimePayload.runtime_phase || "idle" },
-    { label: t("geometry"), value: runtimePayload.geometry_ready ? uiWord("ready") : uiWord("pending") },
-    { label: t("source_type"), value: runtimePayload.source_ready ? uiWord("ready") : uiWord("pending") },
-    { label: t("physics_list"), value: runtimePayload.physics_ready ? uiWord("ready") : uiWord("pending") },
-    { label: uiWord("last_action"), value: runtimePayload.last_action || uiWord("none") },
-  ];
-}
-
-function renderOverviewGrid(targetId, entries = []) {
-  const root = $(targetId);
-  if (!root) return;
-  root.innerHTML = "";
-  entries.forEach((entry) => {
-    const card = document.createElement("div");
-    card.className = "overview-item";
-    card.innerHTML = `
-      <div class="overview-label">${escapeHtml(entry.label)}</div>
-      <div class="overview-value">${escapeHtml(entry.value || "-")}</div>
-    `;
-    root.appendChild(card);
-  });
-}
-
-function renderTagList(targetId, items = [], variant = "") {
-  const root = $(targetId);
-  if (!root) return;
-  root.innerHTML = "";
-  if (!items.length) {
-    const empty = document.createElement("span");
-    empty.className = `tag empty ${variant}`.trim();
-    empty.textContent = variant === "missing" ? uiWord("none") : uiWord("waiting");
-    root.appendChild(empty);
-    return;
-  }
-  items.forEach((item) => {
-    const tag = document.createElement("span");
-    tag.className = `tag ${variant}`.trim();
-    tag.textContent = item;
-    root.appendChild(tag);
-  });
-}
-
-function renderConfigInspector(cfg = {}) {
-  renderOverviewGrid("config-overview", buildConfigOverview(cfg));
-  const buckets = buildCompletionBuckets(cfg);
-  renderTagList("filled-items", buckets.filled, "filled");
-  renderTagList("missing-items", buckets.missing, "missing");
-}
-
-function renderRuntimeInspector(runtimePayload = {}) {
-  renderOverviewGrid("runtime-overview", buildRuntimeOverview(runtimePayload));
-}
-
-function summarizeGeant4State(statePayload) {
-  if (!statePayload) return "";
-  return [
-    `status: ${statePayload.status || ""}`,
-    `runtime_phase: ${statePayload.runtime_phase || ""}`,
-    `connected: ${statePayload.connected}`,
-    `geometry_ready: ${statePayload.geometry_ready}`,
-    `source_ready: ${statePayload.source_ready}`,
-    `physics_ready: ${statePayload.physics_ready}`,
-    `last_action: ${statePayload.last_action || ""}`,
-    `last_error: ${statePayload.last_error || ""}`,
-    `available_actions: ${(statePayload.available_actions || []).join(", ")}`,
-    `metadata: ${JSON.stringify(statePayload.metadata || {}, null, 2)}`,
-  ].join("\n");
-}
-
-function summarizeGeant4Log(payload) {
-  if (!payload) return "";
-  const lines = payload.lines || payload.stdout_tail || [];
-  return Array.isArray(lines) ? lines.join("\n") : JSON.stringify(payload, null, 2);
-}
-
-function summarizeIdempotency(info) {
-  if (!info) return "";
-  const lines = [
-    `idempotency.decision: ${info.decision || (info.enabled ? "execute" : "disabled")}`,
-    `idempotency.action_id: ${info.action_id || info.suggested_action_id || ""}`,
-  ];
-  if (info.reason) lines.push(`idempotency.reason: ${info.reason}`);
-  if (info.suggested_action_id && info.suggested_action_id !== info.action_id) {
-    lines.push(`idempotency.suggested_action_id: ${info.suggested_action_id}`);
-  }
-  return lines.filter(Boolean).join("\n");
-}
-
-function summarizeRuntimePayloadWithIdempotency(data = {}) {
-  const runtimeLog = summarizeGeant4Log({
-    lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
-  });
-  const idempotencyLog = summarizeIdempotency(data.idempotency);
-  return [runtimeLog, idempotencyLog].filter(Boolean).join("\n");
-}
-
-function summarizeGeometryCompare(compare) {
-  if (!compare) return "";
-  const mismatches = Array.isArray(compare.mismatches) ? compare.mismatches : [];
-  const lines = [
-    `compile_ok: ${compare.compile_ok === true ? "true" : "false"}`,
-    `matches: ${compare.matches === true ? "true" : "false"}`,
-    `spec_structure: ${compare.spec_structure || ""}`,
-    `finalization_status: ${compare.finalization_status || ""}`,
-  ];
-  if (Array.isArray(compare.errors) && compare.errors.length) {
-    lines.push(`errors: ${compare.errors.join(", ")}`);
-  }
-  if (Array.isArray(compare.missing_fields) && compare.missing_fields.length) {
-    lines.push(`missing_fields: ${compare.missing_fields.join(", ")}`);
-  }
-  if (mismatches.length) {
-    lines.push("mismatches:");
-    mismatches.slice(0, 12).forEach((item) => {
-      lines.push(`- ${item.field}: legacy=${JSON.stringify(item.legacy)} new=${JSON.stringify(item.new)}`);
-    });
-  } else {
-    lines.push("mismatches: none");
-  }
-  return lines.join("\n");
-}
-
-function summarizeSourceCompare(compare) {
-  if (!compare) return "";
-  const mismatches = Array.isArray(compare.mismatches) ? compare.mismatches : [];
-  const lines = [
-    `compile_ok: ${compare.compile_ok === true ? "true" : "false"}`,
-    `matches: ${compare.matches === true ? "true" : "false"}`,
-    `spec_source_type: ${compare.spec_source_type || ""}`,
-    `finalization_status: ${compare.finalization_status || ""}`,
-  ];
-  if (Array.isArray(compare.errors) && compare.errors.length) {
-    lines.push(`errors: ${compare.errors.join(", ")}`);
-  }
-  if (Array.isArray(compare.missing_fields) && compare.missing_fields.length) {
-    lines.push(`missing_fields: ${compare.missing_fields.join(", ")}`);
-  }
-  if (mismatches.length) {
-    lines.push("mismatches:");
-    mismatches.slice(0, 12).forEach((item) => {
-      lines.push(`- ${item.field}: expected=${JSON.stringify(item.expected)} actual=${JSON.stringify(item.actual)}`);
-    });
-  } else {
-    lines.push("mismatches: none");
-  }
-  return lines.join("\n");
-}
-
-function buildRuntimeLogSummary(payload) {
-  const lines = Array.isArray(payload?.lines)
-    ? payload.lines
-    : Array.isArray(payload?.stdout_tail)
-      ? payload.stdout_tail
-      : [];
-  const trimmed = lines.map((line) => String(line).trim()).filter(Boolean);
-  const highlights = [];
-
-  for (let i = trimmed.length - 1; i >= 0; i -= 1) {
-    const line = trimmed[i];
-    if (/Run Summary/i.test(line)) highlights.push({ kind: "ok", text: line });
-    else if (/Number of events processed/i.test(line)) highlights.push({ kind: "ok", text: line });
-    else if (/terminated/i.test(line)) highlights.push({ kind: "ok", text: line });
-    else if (/error|fatal|exception/i.test(line)) highlights.push({ kind: "warn", text: line });
-    else if (/warning/i.test(line)) highlights.push({ kind: "warn", text: line });
-    if (highlights.length >= 4) break;
-  }
-
-  if (!highlights.length && trimmed.length) {
-    const tail = trimmed.slice(-3);
-    tail.forEach((line) => highlights.push({ kind: "plain", text: line }));
-  }
-
-  return highlights.reverse();
-}
-
-function renderRuntimeLogSummary(payload = {}) {
-  const root = $("runtime-log-summary");
-  if (!root) return;
-  const items = buildRuntimeLogSummary(payload);
-  root.innerHTML = "";
-  if (!items.length) {
-    const empty = document.createElement("div");
-    empty.className = "log-line empty";
-    empty.textContent = uiWord("waiting");
-    root.appendChild(empty);
-    return;
-  }
-  items.forEach((item) => {
-    const row = document.createElement("div");
-    row.className = `log-line ${item.kind}`.trim();
-    row.textContent = item.text;
-    root.appendChild(row);
-  });
-}
-
-function formatRuntimeValue(value) {
-  if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (Math.abs(value) > 0 && Math.abs(value) < 0.001) return value.toExponential(3);
-    return Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(6)));
-  }
-  if (typeof value === "boolean") return value ? "true" : "false";
-  return String(value);
-}
-
-function buildRuntimeResultRows(report = {}) {
-  const config = report.configuration || {};
-  const metrics = report.key_metrics || {};
-  const completed = report.events_completed;
-  const requested = report.events_requested;
-  const eventText = completed === null || completed === undefined
-    ? formatRuntimeValue(requested)
-    : `${formatRuntimeValue(completed)} / ${formatRuntimeValue(requested)}`;
-  return [
-    ["ok", report.ok],
-    ["events", eventText],
-    ["completion", report.completion_fraction],
-    ["geometry", config.geometry_structure],
-    ["material", config.material],
-    ["particle", config.particle],
-    ["physics", config.physics_list],
-    ["target edep MeV", metrics.target_edep_total_mev],
-    ["target hits", metrics.target_hit_events],
-    ["detector crossings", metrics.detector_crossing_count],
-    ["plane crossings", metrics.plane_crossing_count],
-    ["run summary", report.run_summary_path],
-  ];
-}
-
-function renderRuntimeResultSummary(report = null) {
-  const root = $("runtime-result-summary");
-  if (!root) return;
-  root.innerHTML = "";
+function renderRuntimeResult(report = state.lastRuntimeReport) {
   if (!report) {
-    const empty = document.createElement("div");
-    empty.className = "result-empty";
-    empty.textContent = t("no_runtime_result");
-    root.appendChild(empty);
+    $("result-state").textContent = "empty";
+    $("result-summary").innerHTML = `<div class="empty-metric">${escapeHtml(text("noResult"))}</div>`;
     return;
   }
-  buildRuntimeResultRows(report).forEach(([label, value]) => {
-    const row = document.createElement("div");
-    row.className = "result-row";
-    const key = document.createElement("span");
-    key.className = "result-label";
-    key.textContent = label;
-    const val = document.createElement("strong");
-    val.className = "result-value";
-    val.textContent = formatRuntimeValue(value);
-    row.appendChild(key);
-    row.appendChild(val);
-    root.appendChild(row);
-  });
-}
-
-function runtimeResultMessage(report) {
-  if (!report) return "";
   const metrics = report.key_metrics || {};
-  return [
-    `events_completed=${formatRuntimeValue(report.events_completed)}`,
-    `completion_fraction=${formatRuntimeValue(report.completion_fraction)}`,
-    `target_edep_total_mev=${formatRuntimeValue(metrics.target_edep_total_mev)}`,
-    `detector_crossing_count=${formatRuntimeValue(metrics.detector_crossing_count)}`,
-    `plane_crossing_count=${formatRuntimeValue(metrics.plane_crossing_count)}`,
-  ].join("\n");
+  $("result-state").textContent = report.ok ? "ok" : "failed";
+  $("result-summary").innerHTML = [
+    ["events", `${report.events_completed ?? "-"} / ${report.events_requested ?? "-"}`],
+    ["completion", report.completion_fraction === undefined ? "-" : Number(report.completion_fraction).toFixed(3)],
+    ["target edep", metrics.target_edep_total_mev ?? "-"],
+    ["detector crossing", metrics.detector_crossing_count ?? "-"],
+    ["plane crossing", metrics.plane_crossing_count ?? "-"],
+  ]
+    .map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`)
+    .join("");
 }
 
-function isRuntimeResultQuestion(text) {
-  const raw = String(text || "").trim().toLowerCase();
-  if (!raw) return false;
-  const zhHit = /(刚才|上次|最近|当前).*(结果|模拟|运行|计分|得分)|结果怎么样|模拟怎么样|运行怎么样|剂量多少|沉积能量|hit|crossing/i.test(raw);
-  const enHit = /\b(last|latest|previous|current)\b.*\b(result|simulation|run|scoring|score|edep|hit|crossing)\b|\bwhat happened\b.*\b(run|simulation)\b|\bhow did\b.*\b(run|simulation)\b/.test(raw);
-  return zhHit || enHit;
+function renderEvidence() {
+  $("config-json").textContent = JSON.stringify(state.lastRecommendedConfig || {}, null, 2);
+  $("runtime-json").textContent = JSON.stringify(state.lastRuntimeState || {}, null, 2);
+  $("trace-json").textContent = JSON.stringify(state.lastTrace || {}, null, 2);
 }
 
-function isConfigQuestion(text) {
-  const raw = String(text || "").trim().toLowerCase();
-  if (!raw) return false;
-  const zhHit = /(配置|设置|当前|已经|还缺|缺少|几何|材料|源|物理|输出|config|setup).*(什么|多少|如何|怎么|状态|摘要|还缺|缺少|current|what|missing|summary|status)/i.test(raw);
-  const enHit = /\b(current|existing|configured|configuration|config|setup)\b.*\b(config|configuration|setup|geometry|material|source|physics|output|missing|need|status|summary)\b|\bwhat(?:'s| is)\b.*\b(configured|missing|left|current setup)\b|\bwhat do we still need\b/.test(raw);
-  return zhHit || enHit;
+function updateAll() {
+  renderHeader();
+  renderDesignSummary();
+  renderConfigReadiness();
+  renderRuntimeResult();
+  renderEvidence();
 }
 
-async function classifyRuntimeIntent(text) {
-  const res = await fetch("/api/geant4/intent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, lang: state.lang }),
+function designMessage(data) {
+  const candidate = data.simulation_design || {};
+  const setup = candidate.recommended_setup || {};
+  const check = candidate.capability_check || {};
+  const observables = asList(candidate.observables);
+  const simplifications = asList(candidate.simplifications);
+  const unsupported = asList(candidate.unsupported_capabilities);
+  const decisions = asList(candidate.user_decisions_required);
+  const refs = asList(candidate.knowledge_references);
+  const config = data.recommended_config || {};
+  const material = setup.material || asList(config.materials?.selected_materials).join(", ") || "-";
+  const source = setup.source || [config.source?.particle, config.source?.energy ? `${config.source.energy} MeV` : ""].filter(Boolean).join(" ") || "-";
+  const geometry = setup.geometry || config.geometry?.structure || "-";
+  const lines = [
+    text("designTitle"),
+    "",
+    `${text("goal")}: ${candidate.goal || "-"}`,
+    `${text("model")}: ${geometry}; ${material}; ${source}`,
+    `${text("observables")}: ${observables.join(", ") || "-"}`,
+    `${text("runnable")}: ${boolText(check.supported)}`,
+    `${text("approval")}: ${boolText(check.requires_user_approval)}`,
+    `${text("nextAction")}: ${nextActionText(candidate.next_action)}`,
+  ];
+  if (simplifications.length) lines.push("", "Approximation:", ...simplifications.slice(0, 4).map((x) => `- ${x}`));
+  if (unsupported.length) lines.push("", "Unsupported:", ...unsupported.slice(0, 4).map((x) => `- ${x}`));
+  if (decisions.length) lines.push("", "Decision required:", ...decisions.slice(0, 4).map((x) => `- ${x}`));
+  if (refs.length) lines.push("", `${text("referenceTags")}: ${refs.slice(0, 6).join(", ")}`);
+  return lines.join("\n");
+}
+
+function applyDesignResponse(data) {
+  ensureSession(data.session_id);
+  state.lastDesign = data.simulation_design || null;
+  state.lastRecommendedConfig = data.recommended_config || data.config || state.lastRecommendedConfig;
+  state.candidateStatus = data.candidate_status || state.candidateStatus;
+  state.lastTrace = data.internal_trace || null;
+  updateAll();
+}
+
+function runtimePatch() {
+  return state.lastRecommendedConfig || {};
+}
+
+function actionToken(action, payload = {}) {
+  const base = JSON.stringify({ action, payload, session: state.sessionId || "" });
+  let hash = 0;
+  for (let i = 0; i < base.length; i += 1) hash = (hash * 31 + base.charCodeAt(i)) >>> 0;
+  return `${action}-${hash.toString(16)}`;
+}
+
+async function classifyIntent(inputText) {
+  try {
+    return await postJson("/api/geant4/intent", { text: inputText, lang: state.lang });
+  } catch (_) {
+    return { intent: "normal_chat", action_safety_class: "read_only" };
+  }
+}
+
+function isAcceptCurrentDesignText(inputText) {
+  const raw = String(inputText || "").trim().toLowerCase();
+  return /^(就按这个|按这个继续|可以|确认|同意|没问题|生成配置|用这个方案)$/.test(raw)
+    || /\b(use this|looks good|continue|confirm this|generate config|build config|keep this design)\b/.test(raw);
+}
+
+function parseRequestedEvents(inputText) {
+  const match = String(inputText || "").match(/(\d+)\s*(events?|个事件|次)/i);
+  if (!match) return 1;
+  return Math.max(1, Math.min(100000, Number.parseInt(match[1], 10)));
+}
+
+async function requestDesign(inputText) {
+  return postJson("/api/simulation/design", {
+    session_id: state.sessionId || null,
+    text: inputText,
+    strict_mode: true,
+    lang: state.lang,
+    llm_router: true,
+    llm_question: false,
+    geometry_pipeline: "v2",
+    source_pipeline: "v2",
   });
-  if (!res.ok) {
-    if (isRuntimeResultQuestion(text)) return { intent: "read_summary" };
-    if (isConfigQuestion(text)) return { intent: "read_config" };
-    return { intent: "normal_chat" };
-  }
-  return await res.json();
 }
 
-async function answerRuntimeResultQuestion(questionText = "") {
-  const res = await fetch("/api/geant4/summary", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      lang: state.lang,
-      question: questionText,
-      llm_result_summary: $("llm-question")?.checked === true,
-      ollama_config_path: state.ollamaConfigPath,
-    }),
+async function acceptCandidate(options = {}) {
+  if (!state.lastRecommendedConfig || !Object.keys(state.lastRecommendedConfig).length) return null;
+  const data = await postJson("/api/simulation/accept", {
+    session_id: state.sessionId || null,
+    recommended_config: state.lastRecommendedConfig,
+    source: options.source || "ui_accept_candidate",
   });
-  const data = await res.json();
-  if (res.ok && data.runtime_smoke_report) {
-    state.lastRuntimeSmokeReport = data.runtime_smoke_report;
-    renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
+  ensureSession(data.session_id);
+  state.lastRecommendedConfig = data.config || state.lastRecommendedConfig;
+  state.candidateStatus = data.candidate_status || state.candidateStatus;
+  renderConfigReadiness();
+  renderDesignSummary();
+  renderEvidence();
+  if (!options.silent) {
+    appendAgent(text("retained"), [{ stage: "accept", detail: "Candidate config committed to session.", status: "done" }]);
   }
-  if (data.runtime_result_explanation?.message) {
-    return data.runtime_result_explanation.message;
+  return data;
+}
+
+async function ensureCandidateCommitted() {
+  if (!state.lastRecommendedConfig || !Object.keys(state.lastRecommendedConfig).length) return;
+  if (state.candidateStatus?.committed) return;
+  await acceptCandidate({ silent: true, source: "ui_auto_commit_before_runtime" });
+}
+
+async function answerRuntimeQuestion(inputText) {
+  const data = await postJson("/api/geant4/summary", {
+    lang: state.lang,
+    question: inputText,
+  });
+  if (data.runtime_smoke_report) {
+    state.lastRuntimeReport = data.runtime_smoke_report;
+    renderRuntimeResult();
   }
-  if (data.errors?.includes("no_result_summary_available")) {
-    return state.lang === "zh"
-      ? "当前还没有可解释的 Geant4 运行结果。请先显式点击运行按钮，再询问结果。"
-      : "No Geant4 runtime result is available yet. Please explicitly run the simulation first, then ask about the result.";
-  }
-  return data.message || (state.lang === "zh" ? "暂时无法读取运行结果。" : "I could not read the runtime result yet.");
+  return data.runtime_result_explanation?.message || data.message || text("noResult");
 }
 
 async function answerConfigQuestion() {
-  const res = await fetch("/api/config/summary", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      session_id: state.sessionId || "",
-      lang: state.lang,
-    }),
+  const data = await postJson("/api/config/summary", {
+    session_id: state.sessionId || "",
+    lang: state.lang,
   });
-  const data = await res.json();
-  if (res.ok && data.ok) {
-    state.lastMeta = {
-      phase: data.phase,
-      phase_title: data.phase_title,
-      asked_fields_friendly: data.last_asked_fields_friendly || [],
-      is_complete: !!data.is_complete,
-    };
-    $("summary").textContent = summarizeConfig(data.config || {});
-    $("response").textContent = JSON.stringify(data.config || {}, null, 2);
-    renderConfigInspector(data.config || {});
-    updateDebugPanelVisibility();
-    renderTopbar();
-    return data.message || (state.lang === "zh" ? "当前配置已读取。" : "Current configuration summary is available.");
+  if (data.config) {
+    state.lastRecommendedConfig = data.config;
+    renderConfigReadiness();
+    renderEvidence();
   }
-  if (data.error === "no_session_available") {
-    return state.lang === "zh"
-      ? "当前还没有可读取的配置会话。请先描述一次实验配置。"
-      : "No configuration session is available yet. Please describe an experiment first.";
-  }
-  return data.message || (state.lang === "zh" ? "暂时无法读取当前配置。" : "I could not read the current configuration yet.");
+  return data.message || text("noConfig");
 }
 
-function explicitRuntimeActionMessage(intent) {
-  if (intent === "run_requested") {
-    return state.lang === "zh"
-      ? "这属于高占用 Geant4 运行操作。为了避免误触发，我不会从普通聊天里直接运行；请使用 Run 1 Event 或 Run 10 Events 按钮明确启动。"
-      : "That is an expensive Geant4 runtime operation. To avoid accidental execution, I will not run it from ordinary chat; please use the Run 1 Event or Run 10 Events button explicitly.";
-  }
-  if (intent === "viewer_requested") {
-    return state.lang === "zh"
-      ? "打开 viewer 属于显式运行时操作。为了避免误触发，请使用 Open Viewer 按钮启动。"
-      : "Opening the viewer is an explicit runtime operation. To avoid accidental launch, please use the Open Viewer button.";
-  }
-  return "";
-}
-
-function normalChatReadOnlyMessage() {
-  return state.lang === "zh"
-    ? "这看起来不像配置修改、结果追问或明确的运行操作。为了避免误写配置，我不会启动配置写入流程。你可以直接描述要修改的几何、材料、源、物理或输出。"
-    : "This does not look like a configuration change, result question, or explicit runtime action. To avoid accidental config writes, I will not start the configuration workflow. You can describe the geometry, material, source, physics, or output change directly.";
-}
-
-function updateDebugPanelVisibility() {
-  const blocks = [
-    ["debug-terminal-block", $("geant4-log")?.textContent],
-    ["debug-process-block", $("process-log")?.textContent],
-    ["debug-trace-block", $("internal-trace")?.textContent],
-    ["debug-geometry-block", $("geometry-compare")?.textContent],
-    ["debug-source-block", $("source-compare")?.textContent],
-    ["debug-config-block", $("response")?.textContent],
-    ["debug-runtime-block", $("geant4-state")?.textContent],
-  ];
-  let visibleCount = 0;
-  blocks.forEach(([id, text]) => {
-    const node = $(id);
-    if (!node) return;
-    const hasText = String(text || "").trim().length > 0;
-    node.hidden = !hasText;
-    if (hasText) visibleCount += 1;
+async function validateGeant4Config(events = 1, silent = false) {
+  await ensureCandidateCommitted();
+  const data = await postJson("/api/geant4/validate", {
+    session_id: state.sessionId || null,
+    patch: runtimePatch(),
+    events,
   });
-  const details = $("debug-details");
-  const card = details?.closest(".debug-card");
-  if (card) card.hidden = visibleCount === 0;
-  if (details && visibleCount === 0) details.open = false;
+  const payload = data.payload || {};
+  if (!payload.ok && !silent) {
+    appendAgent(`${text("validateFailed")}: ${(payload.missing_paths || data.errors || []).join(", ") || "unknown"}`, [
+      { stage: "validate", detail: "Runtime preflight rejected missing or invalid fields.", status: "warn" },
+    ], "warning");
+  }
+  if (payload.ok && !silent) {
+    appendAgent(text("validateOk"), [{ stage: "validate", detail: "All required runtime fields are present.", status: "done" }]);
+  }
+  return payload;
 }
 
-function currentConfigPatch() {
-  const cfg = parseConfigFromResponse();
-  return {
-    geometry: cfg.geometry || {},
-    source: cfg.source || {},
-    physics_list: cfg.physics || {},
-    output: cfg.output || {},
-  };
-}
-
-function renderTopbar() {
-  const runtimePayload = state.geant4State || {};
-  const meta = state.lastMeta || {};
-  $("header-phase-chip").textContent = meta.phase_title || runtimePayload.runtime_phase || "idle";
-  $("header-complete-chip").textContent = meta.is_complete ? t("complete") : t("incomplete");
-  $("runtime-status-inline").textContent = runtimePayload.connected ? runtimePayload.status || "connected" : t("offline");
-  $("sidebar-runtime-phase").textContent = runtimePayload.runtime_phase || "idle";
-  $("sidebar-model-name").textContent = state.ollamaModel ? `${state.llmProvider || "llm"} / ${state.ollamaModel}` : "-";
-  $("sidebar-session-id").textContent = state.sessionId || t("new_session");
-}
-
-function renderRuntimeNotice() {
-  const box = $("runtime-notice");
-  const p = state.modelPreflight;
-  if (!p) {
-    box.className = "runtime-notice";
-    box.textContent = "";
+async function runGeant4(events = 1) {
+  await ensureCandidateCommitted();
+  const preflight = await validateGeant4Config(events, true);
+  if (!preflight.ok) {
+    appendAgent(`${text("validateFailed")}: ${(preflight.missing_paths || []).join(", ") || "unknown"}`, [
+      { stage: "validate", detail: "Run stopped before subprocess/runtime execution.", status: "warn" },
+    ], "warning");
     return;
   }
-  if (p.ready) {
-    box.className = "runtime-notice ready";
-    box.textContent = t("runtime_ready");
-    return;
-  }
-  const missing = [];
-  const warnings = [];
-  for (const key of ["structure", "ner"]) {
-    const item = p[key] || {};
-    const m = Array.isArray(item.missing_files) ? item.missing_files : [];
-    const w = Array.isArray(item.warnings) ? item.warnings : [];
-    if (m.length) missing.push(`${key}: ${m.join(", ")}`);
-    if (w.length) warnings.push(`${key}: ${w.join(", ")}`);
-  }
-  box.className = "runtime-notice warn";
-  box.textContent = [t("runtime_incomplete"), missing.join(" | "), warnings.join(" | ")].filter(Boolean).join(" ");
+  const patch = runtimePatch();
+  const data = await postJson("/api/geant4/run", {
+    session_id: state.sessionId || null,
+    patch,
+    events,
+    action_id: actionToken("run_beam", { events, patch }),
+  });
+  state.lastRuntimeReport = data.runtime_smoke_report || state.lastRuntimeReport;
+  renderRuntimeResult();
+  await refreshGeant4State();
+  const message = data.runtime_result_explanation?.message || data.message || text("runDone");
+  appendAgent(`${text("runDone")}\n${message}`, [
+    { stage: "accept", detail: "Candidate config is synchronized with the session.", status: "done" },
+    { stage: "validate", detail: "Runtime preflight passed.", status: "done" },
+    { stage: "run", detail: `${events} event(s) requested.`, status: "done" },
+    { stage: "summary", detail: "Structured runtime report returned.", status: "done" },
+  ]);
 }
 
-function buildAssistantMessage(data) {
-  if (data.assistant_message) return data.assistant_message;
-  return "The configuration state has been updated.";
-}
-
-function applyI18n() {
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    const key = el.dataset.i18n;
-    el.textContent = t(key);
+async function openViewer() {
+  await ensureCandidateCommitted();
+  const patch = runtimePatch();
+  const data = await postJson("/api/geant4/viewer/open", {
+    session_id: state.sessionId || null,
+    patch,
+    events: 12,
+    action_id: actionToken("viewer_open", { patch }),
   });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-    const key = el.dataset.i18nPlaceholder;
-    el.setAttribute("placeholder", t(key));
-  });
-  ensureEmptyState();
-  renderTopbar();
-  renderRuntimeNotice();
-  renderConfigInspector(parseConfigFromResponse());
-  renderRuntimeInspector(state.geant4State || {});
-  renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
-  updateDebugPanelVisibility();
-  setComposerStatus(state.sending ? t("composer_busy") : t("composer_hint"), state.sending ? "busy" : "neutral");
+  state.lastRuntimeReport = data.runtime_smoke_report || state.lastRuntimeReport;
+  renderRuntimeResult();
+  appendAgent(`${text("viewerDone")}: ${data.message || "ok"}`, [
+    { stage: "validate", detail: "Viewer preflight completed.", status: "done" },
+    { stage: "run", detail: "Viewer action was explicitly requested.", status: "done" },
+  ]);
 }
 
 async function refreshGeant4State() {
-  const res = await fetch("/api/geant4/state");
-  const data = await res.json();
-  state.geant4State = data;
-  $("geant4-state").textContent = summarizeGeant4State(data);
-  renderRuntimeInspector(data);
-  updateDebugPanelVisibility();
-  renderTopbar();
+  const data = await getJson("/api/geant4/state");
+  state.lastRuntimeState = data;
+  updateAll();
 }
 
 async function refreshGeant4Log() {
-  const res = await fetch("/api/geant4/log", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  });
-  const data = await res.json();
-  const payload = data.payload || {};
-  $("geant4-log").textContent = summarizeGeant4Log(payload);
-  renderRuntimeLogSummary(payload);
-  updateDebugPanelVisibility();
+  const data = await postJson("/api/geant4/log", {});
+  $("log-json").textContent = JSON.stringify(data, null, 2);
 }
 
-async function refreshGeant4Summary() {
-  const res = await fetch("/api/geant4/summary", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      lang: state.lang,
-      llm_result_summary: $("llm-question")?.checked === true,
-      ollama_config_path: state.ollamaConfigPath,
-    }),
-  });
-  const data = await res.json();
-  if (res.ok && data.runtime_smoke_report) {
-    state.lastRuntimeSmokeReport = data.runtime_smoke_report;
-  } else if (data.errors?.includes("no_result_summary_available")) {
-    state.lastRuntimeSmokeReport = null;
+async function loadRuntimeConfig() {
+  const data = await getJson("/api/runtime");
+  state.runtime = data;
+  const select = $("model-config-select");
+  select.innerHTML = "";
+  const configs = Array.isArray(data.available) ? data.available : [];
+  if (!configs.length) {
+    const option = document.createElement("option");
+    option.value = data.current_path || "";
+    option.textContent = data.current_model || "default";
+    select.appendChild(option);
   }
-  renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
-}
-
-function runtimePreflightMessage(data = {}) {
-  const payload = data.payload || {};
-  if (payload.ok) {
-    const preview = payload.runtime_payload_preview || {};
-    const structure = preview.structure || preview.geometry?.structure || "unknown geometry";
-    const particle = preview.particle || preview.source?.particle || "unknown particle";
-    return `Runtime preflight passed: ${structure}, ${particle}.`;
+  for (const item of configs) {
+    const path = item.path || "";
+    const option = document.createElement("option");
+    option.value = path;
+    option.textContent = `${item.provider || "llm"} / ${item.model || path.split(/[\\/]/).pop() || path}`;
+    option.selected = path === data.current_path || path === state.modelConfigPath;
+    select.appendChild(option);
   }
-  const missing = Array.isArray(payload.missing_paths) ? payload.missing_paths : [];
-  const errors = Array.isArray(data.errors) ? data.errors : [];
-  const details = missing.length ? missing.join(", ") : errors.join(", ") || "unknown reason";
-  return `Runtime preflight failed: ${details}.`;
+  renderHeader();
 }
 
-async function validateGeant4Config(events = 1, options = {}) {
-  const body = { events };
-  if (Object.prototype.hasOwnProperty.call(options, "patch")) body.patch = options.patch;
-  if (Object.prototype.hasOwnProperty.call(options, "config")) body.config = options.config;
-  const res = await fetch("/api/geant4/validate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  const ok = res.ok && data.payload?.ok === true;
-  if (!ok) {
-    addMessage("assistant", `${t("geant4_prefix")}: ${runtimePreflightMessage(data)}`, "system");
-  }
-  return { ok, data };
+async function setRuntimeConfig(path) {
+  if (!path) return;
+  const data = await postJson("/api/runtime", { config_path: path, ollama_config_path: path });
+  state.modelConfigPath = path;
+  localStorage.setItem("g4_ollama_config_path", path);
+  state.runtime = data;
+  await loadRuntimeConfig();
+  appendAgent(state.lang === "zh" ? `模型配置已切换：${data.current_model || path}` : `Model config switched: ${data.current_model || path}`);
 }
 
-function stableActionToken(value) {
-  const text = JSON.stringify(value || {});
-  let hash = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
-function runtimeActionId(actionName, payload = {}) {
-  return `${actionName}:${stableActionToken(payload)}`;
-}
-
-async function syncGeant4Config() {
-  const patch = currentConfigPatch();
-  const preflight = await validateGeant4Config(1, { patch });
-  if (!preflight.ok) return;
-  const res = await fetch("/api/geant4/apply", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch }),
-  });
-  const data = await res.json();
-  await refreshGeant4State();
-  if (data.message) addMessage("assistant", `${t("geant4_prefix")}: ${data.message}`, "system");
-}
-
-async function initializeGeant4() {
-  const preflight = await validateGeant4Config(1);
-  if (!preflight.ok) return;
-  const res = await fetch("/api/geant4/initialize", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  });
-  const data = await res.json();
-  await refreshGeant4State();
-  if (data.message) addMessage("assistant", `${t("geant4_prefix")}: ${data.message}`, "system");
-}
-
-async function openGeant4Viewer() {
-  const patch = currentConfigPatch();
-  const preflight = await validateGeant4Config(12, { patch });
-  if (!preflight.ok) return;
-  const actionId = runtimeActionId("viewer_open", { patch, events: 12 });
-  const res = await fetch("/api/geant4/viewer/open", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patch, events: 12, action_id: actionId }),
-  });
-  const data = await res.json();
-  await refreshGeant4State();
-  state.lastRuntimeSmokeReport = data.runtime_smoke_report || state.lastRuntimeSmokeReport;
-  renderRuntimeResultSummary(state.lastRuntimeSmokeReport);
-  $("geant4-log").textContent = summarizeRuntimePayloadWithIdempotency(data);
-  renderRuntimeLogSummary({
-    lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
-  });
-  if (data.message) {
-    const resultText = data.runtime_smoke_report ? `\n${runtimeResultMessage(data.runtime_smoke_report)}` : "";
-    addMessage("assistant", `${t("geant4_prefix")}: ${data.message}${resultText}`, "system");
-  }
-}
-
-async function runGeant4(events) {
-  const preflight = await validateGeant4Config(events);
-  if (!preflight.ok) return;
-  const actionId = runtimeActionId("run_beam", { events });
-  const res = await fetch("/api/geant4/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      events,
-      action_id: actionId,
-      lang: state.lang,
-      llm_result_summary: $("llm-question")?.checked === true,
-      ollama_config_path: state.ollamaConfigPath,
-    }),
-  });
-  const data = await res.json();
-  await refreshGeant4State();
-  $("geant4-log").textContent = summarizeRuntimePayloadWithIdempotency(data);
-  renderRuntimeLogSummary({
-    lines: [...(data.payload?.stdout_tail || []), ...(data.payload?.stderr_tail || [])],
-  });
-  if (data.message) {
-    const explanation = data.runtime_result_explanation?.message || (
-      data.runtime_smoke_report ? runtimeResultMessage(data.runtime_smoke_report) : ""
-    );
-    const resultText = explanation ? `\n${explanation}` : "";
-    addMessage("assistant", `${t("geant4_prefix")}: ${data.message}${resultText}`, "system");
-  }
-}
-
-async function loadRuntimeConfigs() {
-  const sel = $("model-config-select");
-  const res = await fetch("/api/runtime");
-  const data = await res.json();
-  const available = Array.isArray(data.available) ? data.available : [];
-
-  sel.innerHTML = "";
-  available.forEach((item) => {
-    const opt = document.createElement("option");
-    opt.value = item.path;
-    opt.textContent = `${item.provider || "ollama"} / ${item.model}`;
-    sel.appendChild(opt);
-  });
-
-  const preferred = state.ollamaConfigPath || data.current_path || (available[0] && available[0].path) || "";
-  if (preferred) sel.value = preferred;
-  state.ollamaModel = data.current_model || "";
-  state.llmProvider = data.current_provider || "";
-  state.ollamaConfigPath = sel.value || "";
-  state.modelPreflight = data.model_preflight || null;
-  renderRuntimeNotice();
-  renderTopbar();
-}
-
-async function applyRuntimeConfig(path) {
-  const res = await fetch("/api/runtime", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ollama_config_path: path }),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.ok) throw new Error(data.message || "failed to set runtime config");
-  state.ollamaConfigPath = data.current_path || path;
-  state.ollamaModel = data.current_model || "";
-  state.llmProvider = data.current_provider || "";
-  state.modelPreflight = data.model_preflight || null;
-  localStorage.setItem("g4_ollama_config_path", state.ollamaConfigPath);
-  renderRuntimeNotice();
-  renderTopbar();
-}
-
-async function pollStepJob(jobId) {
-  while (true) {
-    await new Promise((resolve) => setTimeout(resolve, 380));
-    const res = await fetch("/api/step_status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: jobId }),
-    });
-    if (!res.ok) throw new Error(`status polling failed: ${res.status}`);
-    const payload = await res.json();
-    renderThinkingProgress(payload.progress || []);
-    if (payload.status === "completed") return payload.result || {};
-    if (payload.status === "failed") throw new Error(payload.error || "async job failed");
-  }
-}
-
-async function sendStep() {
+async function sendPrompt() {
   if (state.sending) return;
-  const text = $("input-text").value.trim();
-  if (!text) return;
-
-  addMessage("user", text);
-  $("input-text").value = "";
-  setSending(true);
-  createThinkingMessage();
+  const input = $("prompt-input").value.trim();
+  if (!input) return;
+  appendMessage("user", escapeHtml(input));
+  $("prompt-input").value = "";
+  setBusy(true);
 
   try {
-    const runtimeIntent = await classifyRuntimeIntent(text);
-    if (runtimeIntent.intent === "read_summary") {
-      const answer = await answerRuntimeResultQuestion(text);
-      finalizeThinkingMessage(answer);
-      await refreshGeant4State();
+    const intent = await classifyIntent(input);
+    const baseActivity = [{ stage: "intent", detail: `${intent.intent || "normal_chat"} / ${intent.action_safety_class || "unknown"}` }];
+
+    if (intent.intent === "read_summary") {
+      const answer = await answerRuntimeQuestion(input);
+      appendAgent(answer, [...baseActivity, { stage: "summary", detail: "Read-only runtime summary path.", status: "done" }]);
       return;
     }
-    if (runtimeIntent.intent === "read_config") {
+    if (intent.intent === "read_config") {
       const answer = await answerConfigQuestion();
-      finalizeThinkingMessage(answer);
-      await refreshGeant4State();
+      appendAgent(answer, [...baseActivity, { stage: "summary", detail: "Read-only config summary path.", status: "done" }]);
       return;
     }
-    if (runtimeIntent.intent === "run_requested" || runtimeIntent.intent === "viewer_requested") {
-      finalizeThinkingMessage(explicitRuntimeActionMessage(runtimeIntent.intent));
-      await refreshGeant4State();
+    if (intent.intent === "run_requested") {
+      const events = parseRequestedEvents(input);
+      appendAgent(text("runIntent", events), baseActivity);
+      await runGeant4(events);
       return;
     }
-    if (runtimeIntent.intent !== "config_mutation") {
-      finalizeThinkingMessage(normalChatReadOnlyMessage());
-      await refreshGeant4State();
+    if (intent.intent === "viewer_requested") {
+      appendAgent(text("viewerIntent"), baseActivity);
+      await openViewer();
+      return;
+    }
+    if (state.lastDesign && isAcceptCurrentDesignText(input)) {
+      await acceptCandidate({ source: "ui_explicit_accept_candidate" });
+      return;
+    }
+    if (intent.intent !== "config_mutation" && intent.intent !== "normal_chat") {
+      appendAgent(text("generalQuestion"), baseActivity, "warning");
       return;
     }
 
-    const payload = {
-      session_id: state.sessionId || null,
-      text,
-      min_confidence: Number($("min-conf").value || 0.6),
-      strict_mode: true,
-      autofix: $("autofix").checked,
-      llm_router: $("llm-router").checked,
-      llm_question: $("llm-question").checked,
-      lang: state.lang,
-      geometry_pipeline: state.geometryPipeline,
-      source_pipeline: state.sourcePipeline,
-    };
-
-    const kickoff = await fetch("/api/step_async", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!kickoff.ok) throw new Error(`request failed: ${kickoff.status}`);
-    const kickoffData = await kickoff.json();
-    if (!kickoffData.job_id) throw new Error("async job was not created");
-
-    const data = await pollStepJob(kickoffData.job_id);
-    if (data.session_id && data.session_id !== state.sessionId) {
-      state.sessionId = data.session_id;
-      localStorage.setItem("g4_session_id", state.sessionId);
-    }
-
-    finalizeThinkingMessage(buildAssistantMessage(data));
-
-    state.lastMeta = {
-      phase: data.phase,
-      phase_title: data.phase_title,
-      asked_fields_friendly: data.asked_fields_friendly || [],
-      is_complete: !!data.is_complete,
-    };
-    state.lastProcess = {
-      llm_used: !!data.llm_used,
-      fallback_reason: data.fallback_reason || "",
-      temperatures: data.temperatures || {},
-      phase: data.phase,
-      phase_title: data.phase_title,
-      asked_fields_friendly: data.asked_fields_friendly || [],
-      rejected_updates: data.rejected_updates || [],
-      violations: data.violations || [],
-      applied_rules: data.applied_rules || [],
-      internal_trace: data.internal_trace || null,
-      geometry_compare: data.geometry_compare || null,
-      source_compare: data.source_compare || null,
-    };
-
-    $("summary").textContent = summarizeConfig(data.config);
-    $("response").textContent = JSON.stringify(data.config || {}, null, 2);
-    renderConfigInspector(data.config || {});
-    $("process-log").textContent = summarizeProcess(state.lastProcess);
-    $("internal-trace").textContent = summarizeInternalTrace(state.lastProcess.internal_trace);
-    $("geometry-compare").textContent = summarizeGeometryCompare(state.lastProcess.geometry_compare);
-    $("source-compare").textContent = summarizeSourceCompare(state.lastProcess.source_compare);
-    updateDebugPanelVisibility();
-    renderTopbar();
-    await refreshGeant4State();
+    const data = await requestDesign(input);
+    applyDesignResponse(data);
+    appendAgent(designMessage(data), [
+      ...baseActivity,
+      { stage: "design", detail: data.simulation_design_source || "simulation_design stage returned a candidate.", status: "done" },
+      { stage: "capability", detail: `next_action=${data.simulation_design?.next_action || "unknown"}`, status: "done" },
+      { stage: "config", detail: data.recommended_config ? "Recommended config draft is available." : "No recommended config draft.", status: data.recommended_config ? "done" : "warn" },
+    ]);
   } catch (error) {
-    failThinkingMessage(`${t("request_failed")}\n${error.message}`);
+    appendAgent(`${text("sendFailed")}: ${error.message}`, [{ stage: "summary", detail: "Request stopped with an error.", status: "warn" }], "error");
   } finally {
-    setSending(false);
+    setBusy(false);
+    await refreshGeant4State().catch(() => {});
   }
 }
 
 async function resetSession() {
   if (state.sessionId) {
-    await fetch("/api/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: state.sessionId }),
-    });
+    await postJson("/api/reset", { session_id: state.sessionId }).catch(() => {});
   }
-  state.sessionId = "";
-  state.lastMeta = null;
-  state.lastProcess = null;
-  state.lastRuntimeSmokeReport = null;
-  state.activeThinkingNode = null;
-  state.activeThinkingProgress = [];
   localStorage.removeItem("g4_session_id");
-  $("chat").innerHTML = "";
-  $("summary").textContent = "";
-  $("response").textContent = "";
-  renderConfigInspector({});
-  $("process-log").textContent = "";
-  $("internal-trace").textContent = "";
-  $("geometry-compare").textContent = "";
-  $("source-compare").textContent = "";
-  $("geant4-state").textContent = "";
-  $("geant4-log").textContent = "";
-  renderRuntimeLogSummary({});
-  renderRuntimeResultSummary(null);
-  renderRuntimeInspector({});
-  updateDebugPanelVisibility();
-  renderTopbar();
-  ensureEmptyState();
+  state.sessionId = "";
+  state.lastDesign = null;
+  state.lastRecommendedConfig = null;
+  state.candidateStatus = null;
+  state.lastRuntimeReport = null;
+  state.lastTrace = null;
+  $("timeline").innerHTML = `
+    <article class="welcome">
+      <p class="caption">Start here</p>
+      <h2>${escapeHtml(text("welcome"))}</h2>
+      <p>10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT.</p>
+    </article>
+  `;
+  updateAll();
+  appendAgent(text("resetDone"));
 }
 
-function bindComposerHotkeys() {
-  $("input-text").addEventListener("keydown", (event) => {
+function bindEvents() {
+  $("send-btn").addEventListener("click", sendPrompt);
+  $("prompt-input").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      sendStep();
+      sendPrompt();
     }
+  });
+  $("lang-select").addEventListener("change", (event) => {
+    state.lang = event.target.value;
+    localStorage.setItem("g4_lang", state.lang);
+    $("prompt-input").placeholder =
+      state.lang === "zh"
+        ? "输入模拟目标、修改意见或结果问题。Enter 发送，Shift+Enter 换行。"
+        : "Enter a simulation goal, modification, or result question. Enter to send, Shift+Enter for newline.";
+    updateAll();
+  });
+  $("model-config-select").addEventListener("change", (event) => setRuntimeConfig(event.target.value).catch((error) => appendAgent(error.message, [], "error")));
+  $("validate-btn").addEventListener("click", () => validateGeant4Config(1).catch((error) => appendAgent(error.message, [], "error")));
+  $("run1-btn").addEventListener("click", () => runGeant4(1).catch((error) => appendAgent(error.message, [], "error")));
+  $("run10-btn").addEventListener("click", () => runGeant4(10).catch((error) => appendAgent(error.message, [], "error")));
+  $("viewer-btn").addEventListener("click", () => openViewer().catch((error) => appendAgent(error.message, [], "error")));
+  $("refresh-btn").addEventListener("click", () => Promise.all([refreshGeant4State(), refreshGeant4Log()]).catch((error) => appendAgent(error.message, [], "error")));
+  $("reset-btn").addEventListener("click", () => resetSession().catch((error) => appendAgent(error.message, [], "error")));
+  document.querySelectorAll(".evidence-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".evidence-tab").forEach((tab) => tab.classList.toggle("active", tab === button));
+      document.querySelectorAll(".evidence-panel").forEach((panel) => {
+        panel.hidden = panel.id !== button.dataset.evidence;
+      });
+    });
+  });
+  $("window-min-btn").addEventListener("click", () => window.geant4Desktop?.minimize?.());
+  $("window-max-btn").addEventListener("click", () => window.geant4Desktop?.toggleMaximize?.());
+  $("window-close-btn").addEventListener("click", () => {
+    if (window.geant4Desktop?.close) window.geant4Desktop.close();
+    else window.close();
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  ensureEmptyState();
+async function boot() {
   $("lang-select").value = state.lang;
-  $("geometry-pipeline-select").value = state.geometryPipeline;
-  $("source-pipeline-select").value = state.sourcePipeline;
-  applyI18n();
-  bindComposerHotkeys();
+  bindEvents();
+  updateAll();
+  await loadRuntimeConfig().catch((error) => appendAgent(`Runtime config load failed: ${error.message}`, [], "error"));
+  await refreshGeant4State().catch(() => {});
+  await refreshGeant4Log().catch(() => {});
+}
 
-  loadRuntimeConfigs().catch((err) => addMessage("assistant", `Runtime config load failed: ${err.message}`, "error"));
-  refreshGeant4State().catch(() => {});
-  refreshGeant4Log().catch(() => {});
-  refreshGeant4Summary().catch(() => {});
-
-  $("run-btn").addEventListener("click", sendStep);
-  $("reset-btn").addEventListener("click", resetSession);
-  $("g4-sync-btn").addEventListener("click", syncGeant4Config);
-  $("g4-viewer-btn").addEventListener("click", openGeant4Viewer);
-  $("g4-init-btn").addEventListener("click", initializeGeant4);
-  $("g4-run-btn").addEventListener("click", () => runGeant4(1));
-  $("g4-run10-btn").addEventListener("click", () => runGeant4(10));
-  $("g4-refresh-btn").addEventListener("click", async () => {
-    await refreshGeant4State();
-    await refreshGeant4Log();
-    await refreshGeant4Summary();
-  });
-  $("lang-select").addEventListener("change", (event) => {
-    state.lang = event.target.value || "zh";
-    localStorage.setItem("g4_lang", state.lang);
-    applyI18n();
-    if ($("summary").textContent) {
-      try {
-        const cfg = JSON.parse($("response").textContent || "{}");
-        $("summary").textContent = summarizeConfig(cfg);
-      } catch (_) {}
-    }
-  });
-  $("geometry-pipeline-select").addEventListener("change", (event) => {
-    state.geometryPipeline = event.target.value || "legacy";
-    localStorage.setItem("g4_geometry_pipeline", state.geometryPipeline);
-  });
-  $("source-pipeline-select").addEventListener("change", (event) => {
-    state.sourcePipeline = event.target.value || "legacy";
-    localStorage.setItem("g4_source_pipeline", state.sourcePipeline);
-  });
-  $("model-config-select").addEventListener("change", async (event) => {
-    const nextPath = event.target.value || "";
-    if (!nextPath) return;
-    try {
-      await applyRuntimeConfig(nextPath);
-      addMessage("assistant", `${t("model_switched")}: ${state.llmProvider || "provider"} / ${state.ollamaModel}.`, "system");
-    } catch (error) {
-      addMessage("assistant", `Model switch failed.\n${error.message}`, "error");
-    }
-  });
-});
+boot();

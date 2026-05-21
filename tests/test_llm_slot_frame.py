@@ -8,6 +8,7 @@ from core.config.llm_prompt_registry import STRICT_SLOT_PROMPT_PROFILE, build_st
 from core.orchestrator.session_manager import process_turn, reset_session
 from core.slots.slot_mapper import slot_frame_to_candidates
 from mcp.geant4.runtime_payload import build_runtime_payload
+from nlu.llm.normalizer import infer_user_turn_controls
 from nlu.llm.slot_frame import build_llm_slot_frame, parse_slot_payload
 
 
@@ -51,6 +52,85 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertEqual(frame.source.position_mm, [0.0, 0.0, -100.0])
         self.assertEqual(frame.source.direction_vec, [0.0, 0.0, 1.0])
         self.assertEqual(frame.output.format, "root")
+
+    def test_parse_slot_payload_preserves_geometry_root_name(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "geometry.root_name:LeadShield; geometry.kind:box",
+            "target_slots": ["geometry.root_name", "geometry.kind"],
+            "slots": {"geometry": {"root_name": "LeadShield", "kind": "box"}},
+        }
+        frame, meta = parse_slot_payload(payload)
+
+        self.assertIsNotNone(frame)
+        assert frame is not None
+        self.assertEqual(meta.get("schema_errors"), [])
+        self.assertEqual(frame.geometry.root_name, "LeadShield")
+        candidate, user_candidate = slot_frame_to_candidates(frame, turn_id=1, geometry_mode="v2", source_mode="v2")
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        mapped = {u.path: u.value for u in candidate.updates}
+        self.assertEqual(mapped["geometry.root_name"], "LeadShield")
+        self.assertIn("geometry.root_name", user_candidate.target_paths)
+
+    def test_explicit_controls_detect_geometry_root_name_contract(self) -> None:
+        controls = infer_user_turn_controls("Exact config path: geometry.root_name must be 'LeadShield'.")
+
+        self.assertIn("geometry.root_name", controls["target_paths"])
+
+    def test_explicit_controls_expand_geometry_size_triplet_contract(self) -> None:
+        controls = infer_user_turn_controls("Canonical required slot clauses: geometry.size_triplet_mm:[100,100,10]")
+
+        self.assertIn("geometry.params.module_x", controls["target_paths"])
+        self.assertIn("geometry.params.module_y", controls["target_paths"])
+        self.assertIn("geometry.params.module_z", controls["target_paths"])
+
+    def test_backfill_reads_geometry_root_name_clause(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "geometry.root_name:LeadShield; geometry.kind:box",
+            "target_slots": ["geometry.kind"],
+            "slots": {"geometry": {"kind": "box"}},
+        }
+        frame, meta = parse_slot_payload(payload)
+
+        self.assertIsNotNone(frame)
+        assert frame is not None
+        self.assertEqual(meta.get("schema_errors"), [])
+        self.assertEqual(frame.geometry.root_name, "LeadShield")
+
+    def test_backfill_reads_string_triplet_array_as_mm(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "geometry.size_triplet_mm:[100.0,100.0,10.0]",
+            "target_slots": ["geometry.size_triplet_mm"],
+            "slots": {"geometry": {}},
+        }
+        frame, meta = parse_slot_payload(payload)
+
+        self.assertIsNotNone(frame)
+        assert frame is not None
+        self.assertEqual(meta.get("schema_errors"), [])
+        self.assertEqual(frame.geometry.size_triplet_mm, [100.0, 100.0, 10.0])
+
+    def test_explicit_user_slot_clause_overrides_llm_default_size(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "geometry.kind:box",
+            "target_slots": ["geometry.kind", "geometry.size_triplet_mm"],
+            "slots": {"geometry": {"kind": "box", "size_triplet_mm": [50, 50, 50]}},
+        }
+        text = "Canonical required slot clauses: geometry.size_triplet_mm:[100.0,100.0,10.0]"
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(payload)}):
+            result = build_llm_slot_frame(text, context_summary="", config_path="", lang="en")
+
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.geometry.size_triplet_mm, [100.0, 100.0, 10.0])
 
     def test_backfill_does_not_treat_dimension_by_as_ellipsoid_by(self) -> None:
         payload = {
@@ -374,6 +454,83 @@ class LlmSlotFrameTest(unittest.TestCase):
         self.assertTrue(runtime["detector_enabled"])
         self.assertEqual(runtime["detector"]["volume_name"], "Detector")
         self.assertEqual(runtime["scoring"]["plane"]["name"], "TargetExitPlane")
+
+    def test_process_turn_hard_slot_clauses_override_llm_default_geometry_size(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "geometry.kind:box; geometry.root_name:LeadShield",
+            "target_slots": ["geometry.kind", "geometry.root_name"],
+            "slots": {
+                "geometry": {"kind": "box", "root_name": "LeadShield", "size_triplet_mm": [50, 50, 50]},
+                "materials": {"primary": "G4_Pb"},
+                "source": {
+                    "kind": "beam",
+                    "particle": "gamma",
+                    "energy_mev": 1,
+                    "position_mm": [0, 0, -100],
+                    "direction_vec": [0, 0, 1],
+                },
+                "physics": {"explicit_list": "FTFP_BERT"},
+            },
+        }
+        session_id = "test-slot-hard-clauses-override-size"
+        reset_session(session_id)
+        try:
+            with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(payload)}):
+                out = process_turn(
+                    {
+                        "session_id": session_id,
+                        "text": (
+                            "Canonical required slot clauses: "
+                            "geometry.root_name:LeadShield; geometry.kind:box; "
+                            "geometry.size_triplet_mm:[100.0,100.0,10.0]; materials.primary:G4_Pb; "
+                            "source.kind:beam; source.particle:gamma; source.energy_mev:1; "
+                            "source.position_mm:[0,0,-100]; source.direction_vec:[0,0,1]; "
+                            "physics.explicit_list:FTFP_BERT"
+                        ),
+                        "llm_router": True,
+                        "llm_question": False,
+                        "normalize_input": True,
+                        "geometry_pipeline": "v2",
+                        "source_pipeline": "v2",
+                        "enable_compare": False,
+                        "autofix": True,
+                    },
+                    ollama_config_path="",
+                    lang="en",
+                )
+        finally:
+            reset_session(session_id)
+
+        runtime = build_runtime_payload(out["config"])
+        self.assertEqual(runtime["geometry"]["root_volume_name"], "LeadShield")
+        self.assertEqual(runtime["geometry"]["size_x_mm"], 100.0)
+        self.assertEqual(runtime["geometry"]["size_y_mm"], 100.0)
+        self.assertEqual(runtime["geometry"]["size_z_mm"], 10.0)
+
+    def test_scoring_word_does_not_clear_box_geometry_as_ring_graph_cue(self) -> None:
+        payload = {
+            "intent": "SET",
+            "confidence": 0.9,
+            "normalized_text": "geometry.kind:box; geometry.size_triplet_mm:[100,100,10]; scoring.target_edep:true",
+            "target_slots": ["geometry.kind", "geometry.size_triplet_mm", "scoring.target_edep"],
+            "slots": {
+                "geometry": {"kind": "box", "size_triplet_mm": [100, 100, 10]},
+                "scoring": {"target_edep": True},
+            },
+        }
+        with patch("nlu.llm.slot_frame.chat", return_value={"response": json.dumps(payload)}):
+            result = build_llm_slot_frame(
+                "Use a box target and enable scoring.target_edep:true",
+                context_summary="",
+                config_path="",
+                lang="en",
+            )
+
+        self.assertTrue(result.ok)
+        assert result.frame is not None
+        self.assertEqual(result.frame.geometry.kind, "box")
 
     def test_build_llm_slot_frame_prefers_explicit_material_from_user_text(self) -> None:
         payload = {

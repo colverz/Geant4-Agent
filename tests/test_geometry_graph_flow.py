@@ -6,7 +6,7 @@ from unittest.mock import patch
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
 from core.semantic_frame import SemanticFrame
 from builder.geometry.synthesize import synthesize_from_params
-from nlu.bert.extractor import extract_candidates_from_normalized_text
+from nlu.runtime_extractor import extract_candidates_from_normalized_text
 from nlu.runtime_components.graph_search import search_candidate_graphs
 
 
@@ -164,7 +164,7 @@ class GeometryGraphFlowTest(unittest.TestCase):
         }
         frame.geometry.params = {"module_x": 8.0, "module_y": 10.0, "module_z": 2.0, "n": 12.0, "radius": 40.0}
 
-        with patch("nlu.bert.extractor.extract_runtime_semantic_frame", return_value=(frame, {"scores": {"best_prob": 0.91}})):
+        with patch("nlu.runtime_extractor.extract_runtime_semantic_frame", return_value=(frame, {"scores": {"best_prob": 0.91}})):
             candidate, _ = extract_candidates_from_normalized_text(
                 "intent=SET; structure=ring; n=12; radius=40 mm;",
                 raw_text="ring of 12 modules",

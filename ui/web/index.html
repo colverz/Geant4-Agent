@@ -1,219 +1,121 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Geant4-Agent</title>
+    <title>Geant4 Agent Console</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand-block">
-          <div class="brand-mark">GA</div>
+    <div class="shell" data-ui-version="rebuild-v1">
+      <header class="titlebar">
+        <div class="brand">
+          <div class="brand-glyph">G4</div>
           <div>
-            <h1>Geant4-Agent</h1>
-            <p data-i18n="brand_subtitle">Dialogue workspace for simulation planning and runtime control.</p>
+            <p class="caption">Agentic Simulation Console</p>
+            <h1>Geant4 Agent</h1>
           </div>
         </div>
+        <div class="titlebar-status">
+          <span id="session-pill" class="status-pill">new session</span>
+          <span id="adapter-pill" class="status-pill">adapter: unknown</span>
+          <span id="phase-pill" class="status-pill accent">idle</span>
+        </div>
+        <div class="window-controls" aria-label="Window controls">
+          <button id="window-min-btn" class="window-button" title="Minimize">-</button>
+          <button id="window-max-btn" class="window-button" title="Maximize">□</button>
+          <button id="window-close-btn" class="window-button close" title="Close">×</button>
+        </div>
+      </header>
 
-        <section class="side-card">
-          <h2 data-i18n="session_title">Session</h2>
-          <div class="meta-list">
-            <div class="meta-row">
-              <span data-i18n="session_label">Session</span>
-              <strong id="sidebar-session-id">new</strong>
-            </div>
-            <div class="meta-row">
-              <span data-i18n="phase_label">Phase</span>
-              <strong id="sidebar-runtime-phase">idle</strong>
-            </div>
-            <div class="meta-row">
-              <span data-i18n="model_label">Model</span>
-              <strong id="sidebar-model-name">-</strong>
-            </div>
+      <main class="layout">
+        <section class="conversation-stage" aria-label="Conversation">
+          <div id="timeline" class="timeline">
+            <article class="welcome">
+              <p class="caption">Start here</p>
+              <h2>描述你的模拟目标。我会先整理方案并生成候选配置，确认后再进入 Geant4 运行。</h2>
+              <p>
+                例如：10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at
+                (0,0,-20) mm along +z; physics FTFP_BERT.
+              </p>
+            </article>
           </div>
-          <div id="runtime-notice" class="runtime-notice"></div>
-        </section>
 
-        <section class="side-card">
-          <h2 data-i18n="controls_title">Controls</h2>
-          <label class="field">
-            <span data-i18n="model_config">Model Config</span>
-            <select id="model-config-select"></select>
-          </label>
-          <label class="field">
-            <span data-i18n="language">Language</span>
-            <select id="lang-select">
-              <option value="zh">中文</option>
-              <option value="en" selected>English</option>
-            </select>
-          </label>
-          <label class="field">
-            <span data-i18n="confidence">Structure Confidence</span>
-            <input id="min-conf" type="number" min="0" max="1" step="0.05" value="0.6" />
-          </label>
-          <label class="check-row">
-            <input id="autofix" type="checkbox" checked />
-            <span data-i18n="autofix">Auto-fix</span>
-          </label>
-          <label class="check-row">
-            <input id="llm-router" type="checkbox" checked />
-            <span data-i18n="llm_routing">LLM routing</span>
-          </label>
-          <label class="check-row">
-            <input id="llm-question" type="checkbox" checked />
-            <span data-i18n="llm_follow_up">LLM follow-up</span>
-          </label>
-          <label class="field">
-            <span>Geometry Pipeline</span>
-            <select id="geometry-pipeline-select">
-              <option value="legacy" selected>legacy</option>
-              <option value="v2">v2</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Source Pipeline</span>
-            <select id="source-pipeline-select">
-              <option value="legacy" selected>legacy</option>
-              <option value="v2">v2</option>
-            </select>
-          </label>
-          <button id="reset-btn" class="ghost wide" data-i18n="reset">Reset session</button>
-        </section>
-
-        <section class="side-card">
-          <h2 data-i18n="summary">Summary</h2>
-          <pre id="summary"></pre>
-        </section>
-      </aside>
-
-      <main class="main-shell">
-        <header class="topbar">
-          <div>
-            <div class="eyebrow" data-i18n="conversation">Conversation</div>
-            <h2 data-i18n="conversation_title">Simulation Planning Chat</h2>
-          </div>
-          <div class="chip-row">
-            <span class="chip" id="header-phase-chip">idle</span>
-            <span class="chip muted" id="header-complete-chip">incomplete</span>
-            <span class="chip muted" id="runtime-status-inline">offline</span>
-          </div>
-        </header>
-
-        <div class="workspace">
-          <section class="chat-panel">
-            <div id="chat" class="chat"></div>
-
-            <div class="composer-shell">
-              <div class="quick-actions">
-                <button id="g4-sync-btn" class="ghost" data-i18n="sync_config">Sync Config</button>
-                <button id="g4-viewer-btn" class="ghost" data-i18n="open_viewer">Open Viewer</button>
-                <button id="g4-init-btn" class="ghost" data-i18n="initialize">Initialize</button>
-                <button id="g4-run-btn" class="ghost" data-i18n="run_one">Run 1 Event</button>
-                <button id="g4-run10-btn" class="ghost" data-i18n="run_ten">Run 10 Events</button>
-                <button id="g4-refresh-btn" class="ghost" data-i18n="refresh">Refresh</button>
-              </div>
-
-              <div class="composer">
-                <textarea
-                  id="input-text"
-                  rows="4"
-                  data-i18n-placeholder="input_placeholder"
-                  placeholder="Describe the experiment you want to build. Press Enter to send, Shift+Enter for a new line."
-                ></textarea>
-                <div class="composer-footer">
-                  <div class="composer-hint" id="composer-status">
-                    <span data-i18n="composer_hint">Build the requirement in dialogue first. Use the runtime buttons after the structure looks right.</span>
-                  </div>
-                  <div class="thinking-indicator" id="thinking-indicator" hidden>
-                    <span></span><span></span><span></span>
-                  </div>
-                  <button id="run-btn" data-i18n="send">Send</button>
+          <section class="composer-zone" aria-label="Prompt composer">
+            <div id="activity-strip" class="activity-strip" hidden></div>
+            <div class="command-bar">
+              <button id="validate-btn" class="secondary">Validate</button>
+              <button id="run1-btn" class="primary">Run 1 Event</button>
+              <button id="run10-btn" class="secondary">Run 10 Events</button>
+              <button id="viewer-btn" class="secondary">Viewer</button>
+              <button id="refresh-btn" class="ghost">Refresh</button>
+              <button id="reset-btn" class="ghost danger">Reset</button>
+            </div>
+            <div class="composer">
+              <textarea
+                id="prompt-input"
+                rows="4"
+                placeholder="输入模拟目标、修改意见或结果问题。Enter 发送，Shift+Enter 换行。"
+              ></textarea>
+              <div class="composer-footer">
+                <div>
+                  <label class="inline-field">
+                    <span>Language</span>
+                    <select id="lang-select">
+                      <option value="zh" selected>中文</option>
+                      <option value="en">English</option>
+                    </select>
+                  </label>
+                  <label class="inline-field">
+                    <span>Model</span>
+                    <select id="model-config-select"></select>
+                  </label>
                 </div>
+                <button id="send-btn" class="primary large">Send</button>
               </div>
             </div>
           </section>
+        </section>
 
-          <aside class="inspector">
-            <section class="inspector-card">
-              <h3 data-i18n="config_overview">Configuration Overview</h3>
-              <div id="config-overview" class="overview-grid"></div>
-            </section>
+        <aside class="context-rail" aria-label="Context">
+          <section class="rail-section">
+            <div class="rail-head">
+              <p class="caption">Current Design</p>
+              <strong id="design-state">none</strong>
+            </div>
+            <div id="design-summary" class="summary-block muted">还没有方案。先描述一个模拟目标。</div>
+          </section>
 
-            <section class="inspector-card">
-              <h3 data-i18n="completion_status">Completion Status</h3>
-              <div class="status-split">
-                <div>
-                  <div class="status-title" data-i18n="filled_items">Filled</div>
-                  <div id="filled-items" class="tag-list"></div>
-                </div>
-                <div>
-                  <div class="status-title" data-i18n="missing_items">Missing</div>
-                  <div id="missing-items" class="tag-list missing"></div>
-                </div>
-              </div>
-            </section>
+          <section class="rail-section">
+            <div class="rail-head">
+              <p class="caption">Runtime Result</p>
+              <strong id="result-state">empty</strong>
+            </div>
+            <div id="result-summary" class="metric-grid"></div>
+          </section>
 
-            <section class="inspector-card">
-              <h3 data-i18n="runtime_state">Runtime State</h3>
-              <div id="runtime-overview" class="overview-grid compact"></div>
-            </section>
+          <section class="rail-section">
+            <div class="rail-head">
+              <p class="caption">Config Readiness</p>
+              <strong id="config-state">pending</strong>
+            </div>
+            <div id="config-readiness" class="readiness-list"></div>
+          </section>
 
-            <section class="inspector-card">
-              <h3 data-i18n="runtime_log">Runtime Log</h3>
-              <div id="runtime-log-summary" class="log-summary"></div>
-            </section>
-
-            <section class="inspector-card">
-              <h3 data-i18n="runtime_result">Runtime Result</h3>
-              <div id="runtime-result-summary" class="result-summary"></div>
-            </section>
-
-            <section class="inspector-card debug-card">
-              <details id="debug-details" class="debug-details">
-                <summary class="debug-summary">
-                  <span data-i18n="debug_panel">Debug Panel</span>
-                </summary>
-
-                <div id="debug-terminal-block" class="debug-block">
-                  <div class="debug-title" data-i18n="terminal_log">Terminal</div>
-                  <pre id="geant4-log"></pre>
-                </div>
-
-                <div id="debug-process-block" class="debug-block">
-                  <div class="debug-title" data-i18n="process">Process</div>
-                  <pre id="process-log"></pre>
-                </div>
-
-                <div id="debug-trace-block" class="debug-block">
-                  <div class="debug-title" data-i18n="internal_trace">Internal Trace</div>
-                  <pre id="internal-trace"></pre>
-                </div>
-
-                <div id="debug-geometry-block" class="debug-block">
-                  <div class="debug-title" data-i18n="geometry_compare">Geometry Compare</div>
-                  <pre id="geometry-compare"></pre>
-                </div>
-
-                <div id="debug-source-block" class="debug-block">
-                  <div class="debug-title">Source Compare</div>
-                  <pre id="source-compare"></pre>
-                </div>
-
-                <div id="debug-config-block" class="debug-block">
-                  <div class="debug-title" data-i18n="raw_config">Raw Config</div>
-                  <pre id="response"></pre>
-                </div>
-
-                <div id="debug-runtime-block" class="debug-block">
-                  <div class="debug-title" data-i18n="raw_runtime">Raw Runtime</div>
-                  <pre id="geant4-state"></pre>
-                </div>
-              </details>
-            </section>
-          </aside>
-        </div>
+          <details class="evidence-drawer">
+            <summary>Evidence / Raw Data</summary>
+            <div class="evidence-tabs">
+              <button class="evidence-tab active" data-evidence="config-json">Config</button>
+              <button class="evidence-tab" data-evidence="runtime-json">Runtime</button>
+              <button class="evidence-tab" data-evidence="log-json">Log</button>
+              <button class="evidence-tab" data-evidence="trace-json">Trace</button>
+            </div>
+            <pre id="config-json" class="evidence-panel"></pre>
+            <pre id="runtime-json" class="evidence-panel" hidden></pre>
+            <pre id="log-json" class="evidence-panel" hidden></pre>
+            <pre id="trace-json" class="evidence-panel" hidden></pre>
+          </details>
+        </aside>
       </main>
     </div>
     <script src="app.js"></script>

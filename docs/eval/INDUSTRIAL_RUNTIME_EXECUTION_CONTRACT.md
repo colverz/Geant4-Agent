@@ -242,6 +242,29 @@ Strict evaluator:
 .venv\Scripts\python.exe tools\evaluate_industrial_runtime_benchmark.py --json
 ```
 
+Live LLM-to-runtime evaluator:
+
+```powershell
+$env:GEANT4_INDUSTRIAL_RUNTIME_BENCHMARK="1"
+$env:GEANT4_RUNTIME_COMMAND_JSON='["<path-to-real-geant4-wrapper>"]'
+.venv\Scripts\python.exe tools\run_industrial_llm_runtime_stage.py `
+  --live-llm `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --case-id shielding_lead_gamma_transmission `
+  --golden-dir docs\eval\golden\industrial_runtime `
+  --json
+```
+
+This stage is the required path when the question is whether the agent can solve
+the full user-facing workflow. It differs from the deterministic evaluator by
+placing the LLM before the typed runtime boundary:
+
+`industrial brief -> LLM candidate config -> runtime contract check -> real Geant4 run -> structured metrics -> golden comparison`
+
+The stage must not call the live LLM when real runtime is unavailable unless the
+operator explicitly passes `--allow-llm-without-runtime` for parser-only
+debugging. Parser-only output is never an industrial readiness claim.
+
 Golden generation gate:
 
 ```powershell
@@ -304,6 +327,20 @@ Golden review is mandatory for official evaluation. Generated golden files start
 as `review.status="unreviewed"`. The strict evaluator rejects them unless the
 caller explicitly opts into `--allow-unreviewed-goldens`, which is reserved for
 development wiring checks and must not be reported as industrial readiness.
+
+Golden review is performed through:
+
+```text
+tools/review_industrial_golden.py
+```
+
+The review command validates that the golden file has a complete schema,
+numeric expected metrics, numeric tolerances, and a runtime fingerprint before
+setting `review.status="reviewed"`. It records reviewer identity, review time,
+notes, evidence, previous status, and a metrics hash. It must not alter the
+metric expected values; if a value is wrong, regenerate the golden from a pinned
+runtime instead of editing it manually. Use `--dry-run` for validation-only
+checks before changing review status.
 
 ## What This Contract Forbids
 

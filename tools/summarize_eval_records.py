@@ -87,6 +87,18 @@ def _compact_failures(report: dict[str, Any], *, limit: int = 8) -> list[dict[st
         for failure in child.get("failures") or []:
             if isinstance(failure, dict):
                 add_failure(failure, source=source or None)
+    for result in report.get("case_results") or []:
+        if not isinstance(result, dict):
+            continue
+        if result.get("status") == "passed":
+            continue
+        add_failure(
+            {
+                "id": result.get("id"),
+                "errors": result.get("reasons") or result.get("errors") or [result.get("failure_category")],
+            },
+            source=str(result.get("domain") or "") or None,
+        )
     return compact
 
 
@@ -106,6 +118,58 @@ def _compact_key_metrics(report: dict[str, Any]) -> dict[str, Any]:
         for key in ("expected_metric_value_accuracy", "expected_metric_range_rate", "relation_pass_rate"):
             if key in quantitative:
                 metrics[key] = quantitative[key]
+    stage = report.get("stage_summary")
+    if isinstance(stage, dict):
+        for key in ("passed", "failed", "not_evaluable", "llm_contract_passed", "runtime_completed"):
+            if key in stage:
+                metrics[key] = stage[key]
+        eval_status = stage.get("evaluation_status")
+        if isinstance(eval_status, dict):
+            for key in ("passed", "failed", "not_evaluable", "unsupported"):
+                if key in eval_status:
+                    metrics[f"evaluation.{key}"] = eval_status[key]
+        nlu_boundary = stage.get("nlu_boundary")
+        if isinstance(nlu_boundary, dict):
+            for key in ("no_bert_prior_pass_rate", "backend_check_pass_rate"):
+                if key in nlu_boundary:
+                    metrics[key] = nlu_boundary[key]
+        candidate_boundary = stage.get("candidate_boundary")
+        if isinstance(candidate_boundary, dict):
+            for key in ("cases", "requires_confirmation_cases", "uncertainty_cases", "assumption_count", "physics_rationale_count"):
+                if key in candidate_boundary:
+                    metrics[f"candidate_boundary.{key}"] = candidate_boundary[key]
+            role_counts = candidate_boundary.get("role_counts")
+            if isinstance(role_counts, dict):
+                for key, value in sorted(role_counts.items()):
+                    if _safe_number(value) is not None:
+                        metrics[f"candidate_boundary.role.{key}"] = value
+        alignment = stage.get("contract_alignment")
+        if isinstance(alignment, dict):
+            for key in ("applied_cases", "correction_count", "completion_count", "override_count", "risk_correction_count"):
+                if key in alignment:
+                    metrics[f"contract_alignment.{key}"] = alignment[key]
+            categories = alignment.get("correction_categories")
+            if isinstance(categories, dict):
+                for key, value in sorted(categories.items()):
+                    if _safe_number(value) is not None:
+                        metrics[f"contract_alignment.{key}"] = value
+        simulation_design = stage.get("simulation_design")
+        if isinstance(simulation_design, dict):
+            for key in (
+                "supported_count",
+                "approximation_required_count",
+                "unsupported_count",
+                "user_decision_required_count",
+            ):
+                if key in simulation_design:
+                    metrics[f"simulation_design.{key}"] = simulation_design[key]
+    case_results = report.get("case_results")
+    if isinstance(case_results, list) and len(case_results) == 1 and isinstance(case_results[0], dict):
+        actual_metrics = case_results[0].get("actual_metrics")
+        if isinstance(actual_metrics, dict):
+            for key, value in sorted(actual_metrics.items()):
+                if _safe_number(value) is not None:
+                    metrics[f"actual.{key}"] = value
     return metrics
 
 
@@ -128,13 +192,25 @@ def summarize_eval_record(path: Path) -> dict[str, Any] | None:
         "git_dirty": bool(git.get("dirty")),
         "git_changed_line_count": git.get("changed_line_count"),
         "key_metrics": _compact_key_metrics(report),
-        "failure_count": int(report.get("failed") or 0) if _safe_number(report.get("failed")) is not None else len(_compact_failures(report)),
+        "failure_count": _failure_count(report),
         "failure_summary": _compact_failures(report),
         "model_summaries": _compact_model_summaries(report),
         "failed_models": report.get("failed_models", []),
         "hidden_fallback_models": report.get("hidden_fallback_models", []),
         "profile_mismatch_models": report.get("profile_mismatch_models", []),
     }
+
+
+def _failure_count(report: dict[str, Any]) -> int:
+    failed = _safe_number(report.get("failed"))
+    if failed is not None:
+        return int(failed)
+    stage = report.get("stage_summary")
+    if isinstance(stage, dict):
+        failed = _safe_number(stage.get("failed"))
+        if failed is not None:
+            return int(failed)
+    return len(_compact_failures(report))
 
 
 def summarize_eval_records(outdir: Path = DEFAULT_EVAL_REPORT_DIR, *, latest_only: bool = False) -> dict[str, Any]:

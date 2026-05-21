@@ -4,7 +4,13 @@ from typing import Any, Callable
 
 from ui.web.geant4_api import handle_geant4_post
 from ui.web.runtime_state import runtime_config_payload, set_ollama_config_path
-from ui.web.strict_api import handle_strict_audit, handle_strict_config_summary, handle_strict_reset
+from ui.web.strict_api import (
+    handle_strict_audit,
+    handle_strict_accept_candidate,
+    handle_strict_config_summary,
+    handle_strict_reset,
+    handle_strict_simulation_design,
+)
 from ui.web.async_jobs import create_step_job, get_job
 
 
@@ -17,6 +23,8 @@ POST_PATHS = {
     "/api/runtime",
     "/api/audit",
     "/api/config/summary",
+    "/api/simulation/design",
+    "/api/simulation/accept",
     "/api/geant4/apply",
     "/api/geant4/validate",
     "/api/geant4/initialize",
@@ -61,6 +69,14 @@ def handle_post_request(
         session_id = str(payload.get("session_id", "")).strip()
         body = handle_strict_config_summary(session_id, lang=str(payload.get("lang", "zh")).lower())
         return (200 if body.get("ok") else 404), body
+
+    if path == "/api/simulation/design":
+        body = handle_strict_simulation_design(payload)
+        return (200 if not body.get("error") else 400), body
+
+    if path == "/api/simulation/accept":
+        body = handle_strict_accept_candidate(payload)
+        return (200 if body.get("ok") else 400), body
 
     if path == "/api/runtime":
         cfg_path = str(payload.get("ollama_config_path", "")).strip()

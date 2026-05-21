@@ -120,6 +120,19 @@ def slot_frame_to_candidates(
         )
         target_paths.extend(["materials.selected_materials", "materials.volume_material_map"])
 
+    if frame.geometry.root_name:
+        updates.append(
+            UpdateOp(
+                path="geometry.root_name",
+                op="set",
+                value=frame.geometry.root_name,
+                producer=Producer.SLOT_MAPPER,
+                confidence=frame.confidence or 0.8,
+                turn_id=turn_id,
+            )
+        )
+        target_paths.append("geometry.root_name")
+
     if frame.physics.explicit_list:
         updates.append(
             UpdateOp(

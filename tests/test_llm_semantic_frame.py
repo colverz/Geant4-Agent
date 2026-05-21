@@ -87,6 +87,26 @@ class LlmSemanticFrameTest(unittest.TestCase):
         self.assertIn("output.format", user_candidate.target_paths)
         self.assertNotIn("update_invalid_source_type:gamma", meta.get("schema_errors", []))
 
+    def test_parse_allows_explicit_geometry_root_name(self) -> None:
+        payload = {
+            "intent": "SET",
+            "target_paths": ["geometry.root_name"],
+            "normalized_text": "geometry root volume name: LeadShield",
+            "structure_hint": "single_box",
+            "confidence": 0.9,
+            "updates": [{"path": "geometry.root_name", "op": "set", "value": "LeadShield"}],
+        }
+        candidate, user_candidate, meta = parse_semantic_frame_payload(payload, turn_id=8)
+
+        self.assertIsNotNone(candidate)
+        self.assertIsNotNone(user_candidate)
+        assert candidate is not None
+        assert user_candidate is not None
+        mapped = {u.path: u.value for u in candidate.updates}
+        self.assertEqual(mapped["geometry.root_name"], "LeadShield")
+        self.assertIn("geometry.root_name", user_candidate.target_paths)
+        self.assertEqual(meta.get("schema_errors"), [])
+
     def test_build_llm_semantic_frame_rejects_prompt_contract_escape(self) -> None:
         payload = {
             "intent": "SET",

@@ -38,6 +38,7 @@ VALID_CAPABILITIES = {
     "quantitative_result",
     "llm_reliability",
     "model_routing",
+    "nlu_boundary",
 }
 VALID_INTENTS = {"read_config", "read_summary", "config_mutation", "run_requested", "viewer_requested", "normal_chat"}
 VALID_SAFETY = {"read_only", "config_mutation", "expensive_runtime"}
@@ -88,6 +89,7 @@ TOP_LEVEL_KEYS = {
     "expected_result_answer",
     "expected_quantitative_result",
     "expected_model_route",
+    "expected_nlu",
     "forbidden",
 }
 TURN_KEYS = {"text", "lang", "expected_trace"}
@@ -122,6 +124,7 @@ QUANTITATIVE_RESULT_KEYS = {
 QUANTITATIVE_RELATION_KEYS = {"left", "op", "right", "numerator", "denominator"}
 QUANTITATIVE_RANGE_KEYS = {"min", "max"}
 MODEL_ROUTE_KEYS = {"label", "must_not_allow_runtime", "rationale_contains"}
+EXPECTED_NLU_KEYS = {"after_turn_index", "must_disable_nlp_bert_prior", "expected_inference_backend"}
 FORBIDDEN_KEYS = {"runtime_side_effects", "session_mutation", "unsupported_capability_as_supported"}
 REQUIRED_TOP_LEVEL_KEYS = {"id", "suite", "difficulty", "lang", "turns"}
 MIN_V1_SUITE_COUNTS = {
@@ -141,6 +144,7 @@ MIN_V1_CAPABILITY_COUNTS = {
     "grounding": 1,
     "result_grounding": 1,
     "confirmation_policy": 1,
+    "nlu_boundary": 1,
 }
 
 
@@ -310,6 +314,13 @@ def validate_benchmark_shape(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str, A
             else:
                 _validate_model_route(failures, case_id=case_id, expected=expected_model_route)
 
+        if "expected_nlu" in item:
+            expected_nlu = item["expected_nlu"]
+            if not isinstance(expected_nlu, dict):
+                failures.append({"id": case_id, "section": "expected_nlu", "error": "not_object"})
+            else:
+                _validate_nlu_boundary(failures, case_id=case_id, expected=expected_nlu)
+
         if "forbidden" in item:
             forbidden = item["forbidden"]
             if not isinstance(forbidden, dict):
@@ -429,6 +440,18 @@ def _validate_runtime(failures: list[dict[str, Any]], *, case_id: str, runtime: 
         )
     if "expected_payload_values" in runtime and not isinstance(runtime["expected_payload_values"], dict):
         failures.append({"id": case_id, "section": "expected_runtime", "error": "expected_payload_values_not_object"})
+
+
+def _validate_nlu_boundary(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
+    _add_unknown_key_errors(failures, case_id=case_id, section="expected_nlu", payload=expected, allowed=EXPECTED_NLU_KEYS)
+    if "after_turn_index" in expected and (
+        not isinstance(expected["after_turn_index"], int) or expected["after_turn_index"] < 0
+    ):
+        failures.append({"id": case_id, "section": "expected_nlu", "error": "after_turn_index_not_non_negative_int"})
+    if "must_disable_nlp_bert_prior" in expected and not isinstance(expected["must_disable_nlp_bert_prior"], bool):
+        failures.append({"id": case_id, "section": "expected_nlu", "error": "must_disable_nlp_bert_prior_not_bool"})
+    if "expected_inference_backend" in expected and not isinstance(expected["expected_inference_backend"], str):
+        failures.append({"id": case_id, "section": "expected_nlu", "error": "expected_inference_backend_not_string"})
 
 
 def _validate_config_delta(failures: list[dict[str, Any]], *, case_id: str, expected: dict[str, Any]) -> None:
@@ -671,6 +694,24 @@ def _runtime_errors(expected: dict[str, Any], payload: dict[str, Any], *, case_i
             actual = payload.get(key)
             if not _values_equal(actual, value):
                 failures.append({"id": case_id, "section": "expected_runtime", "error": f"payload_value:{key}:expected={value!r}:actual={actual!r}"})
+    return failures
+
+
+def _nlu_boundary_errors(expected: dict[str, Any], out: dict[str, Any], *, case_id: str) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    if expected.get("must_disable_nlp_bert_prior") and bool(out.get("nlp_bert_model_prior_enabled")):
+        failures.append({"id": case_id, "section": "expected_nlu", "error": "nlp_bert_prior_enabled"})
+    expected_backend = str(expected.get("expected_inference_backend") or "")
+    if expected_backend:
+        actual_backend = str(out.get("inference_backend") or "")
+        if actual_backend != expected_backend:
+            failures.append(
+                {
+                    "id": case_id,
+                    "section": "expected_nlu",
+                    "error": f"inference_backend:expected={expected_backend!r}:actual={actual_backend!r}",
+                }
+            )
     return failures
 
 
@@ -990,6 +1031,38 @@ def _new_model_route_summary() -> dict[str, Any]:
     }
 
 
+def _new_nlu_boundary_summary() -> dict[str, Any]:
+    return {
+        "cases": 0,
+        "no_bert_prior_required": 0,
+        "no_bert_prior_passed": 0,
+        "backend_checks": 0,
+        "backend_checks_passed": 0,
+    }
+
+
+def _update_nlu_boundary_summary(summary: dict[str, Any], expected: dict[str, Any], out: dict[str, Any]) -> None:
+    if not expected:
+        return
+    summary["cases"] += 1
+    if expected.get("must_disable_nlp_bert_prior"):
+        summary["no_bert_prior_required"] += 1
+        if not bool(out.get("nlp_bert_model_prior_enabled")):
+            summary["no_bert_prior_passed"] += 1
+    expected_backend = str(expected.get("expected_inference_backend") or "")
+    if expected_backend:
+        summary["backend_checks"] += 1
+        if str(out.get("inference_backend") or "") == expected_backend:
+            summary["backend_checks_passed"] += 1
+
+
+def _finalize_nlu_boundary_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    finalized = dict(summary)
+    finalized["no_bert_prior_pass_rate"] = _ratio(summary["no_bert_prior_passed"], summary["no_bert_prior_required"])
+    finalized["backend_check_pass_rate"] = _ratio(summary["backend_checks_passed"], summary["backend_checks"])
+    return finalized
+
+
 def _update_model_route_summary(summary: dict[str, Any], case: dict[str, Any], outputs: list[dict[str, Any]]) -> None:
     capabilities = {str(capability) for capability in case.get("capabilities", []) if isinstance(capability, str)}
     if "model_routing" not in capabilities:
@@ -1184,6 +1257,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
     difficulty_summary: dict[str, dict[str, int]] = {}
     capability_summary: dict[str, dict[str, int]] = {}
     model_route_summary = _new_model_route_summary()
+    nlu_boundary_summary = _new_nlu_boundary_summary()
     for case_index, case in enumerate(cases):
         if not isinstance(case, dict):
             continue
@@ -1227,6 +1301,12 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
                 runtime_config = outputs[runtime_output_index].get("config", {}) if 0 <= runtime_output_index < len(outputs) else {}
                 runtime_payload = build_runtime_payload(runtime_config)
                 case_failures.extend(_runtime_errors(expected_runtime, runtime_payload, case_id=case_id))
+            expected_nlu = case.get("expected_nlu") if isinstance(case.get("expected_nlu"), dict) else {}
+            if expected_nlu:
+                nlu_output_index = int(expected_nlu.get("after_turn_index", len(outputs) - 1))
+                nlu_output = outputs[nlu_output_index] if 0 <= nlu_output_index < len(outputs) else {}
+                _update_nlu_boundary_summary(nlu_boundary_summary, expected_nlu, nlu_output)
+                case_failures.extend(_nlu_boundary_errors(expected_nlu, nlu_output, case_id=case_id))
             case_failures.extend(_forbidden_errors(case, outputs, case_id=case_id))
             case_failures.extend(_result_answer_errors(case, case_id=case_id, lang=str(case.get("lang") or "en")))
             expected_quantitative_result = (
@@ -1281,6 +1361,7 @@ def evaluate_benchmark_dry_run(path: Path = DEFAULT_BENCHMARK_PATH) -> dict[str,
         "difficulty_summary": _finalize_bucket_summary(difficulty_summary),
         "capability_summary": _finalize_bucket_summary(capability_summary),
         "model_route_summary": _finalize_model_route_summary(model_route_summary),
+        "nlu_boundary_summary": _finalize_nlu_boundary_summary(nlu_boundary_summary),
     }
 
 

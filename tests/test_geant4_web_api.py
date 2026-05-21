@@ -10,6 +10,8 @@ from unittest import mock
 from mcp.geant4.adapter import InMemoryGeant4Adapter, LocalProcessGeant4Adapter
 from mcp.geant4.server import Geant4McpServer
 import ui.web.geant4_api as geant4_api
+from core.orchestrator.session_manager import reset_session
+from ui.web.request_router import handle_post_request
 
 
 def _runtime_patch() -> dict:
@@ -223,6 +225,86 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertEqual(qa_body["runtime_result_explanation"]["prompt_profile_id"], "runtime_result_qa_en_v1")
         self.assertIn("does not report dose", qa_body["runtime_result_explanation"]["message"])
 
+    def test_simulation_design_recommended_config_can_run_full_runtime_chain(self) -> None:
+        session_id = "design-runtime-chain"
+        reset_session(session_id)
+        common = {"legacy_sessions": {}, "solve_fn": lambda payload: {}, "step_fn": lambda payload: {}}
+        try:
+            design_status, design_body = handle_post_request(
+                "/api/simulation/design",
+                {
+                    "session_id": session_id,
+                    "text": "10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at (0,0,-20) mm along +z; physics FTFP_BERT; output json",
+                    "lang": "en",
+                    "llm_router": False,
+                },
+                **common,
+            )
+            config = design_body.get("recommended_config") or {}
+            validate_status, validate_body = handle_post_request(
+                "/api/geant4/validate",
+                {"patch": config, "events": 1},
+                **common,
+            )
+            apply_status, _ = handle_post_request("/api/geant4/apply", {"patch": config}, **common)
+            init_status, _ = handle_post_request("/api/geant4/initialize", {}, **common)
+            run_status, run_body = handle_post_request(
+                "/api/geant4/run",
+                {"events": 1, "action_id": "design-runtime-chain-run"},
+                **common,
+            )
+            summary_status, summary_body = handle_post_request("/api/geant4/summary", {"lang": "en"}, **common)
+
+            self.assertEqual(design_status, 200)
+            self.assertTrue(config)
+            self.assertEqual(validate_status, 200)
+            self.assertTrue(validate_body["payload"]["ok"])
+            self.assertEqual(validate_body["payload"]["missing_paths"], [])
+            self.assertEqual(apply_status, 200)
+            self.assertEqual(init_status, 200)
+            self.assertEqual(run_status, 200)
+            self.assertEqual(run_body["runtime_smoke_report"]["events_completed"], 1)
+            self.assertEqual(summary_status, 200)
+            self.assertEqual(summary_body["runtime_smoke_report"]["events_completed"], 1)
+        finally:
+            reset_session(session_id)
+
+    def test_run_can_use_session_recommended_config_without_frontend_patch(self) -> None:
+        session_id = "design-runtime-session-fallback"
+        reset_session(session_id)
+        common = {"legacy_sessions": {}, "solve_fn": lambda payload: {}, "step_fn": lambda payload: {}}
+        try:
+            design_status, design_body = handle_post_request(
+                "/api/simulation/design",
+                {
+                    "session_id": session_id,
+                    "text": "10 mm copper box target; gamma point source 1 MeV along +z; physics FTFP_BERT; output json",
+                    "lang": "en",
+                    "llm_router": False,
+                },
+                **common,
+            )
+            validate_status, validate_body = handle_post_request(
+                "/api/geant4/validate",
+                {"session_id": session_id, "events": 1},
+                **common,
+            )
+            run_status, run_body = handle_post_request(
+                "/api/geant4/run",
+                {"session_id": session_id, "events": 1, "action_id": "design-runtime-session-fallback-run"},
+                **common,
+            )
+
+            self.assertEqual(design_status, 200)
+            self.assertTrue(design_body.get("recommended_config"))
+            self.assertEqual(validate_status, 200)
+            self.assertTrue(validate_body["payload"]["ok"])
+            self.assertEqual(validate_body["payload"]["missing_paths"], [])
+            self.assertEqual(run_status, 200)
+            self.assertEqual(run_body["runtime_smoke_report"]["events_completed"], 1)
+        finally:
+            reset_session(session_id)
+
     def test_run_without_action_id_keeps_compatibility_and_returns_suggested_action_id(self) -> None:
         geant4_api.handle_geant4_post("/api/geant4/apply", {"patch": _runtime_patch()})
         geant4_api.handle_geant4_post("/api/geant4/initialize", {})
@@ -295,120 +377,125 @@ class Geant4WebApiTest(unittest.TestCase):
 
 
 class RuntimeResultFrontendStaticTest(unittest.TestCase):
-    def test_frontend_exposes_runtime_result_card_and_formatter(self) -> None:
+    def test_frontend_is_rebuilt_without_legacy_ui_shell(self) -> None:
         index_html = Path("ui/web/index.html").read_text(encoding="utf-8")
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        css = Path("ui/web/style.css").read_text(encoding="utf-8")
 
-        self.assertIn('id="runtime-result-summary"', index_html)
-        self.assertIn("renderRuntimeResultSummary", app_js)
-        self.assertIn("runtime_smoke_report", app_js)
-        self.assertIn("runtime_result_explanation", app_js)
-        self.assertIn("isRuntimeResultQuestion", app_js)
-        self.assertIn("isConfigQuestion", app_js)
-        self.assertIn("classifyRuntimeIntent", app_js)
-        self.assertIn("answerRuntimeResultQuestion", app_js)
-        self.assertIn("answerConfigQuestion", app_js)
-        self.assertIn("normalChatReadOnlyMessage", app_js)
-        self.assertIn("question: questionText", app_js)
-        self.assertIn("/api/geant4/summary", app_js)
-        self.assertIn("/api/config/summary", app_js)
-        self.assertIn("validateGeant4Config", app_js)
-        self.assertIn("runtimePreflightMessage", app_js)
-        self.assertIn("/api/geant4/validate", app_js)
-        self.assertIn("metadata.adapter", app_js)
-        self.assertIn("runtimeActionId", app_js)
-        self.assertIn("stableActionToken", app_js)
-        self.assertIn("action_id: actionId", app_js)
-        self.assertIn("summarizeIdempotency", app_js)
-        self.assertIn("summarizeRuntimePayloadWithIdempotency", app_js)
+        self.assertIn('data-ui-version="rebuild-v1"', index_html)
+        self.assertIn("conversation-stage", index_html)
+        self.assertIn("activity-strip", index_html)
+        self.assertIn("context-rail", index_html)
+        self.assertIn("evidence-drawer", index_html)
+        self.assertNotIn("sidebar", index_html)
+        self.assertNotIn("inspector-card", index_html)
+        self.assertNotIn("debug-panel", index_html)
+        self.assertIn("Quiet research console", css)
+        self.assertIn("Anthropic/Claude", css)
+        self.assertNotIn("v3 visual system", css)
+        self.assertNotIn("v4 conversation-first interface", css)
+        self.assertIn("activity-trace", css)
+        self.assertIn("context-rail", css)
+        self.assertIn("100dvh", css)
+        self.assertIn("@media (max-width: 1120px)", css)
+        self.assertIn("@media (max-width: 760px)", css)
+        self.assertIn("designMessage", app_js)
+        self.assertIn("activityHtml", app_js)
+        self.assertIn("data-agent-activity", app_js)
+        self.assertIn("acceptCandidate", app_js)
+        self.assertIn('"/api/simulation/accept"', app_js)
+        self.assertIn("window-close-btn", index_html)
+        self.assertIn("window-controls", index_html)
+        self.assertIn("window.geant4Desktop?.close", app_js)
+        self.assertIn("#f4f0e8", css)
+        self.assertIn("#8a3f2d", css)
 
-    def test_frontend_runtime_result_question_uses_summary_not_run(self) -> None:
+    def test_frontend_uses_simulation_design_as_default_conversation_path(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        question_branch = app_js[
-            app_js.index('runtimeIntent.intent === "read_summary"') : app_js.index("const payload = {", app_js.index('runtimeIntent.intent === "read_summary"'))
+        self.assertIn('"/api/simulation/design"', app_js)
+        self.assertIn('"/api/simulation/accept"', app_js)
+        self.assertIn("requestDesign(input)", app_js)
+        self.assertIn("applyDesignResponse(data)", app_js)
+        self.assertIn("appendAgent(designMessage(data)", app_js)
+        self.assertNotIn('"/api/step_async"', app_js)
+
+    def test_frontend_read_only_questions_do_not_run_or_write_config(self) -> None:
+        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
+        summary_branch = app_js[
+            app_js.index('intent.intent === "read_summary"') : app_js.index('intent.intent === "read_config"')
+        ]
+        config_branch = app_js[
+            app_js.index('intent.intent === "read_config"') : app_js.index('intent.intent === "run_requested"')
         ]
 
-        self.assertIn("answerRuntimeResultQuestion", question_branch)
-        self.assertIn("return;", question_branch)
-        self.assertNotIn("/api/geant4/run", question_branch)
-        self.assertNotIn("/api/step_async", question_branch)
+        self.assertIn("answerRuntimeQuestion(input)", summary_branch)
+        self.assertIn('"/api/geant4/summary"', app_js)
+        self.assertNotIn("/api/geant4/run", summary_branch)
+        self.assertNotIn("/api/simulation/design", summary_branch)
+        self.assertIn("answerConfigQuestion()", config_branch)
+        self.assertIn('"/api/config/summary"', app_js)
+        self.assertNotIn("/api/geant4/run", config_branch)
+        self.assertNotIn("/api/simulation/design", config_branch)
 
-    def test_frontend_config_question_uses_config_summary_not_step(self) -> None:
+    def test_frontend_runtime_actions_validate_before_run_and_viewer(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        question_branch = app_js[
-            app_js.index('runtimeIntent.intent === "read_config"') : app_js.index("const payload = {", app_js.index('runtimeIntent.intent === "read_config"'))
-        ]
+        run_branch = app_js[app_js.index("async function runGeant4") : app_js.index("async function openViewer")]
+        viewer_branch = app_js[app_js.index("async function openViewer") : app_js.index("async function refreshGeant4State")]
 
-        self.assertIn("answerConfigQuestion", question_branch)
-        self.assertIn("return;", question_branch)
-        self.assertNotIn("/api/step_async", question_branch)
+        self.assertIn("validateGeant4Config(events, true)", run_branch)
+        self.assertIn("ensureCandidateCommitted()", run_branch)
+        self.assertLess(run_branch.index("ensureCandidateCommitted()"), run_branch.index('"/api/geant4/run"'))
+        self.assertLess(run_branch.index("validateGeant4Config(events, true)"), run_branch.index('"/api/geant4/run"'))
+        self.assertIn("actionToken(\"run_beam\"", run_branch)
+        self.assertIn("action_id", run_branch)
+        self.assertIn('"/api/geant4/viewer/open"', viewer_branch)
+        self.assertIn("actionToken(\"viewer_open\"", viewer_branch)
 
-    def test_frontend_explicit_runtime_requests_do_not_auto_run_from_chat(self) -> None:
+    def test_frontend_keeps_latest_recommended_config_as_runtime_patch(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        action_branch = app_js[
-            app_js.index('runtimeIntent.intent === "run_requested"') : app_js.index("const payload = {", app_js.index('runtimeIntent.intent === "run_requested"'))
-        ]
+        self.assertIn("lastRecommendedConfig", app_js)
+        self.assertIn("state.lastRecommendedConfig = data.recommended_config || data.config || state.lastRecommendedConfig", app_js)
+        self.assertIn("function runtimePatch()", app_js)
+        self.assertIn("return state.lastRecommendedConfig || {}", app_js)
 
-        self.assertIn("explicitRuntimeActionMessage", action_branch)
-        self.assertIn("return;", action_branch)
-        self.assertNotIn("/api/geant4/run", action_branch)
-        self.assertNotIn("/api/geant4/viewer/open", action_branch)
-
-    def test_frontend_only_config_mutation_reaches_step_async(self) -> None:
+    def test_frontend_model_switch_uses_runtime_available_configs(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        guard_branch = app_js[
-            app_js.index('runtimeIntent.intent !== "config_mutation"') : app_js.index("const payload = {", app_js.index('runtimeIntent.intent !== "config_mutation"'))
-        ]
+        runtime_branch = app_js[app_js.index("async function loadRuntimeConfig") : app_js.index("async function setRuntimeConfig")]
+        switch_branch = app_js[app_js.index("async function setRuntimeConfig") : app_js.index("async function sendPrompt")]
 
-        self.assertIn("normalChatReadOnlyMessage", guard_branch)
-        self.assertIn("return;", guard_branch)
-        self.assertNotIn("/api/step_async", guard_branch)
+        self.assertIn("data.available", runtime_branch)
+        self.assertNotIn("data.config_paths", runtime_branch)
+        self.assertIn("item.provider", runtime_branch)
+        self.assertIn("item.model", runtime_branch)
+        self.assertIn('"/api/runtime"', switch_branch)
+        self.assertIn("config_path: path", switch_branch)
+        self.assertIn("await loadRuntimeConfig()", switch_branch)
 
-    def test_frontend_sync_config_preflights_before_apply(self) -> None:
-        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        branch = app_js[
-            app_js.index("async function syncGeant4Config") : app_js.index("async function initializeGeant4")
-        ]
+    def test_ui_rebuild_plan_document_exists(self) -> None:
+        doc = Path("docs/ui/GEANT4_AGENT_UI_REBUILD_PLAN_CN.md").read_text(encoding="utf-8")
+        self.assertIn("当前 UI 不再继续修补", doc)
+        self.assertIn("Conversation Stage", doc)
+        self.assertIn("Runtime Command Bar", doc)
+        self.assertIn("Evidence Drawer", doc)
 
-        self.assertIn("validateGeant4Config", branch)
-        self.assertIn("return;", branch)
-        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/apply"'))
+    def test_desktop_chromium_shell_launch_contract(self) -> None:
+        main_js = Path("ui/desktop/main.js").read_text(encoding="utf-8")
+        preload_js = Path("ui/desktop/preload.js").read_text(encoding="utf-8")
+        package_json = Path("ui/desktop/package.json").read_text(encoding="utf-8")
+        start_ps1 = Path("ui/desktop/start_desktop.ps1").read_text(encoding="utf-8")
 
-    def test_frontend_initialize_preflights_before_initialize(self) -> None:
-        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        branch = app_js[
-            app_js.index("async function initializeGeant4") : app_js.index("async function openGeant4Viewer")
-        ]
-
-        self.assertIn("validateGeant4Config", branch)
-        self.assertIn("return;", branch)
-        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/initialize"'))
-
-    def test_frontend_viewer_preflights_before_viewer(self) -> None:
-        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        branch = app_js[
-            app_js.index("async function openGeant4Viewer") : app_js.index("async function runGeant4")
-        ]
-
-        self.assertIn("validateGeant4Config", branch)
-        self.assertIn("runtimeActionId", branch)
-        self.assertIn("action_id: actionId", branch)
-        self.assertIn("summarizeRuntimePayloadWithIdempotency", branch)
-        self.assertIn("return;", branch)
-        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/viewer/open"'))
-
-    def test_frontend_run_preflights_before_run(self) -> None:
-        app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        branch = app_js[
-            app_js.index("async function runGeant4") : app_js.index("async function loadRuntimeConfigs")
-        ]
-
-        self.assertIn("validateGeant4Config", branch)
-        self.assertIn("runtimeActionId", branch)
-        self.assertIn("action_id: actionId", branch)
-        self.assertIn("summarizeRuntimePayloadWithIdempotency", branch)
-        self.assertIn("return;", branch)
-        self.assertLess(branch.index("validateGeant4Config"), branch.index('"/api/geant4/run"'))
+        self.assertIn("BrowserWindow", main_js)
+        self.assertIn("?desktop=1", main_js)
+        self.assertIn("ui.desktop.runtime_bridge", main_js)
+        self.assertIn("setWindowOpenHandler", main_js)
+        self.assertIn("ipcMain.handle(\"window:close\"", main_js)
+        self.assertIn("ipcMain.handle(\"window:minimize\"", main_js)
+        self.assertIn("ipcMain.handle(\"window:toggle-maximize\"", main_js)
+        self.assertIn("contextBridge", preload_js)
+        self.assertIn("geant4Desktop", preload_js)
+        self.assertIn("close: () => ipcRenderer.invoke(\"window:close\")", preload_js)
+        self.assertIn('"electron"', package_json)
+        self.assertIn("npm start", start_ps1)
 
 
 if __name__ == "__main__":

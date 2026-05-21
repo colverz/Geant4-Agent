@@ -1,0 +1,74 @@
+[
+  {
+    "id": "supported_lead_gamma_transmission",
+    "lang": "en",
+    "goal": "Design a 1 MeV gamma transmission study through a lead shielding slab with a downstream silicon detector.",
+    "expected": {
+      "checked_next_action": "build_candidate_config",
+      "must_be_supported": true,
+      "must_require_user_decision": false,
+      "must_include_observables": ["detector_crossing_count"],
+      "must_reference_any": ["materials:G4_Pb", "scoring:detector_crossing_count"]
+    }
+  },
+  {
+    "id": "supported_silicon_detector_response",
+    "lang": "en",
+    "goal": "Design a simplified gamma response setup for a silicon detector behind an air gap.",
+    "expected": {
+      "checked_next_action": "build_candidate_config",
+      "must_be_supported": true,
+      "must_require_user_decision": false,
+      "must_include_observables": ["detector_crossing_count", "detector_edep"],
+      "must_reference_any": ["materials:G4_Si", "scoring:detector_edep"]
+    }
+  },
+  {
+    "id": "approx_pipe_corrosion",
+    "lang": "en",
+    "goal": "I need an industrial NDT simulation for steel pipe corrosion thinning using transmission measurements.",
+    "expected": {
+      "checked_next_action": "ask_user_to_choose_approximation",
+      "must_be_supported": true,
+      "must_require_user_decision": true,
+      "must_have_simplification": true,
+      "must_reference_any": ["geometry:pipe", "materials:G4_STAINLESS-STEEL"]
+    }
+  },
+  {
+    "id": "approx_step_wedge",
+    "lang": "en",
+    "goal": "Design a steel step wedge attenuation study and explain whether current geometry can execute it directly.",
+    "expected": {
+      "checked_next_action": "ask_user_to_choose_approximation",
+      "must_be_supported": true,
+      "must_require_user_decision": true,
+      "must_have_simplification": true,
+      "must_reference_any": ["geometry:step_wedge", "materials:G4_STAINLESS-STEEL"]
+    }
+  },
+  {
+    "id": "unsupported_water_depth_dose",
+    "lang": "en",
+    "goal": "Design a water phantom depth-dose simulation with depth-binned scoring for a proton beam.",
+    "expected": {
+      "checked_next_action": "unsupported_capability",
+      "must_be_supported": false,
+      "must_require_user_decision": true,
+      "must_include_unsupported": ["depth_binned_scoring"],
+      "must_reference_any": ["materials:G4_WATER", "scoring:depth_bins"]
+    }
+  },
+  {
+    "id": "unsupported_void_contrast_zh",
+    "lang": "zh",
+    "goal": "我想做铝块内部空洞缺陷的成像对比模拟，需要直接给出区域 contrast 指标。",
+    "expected": {
+      "checked_next_action": "unsupported_capability",
+      "must_be_supported": false,
+      "must_require_user_decision": true,
+      "must_include_unsupported": ["embedded_void_geometry", "region_contrast_scoring"],
+      "must_reference_any": ["geometry:void", "scoring:region_contrast"]
+    }
+  }
+]

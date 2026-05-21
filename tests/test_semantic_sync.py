@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from core.orchestrator.semantic_sync import build_semantic_sync_candidate
+from core.orchestrator.types import Producer, UpdateOp
 
 
 class SemanticSyncTest(unittest.TestCase):
@@ -56,6 +57,39 @@ class SemanticSyncTest(unittest.TestCase):
         mapped = {u.path: u.value for u in candidate.updates}
         self.assertEqual(mapped["geometry.structure"], "boolean")
         self.assertEqual(mapped["geometry.root_name"], "boolean")
+
+    def test_sync_preserves_explicit_root_name_and_material_binding(self) -> None:
+        config = {
+            "geometry": {"structure": "single_box", "root_name": "LeadShield"},
+            "materials": {
+                "selected_materials": ["G4_Pb"],
+                "volume_material_map": {},
+                "selection_source": None,
+                "selection_reasons": [],
+            },
+            "source": {},
+            "physics": {},
+            "output": {},
+        }
+        candidate = build_semantic_sync_candidate(
+            config,
+            turn_id=11,
+            recent_updates=[
+                UpdateOp(
+                    path="geometry.root_name",
+                    op="set",
+                    value="LeadShield",
+                    producer=Producer.LLM_SEMANTIC_FRAME,
+                    confidence=0.9,
+                    turn_id=11,
+                )
+            ],
+        )
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        mapped = {u.path: u.value for u in candidate.updates}
+        self.assertNotIn("geometry.root_name", mapped)
+        self.assertEqual(mapped["materials.volume_material_map"], {"LeadShield": "G4_Pb"})
 
 
 if __name__ == "__main__":

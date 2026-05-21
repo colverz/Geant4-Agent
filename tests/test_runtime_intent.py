@@ -59,6 +59,24 @@ class RuntimeIntentTest(unittest.TestCase):
         self.assertEqual(result.action_safety_class, ActionSafetyClass.CONFIG_MUTATION)
         self.assertTrue(result.prompt_validation["ok"])
 
+    def test_clean_chinese_simulation_goal_is_config_mutation(self) -> None:
+        result = classify_user_runtime_intent("设计一个10mm铜靶，1MeV gamma点源沿z方向照射", "zh")
+
+        self.assertEqual(result.intent, RuntimeIntent.CONFIG_MUTATION)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.CONFIG_MUTATION)
+
+    def test_clean_chinese_run_request_is_expensive_runtime(self) -> None:
+        result = classify_user_runtime_intent("运行10个事件看看结果", "zh")
+
+        self.assertEqual(result.intent, RuntimeIntent.RUN_REQUESTED)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.EXPENSIVE_RUNTIME)
+
+    def test_clean_chinese_config_question_is_read_only(self) -> None:
+        result = classify_user_runtime_intent("当前配置里面源方向是什么？", "zh")
+
+        self.assertEqual(result.intent, RuntimeIntent.READ_CONFIG)
+        self.assertEqual(result.action_safety_class, ActionSafetyClass.READ_ONLY)
+
     def test_normal_chat_is_read_only(self) -> None:
         result = classify_user_runtime_intent("hello, what can you do?", "en")
 
