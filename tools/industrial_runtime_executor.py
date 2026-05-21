@@ -342,7 +342,7 @@ def _execute_paired_industrial_case(
         "status": "completed",
         "failure_category": None,
         "compile_result": compile_result,
-        "runtime_fingerprint": _runtime_fingerprint(compile_result.get("runtime_payloads") or {}, {"result_summary": result_summary}),
+        "runtime_fingerprint": _paired_runtime_fingerprint(compile_result, run_payloads, result_summary),
         "run_payload": {"paired_run_payloads": run_payloads, "result_summary": result_summary},
         "result_summary": result_summary,
         **metrics,
@@ -372,6 +372,24 @@ def _paired_result_summary(case: dict[str, Any], paired_runs: dict[str, dict[str
             "derived_metrics": {},
         },
     }
+
+
+def _paired_runtime_fingerprint(
+    compile_result: dict[str, Any],
+    run_payloads: dict[str, dict[str, Any]],
+    result_summary: dict[str, Any],
+) -> dict[str, Any]:
+    runtime_payloads = compile_result.get("runtime_payloads") if isinstance(compile_result.get("runtime_payloads"), dict) else {}
+    labels = sorted(label for label in runtime_payloads if label in run_payloads)
+    if not labels:
+        return _runtime_fingerprint(runtime_payloads or {}, {"result_summary": result_summary})
+    first_label = labels[0]
+    fingerprint = _runtime_fingerprint(runtime_payloads[first_label], run_payloads[first_label])
+    encoded = json.dumps(runtime_payloads, ensure_ascii=True, sort_keys=True).encode("utf-8")
+    fingerprint["runtime_payload_hash"] = hashlib.sha256(encoded).hexdigest()
+    fingerprint["paired_labels"] = labels
+    fingerprint["events"] = (result_summary.get("run") or {}).get("events_completed") or fingerprint.get("events")
+    return fingerprint
 
 
 def build_industrial_golden_payload(
