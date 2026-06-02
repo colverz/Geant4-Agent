@@ -168,6 +168,21 @@ tmp_*.txt
 runtime_artifacts/
 runtime/geant4_local_app/build/
 
+# Local agent scratch / unreviewed generated artifacts
+CLAUDE.md
+DESIGN.md
+SKILL.md
+docs/architecture/*.html
+docs/eval/golden/industrial_runtime/*.golden.json
+tests/test_minimal_agent_smoke_tool.py
+tools/evaluate_agent_capability.py
+tools/generate_agent_report.py
+tools/run_minimal_agent_smoke.py
+tools/test_astronaut_multiturn.py
+tools/test_multiturn_ui.py
+tools/verify_geometry_coverage.py
+ui/web/test_multiturn.html
+
 # Archived local-only tooling
 scripts/
 legacy/tooling/
