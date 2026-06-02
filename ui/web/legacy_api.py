@@ -1,5 +1,11 @@
 ﻿from __future__ import annotations
 
+"""Compatibility-only legacy web API glue.
+
+The default UI and agent workflow are v3-first. This module remains importable
+for older endpoints and regression tests only.
+"""
+
 import re
 from typing import Any, Dict, List
 

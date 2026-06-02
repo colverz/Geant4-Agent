@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 
+"""Compatibility-only strict/v2 web API glue.
+
+The v3 product mainline is served by ui.web.v3_agent_api. Keep this module
+available for legacy endpoints and tests, but do not route the default UI
+conversation path through it.
+"""
+
 def _load_session_manager():
     from core.orchestrator.session_manager import (
         commit_recommended_config as commit_recommended_config_v2,
@@ -30,7 +37,7 @@ def _session_manager_parts():
 
 
 def handle_strict_step(payload: dict, progress_cb=None) -> dict:
-    from ui.web.runtime_state import get_ollama_config_path
+    from ui.web.runtime_state import get_ollama_config_path, set_latest_agent_state_summary
 
     if progress_cb:
         progress_cb("loading_runtime", "Loading runtime", "Importing strict orchestration modules and model dependencies.")
@@ -70,13 +77,15 @@ def handle_strict_step(payload: dict, progress_cb=None) -> dict:
     if llm_enabled:
         mainline_payload.setdefault("geometry_pipeline", "v2")
         mainline_payload.setdefault("source_pipeline", "v2")
-    return process_turn_v2(
+    result = process_turn_v2(
         payload=mainline_payload,
         ollama_config_path=get_ollama_config_path(),
         min_confidence=float(payload.get("min_confidence", 0.6)),
         lang=str(payload.get("lang", "zh")).lower(),
         progress_cb=progress_cb,
     )
+    set_latest_agent_state_summary(result.get("session_id") or payload.get("session_id"), result.get("agent_state_summary"))
+    return result
 
 
 def handle_strict_reset(session_id: str | None) -> None:
@@ -118,6 +127,7 @@ def handle_strict_accept_candidate(payload: dict) -> dict:
     from ui.web.runtime_state import (
         get_latest_agent_plan,
         get_latest_recommended_config,
+        get_latest_simulation_design,
         mark_latest_candidate_accepted,
         set_latest_agent_state,
         set_latest_recommended_config,
@@ -161,6 +171,7 @@ def handle_strict_accept_candidate(payload: dict) -> dict:
         session_id,
         config,
         source=str(payload.get("source") or "accepted_simulation_design"),
+        design_advice=(get_latest_simulation_design(session_id).get("design_advice") or payload.get("design_advice")),
     )
     if result.get("ok"):
         set_latest_recommended_config(session_id, result.get("config") or config)
@@ -181,6 +192,7 @@ def handle_strict_simulation_design(payload: dict, progress_cb=None) -> dict:
         get_latest_simulation_design,
         set_latest_agent_plan,
         set_latest_agent_state,
+        set_latest_agent_state_summary,
         set_latest_simulation_design,
     )
 
@@ -207,6 +219,7 @@ def handle_strict_simulation_design(payload: dict, progress_cb=None) -> dict:
         user_text=str(body.get("simulation_design", {}).get("goal") or design_payload.get("text", "")),
         candidate=body.get("simulation_design"),
         recommended_config=body.get("recommended_config"),
+        design_advice=body.get("design_advice"),
         source=str(body.get("simulation_design_source") or ""),
     )
     agent_plan = build_agent_plan(body.get("simulation_design"), recommended_config=body.get("recommended_config"))
@@ -217,4 +230,5 @@ def handle_strict_simulation_design(payload: dict, progress_cb=None) -> dict:
     body["agent_plan"] = agent_plan
     body["agent_state"] = agent_state
     body["candidate_status"] = candidate_status
+    set_latest_agent_state_summary(body.get("session_id") or session_id, body.get("agent_state_summary"))
     return body

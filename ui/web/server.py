@@ -100,6 +100,28 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split('?', 1)[0]
+
+        # UI error log endpoint: append to runtime_artifacts/ui_errors.log
+        if path == "/api/log":
+            length = int(self.headers.get('Content-Length', '0'))
+            raw = self.rfile.read(length) if length > 0 else b'{}'
+            try:
+                payload = json.loads(raw.decode('utf-8')) if raw else {}
+            except Exception:
+                payload = {}
+            msg = str(payload.get('message', '') or '')
+            level = str(payload.get('level', 'info'))
+            line = f"[{level.upper()}] {msg}\n"
+            try:
+                log_path = ROOT.parent.parent / "runtime_artifacts" / "ui_errors.log"
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(line)
+                _respond(self, 200, {"ok": True})
+            except Exception as exc:
+                _respond(self, 500, {"ok": False, "error": str(exc)})
+            return
+
         if not is_supported_post_path(path):
             self.send_response(404)
             self.end_headers()

@@ -1,120 +1,68 @@
 <!doctype html>
 <html lang="zh">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Geant4 Agent Console</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="shell" data-ui-version="rebuild-v1">
-      <header class="titlebar">
-        <div class="brand">
-          <div class="brand-glyph">G4</div>
-          <div>
-            <p class="caption">Agentic Simulation Console</p>
-            <h1>Geant4 Agent</h1>
-          </div>
-        </div>
-        <div class="titlebar-status">
-          <span id="session-pill" class="status-pill">new session</span>
-          <span id="adapter-pill" class="status-pill">adapter: unknown</span>
-          <span id="phase-pill" class="status-pill accent">idle</span>
-        </div>
-        <div class="window-controls" aria-label="Window controls">
-          <button id="window-min-btn" class="window-button" title="Minimize">-</button>
-          <button id="window-max-btn" class="window-button" title="Maximize">□</button>
-          <button id="window-close-btn" class="window-button close" title="Close">×</button>
-        </div>
-      </header>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Geant4 Agent</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <span class="logo">G4</span>
+    <span class="title">Geant4 Agent</span>
+    <span class="spacer"></span>
+    <span id="session-pill" class="pill">session</span>
+    <span id="adapter-pill" class="pill dim">adapter</span>
+    <span id="phase-pill" class="pill accent">idle</span>
+    <button id="reset-btn" class="btn-icon" title="Reset">&#8635;</button>
+    <span class="desktop-only" id="window-controls">
+      <button id="window-min-btn" class="btn-icon" title="Minimize">&minus;</button>
+      <button id="window-max-btn" class="btn-icon" title="Maximize">&#9744;</button>
+      <button id="window-close-btn" class="btn-icon" title="Close">&times;</button>
+    </span>
+  </header>
 
-      <main class="layout">
-        <section class="conversation-stage" aria-label="Conversation">
-          <div id="timeline" class="timeline">
-            <article class="welcome">
-              <p class="caption">Start here</p>
-              <h2>描述你的模拟目标。我会先整理方案并生成候选配置，确认后再进入 Geant4 运行。</h2>
-              <p>
-                例如：10 mm x 20 mm x 30 mm copper box target; gamma point source 1 MeV at
-                (0,0,-20) mm along +z; physics FTFP_BERT. 也可以直接说：
-                “设计一个真空环境中的伽马透射模拟，批准后运行 1000 events。”
-              </p>
-            </article>
-          </div>
-
-          <section class="composer-zone" aria-label="Prompt composer">
-            <div id="activity-strip" class="activity-strip" hidden></div>
-            <div class="command-bar">
-              <button id="refresh-btn" class="ghost">Refresh</button>
-              <button id="reset-btn" class="ghost danger">Reset</button>
-            </div>
-            <div class="composer">
-              <textarea
-                id="prompt-input"
-                rows="4"
-                placeholder="输入模拟目标、修改意见或结果问题。Enter 发送，Shift+Enter 换行。"
-              ></textarea>
-              <div class="composer-footer">
-                <div>
-                  <label class="inline-field">
-                    <span>Language</span>
-                    <select id="lang-select">
-                      <option value="zh" selected>中文</option>
-                      <option value="en">English</option>
-                    </select>
-                  </label>
-                  <label class="inline-field">
-                    <span>Model</span>
-                    <select id="model-config-select"></select>
-                  </label>
-                </div>
-                <button id="send-btn" class="primary large">Send</button>
-              </div>
-            </div>
-          </section>
-        </section>
-
-        <aside class="context-rail" aria-label="Context">
-          <section class="rail-section">
-            <div class="rail-head">
-              <p class="caption">Current Design</p>
-              <strong id="design-state">none</strong>
-            </div>
-            <div id="design-summary" class="summary-block muted">还没有方案。先描述一个模拟目标。</div>
-          </section>
-
-          <section class="rail-section">
-            <div class="rail-head">
-              <p class="caption">Runtime Result</p>
-              <strong id="result-state">empty</strong>
-            </div>
-            <div id="result-summary" class="metric-grid"></div>
-          </section>
-
-          <section class="rail-section">
-            <div class="rail-head">
-              <p class="caption">Config Readiness</p>
-              <strong id="config-state">pending</strong>
-            </div>
-            <div id="config-readiness" class="readiness-list"></div>
-          </section>
-
-          <details class="evidence-drawer">
-            <summary>Evidence / Raw Data</summary>
-            <div class="evidence-tabs">
-              <button class="evidence-tab active" data-evidence="config-json">Config</button>
-              <button class="evidence-tab" data-evidence="runtime-json">Runtime</button>
-              <button class="evidence-tab" data-evidence="log-json">Log</button>
-              <button class="evidence-tab" data-evidence="trace-json">Trace</button>
-            </div>
-            <pre id="config-json" class="evidence-panel"></pre>
-            <pre id="runtime-json" class="evidence-panel" hidden></pre>
-            <pre id="log-json" class="evidence-panel" hidden></pre>
-            <pre id="trace-json" class="evidence-panel" hidden></pre>
-          </details>
-        </aside>
-      </main>
+  <main class="chat" id="timeline">
+    <div class="welcome">
+      <h2>Geant4 Agent</h2>
+      <p>描述你的物理模拟目标，我会设计方案、生成配置并在确认后运行 Geant4。</p>
+      <div class="quick-actions">
+        <button class="quick-btn" data-text="评估 1 MeV gamma 穿过 10mm 铅板的透射效果">Gamma 铅屏蔽透射</button>
+        <button class="quick-btn" data-text="质子束打入水模体的深度剂量分布">质子深度剂量</button>
+        <button class="quick-btn" data-text="宇航员在太空中受到的质子辐射">宇航员太空辐照</button>
+        <button class="quick-btn" data-text="铝块内部空洞 NDT 无损检测">NDT 缺陷检测</button>
+      </div>
     </div>
-    <script src="app.js"></script>
-  </body>
+  </main>
+
+  <footer class="composer-area">
+    <div class="composer">
+      <textarea id="prompt-input" rows="1" placeholder="输入模拟目标..."></textarea>
+      <div class="composer-row">
+        <select id="lang-select" class="field-sm">
+          <option value="zh" selected>中文</option>
+          <option value="en">English</option>
+        </select>
+        <select id="model-config-select" class="field-sm"></select>
+        <input id="events-input" type="number" value="1000" min="1" max="1000000" class="field-sm" style="width:80px" title="Events">
+        <span class="spacer"></span>
+        <button id="send-btn" class="btn-primary">Send</button>
+      </div>
+    </div>
+    <div id="activity-strip" class="activity-strip" hidden></div>
+  </footer>
+
+  <!-- trace panel (slide-over) -->
+  <aside id="trace-panel" class="slide-panel" hidden>
+    <div class="panel-head">
+      <span>Reasoning Chain</span>
+      <button class="btn-icon" onclick="$('trace-panel').hidden=true">&times;</button>
+    </div>
+    <div class="panel-body" id="trace-content"></div>
+  </aside>
+</div>
+<script>window.onerror=function(m,u,l,c,e){var d=new Date().toISOString();var msg='['+d+'] ERROR: '+m+' (line '+l+')';if(e&&e.stack)msg+='\n'+e.stack;fetch('/api/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:'error',message:msg})}).catch(function(){})};window.addEventListener('unhandledrejection',function(e){var d=new Date().toISOString();var msg='['+d+'] PROMISE: '+(e.reason?.message||e.reason||'?');fetch('/api/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level:'error',message:msg})}).catch(function(){})})</script>
+<script src="app.js"></script>
+</body>
 </html>

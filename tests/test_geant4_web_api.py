@@ -210,7 +210,7 @@ class Geant4WebApiTest(unittest.TestCase):
         self.assertIn("result_summary", report)
         self.assertEqual(explanation["source"], "deterministic")
         self.assertIn("4 / 4", explanation["message"])
-        self.assertEqual(explanation["prompt_profile_id"], "runtime_result_explain_zh_v1")
+        self.assertEqual(explanation["prompt_profile_id"], "runtime_result_explain_zh_v2_human_collab")
         self.assertTrue(explanation["prompt_validation"]["ok"])
 
         summary_status, summary_body = geant4_api.handle_geant4_post("/api/geant4/summary", {})
@@ -225,7 +225,7 @@ class Geant4WebApiTest(unittest.TestCase):
             {"lang": "en", "question": "What was the dose?"},
         )
         self.assertEqual(qa_status, 200)
-        self.assertEqual(qa_body["runtime_result_explanation"]["prompt_profile_id"], "runtime_result_qa_en_v1")
+        self.assertEqual(qa_body["runtime_result_explanation"]["prompt_profile_id"], "runtime_result_qa_en_v2_human_collab")
         self.assertIn("does not report dose", qa_body["runtime_result_explanation"]["message"])
 
     def test_simulation_design_recommended_config_can_run_full_runtime_chain(self) -> None:
@@ -392,43 +392,46 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
         css = Path("ui/web/style.css").read_text(encoding="utf-8")
 
-        self.assertIn('data-ui-version="rebuild-v1"', index_html)
-        self.assertIn("conversation-stage", index_html)
+        self.assertIn("composer-area", index_html)
         self.assertIn("activity-strip", index_html)
-        self.assertIn("context-rail", index_html)
-        self.assertIn("evidence-drawer", index_html)
+        self.assertIn("trace-panel", index_html)
+        self.assertIn("quick-actions", index_html)
         self.assertNotIn("sidebar", index_html)
-        self.assertNotIn("inspector-card", index_html)
-        self.assertNotIn("debug-panel", index_html)
-        self.assertIn("Quiet research console", css)
-        self.assertIn("Anthropic/Claude", css)
-        self.assertNotIn("v3 visual system", css)
-        self.assertNotIn("v4 conversation-first interface", css)
-        self.assertIn("activity-trace", css)
-        self.assertIn("context-rail", css)
+        self.assertIn("Claude-inspired", css)
+        self.assertIn("--primary: #cc785c", css)
+        self.assertIn("msg-trace", css)
+        self.assertIn("answer-part", css)
+        self.assertIn("pending-bar", css)
         self.assertIn("100dvh", css)
-        self.assertIn("@media (max-width: 1120px)", css)
-        self.assertIn("@media (max-width: 760px)", css)
-        self.assertIn("designMessage", app_js)
-        self.assertIn("activityHtml", app_js)
-        self.assertIn("data-agent-activity", app_js)
-        self.assertIn("acceptCandidate", app_js)
-        self.assertIn('"/api/simulation/accept"', app_js)
-        self.assertIn("window-close-btn", index_html)
-        self.assertIn("window-controls", index_html)
+        self.assertIn("@media(max-width:768px)", css)
+        self.assertIn('postJson("/api/v3/agent/turn"', app_js)
+        self.assertIn('postJson("/api/v3/agent/state"', app_js)
+        self.assertIn("showPending(data)", app_js)
+        self.assertIn("showSuggestions(data)", app_js)
+        self.assertIn("addAgentMsg(data)", app_js)
+        self.assertIn("renderAnswerPart", app_js)
+        self.assertIn("normalizeSuggestion", app_js)
+        self.assertIn("loadRuntimeConfig()", app_js)
+        self.assertNotIn("deepseek_api.local.json", app_js)
         self.assertIn("window.geant4Desktop?.close", app_js)
-        self.assertIn("#f4f0e8", css)
-        self.assertIn("#8a3f2d", css)
+        self.assertIn("desktop", app_js)
+        self.assertIn('get("desktop") === "1"', app_js)
+        self.assertIn("desktop-only", index_html)
+        self.assertIn("window-min-btn", index_html)
+        self.assertIn("-webkit-app-region", css)
+        self.assertIn("#ffffff", css)
+        self.assertIn("--primary: #cc785c", css)
 
     def test_frontend_uses_simulation_design_as_default_conversation_path(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
         index_html = Path("ui/web/index.html").read_text(encoding="utf-8")
-        self.assertIn('"/api/simulation/design"', app_js)
-        self.assertIn('"/api/simulation/accept"', app_js)
-        self.assertIn("requestDesign(input)", app_js)
-        self.assertIn("applyDesignResponse(data)", app_js)
-        self.assertIn("appendAgent(designMessage(data)", app_js)
-        self.assertIn("No runnable candidate existed, so the agent designed one first.", app_js)
+        self.assertIn('"/api/v3/agent/turn"', app_js)
+        self.assertIn('"/api/v3/agent/reset"', app_js)
+        self.assertIn("sendTurn()", app_js)
+        self.assertIn("ensureSessionId()", app_js)
+        self.assertNotIn('"/api/simulation/design"', app_js)
+        self.assertNotIn('"/api/simulation/accept"', app_js)
+        self.assertNotIn('"/api/agent/state"', app_js)
         self.assertNotIn("run1-btn", index_html)
         self.assertNotIn("run10-btn", index_html)
         self.assertNotIn("validate-btn", index_html)
@@ -436,55 +439,40 @@ class RuntimeResultFrontendStaticTest(unittest.TestCase):
 
     def test_frontend_read_only_questions_do_not_run_or_write_config(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        summary_branch = app_js[
-            app_js.index('intent.intent === "read_summary"') : app_js.index('intent.intent === "read_config"')
-        ]
-        config_branch = app_js[
-            app_js.index('intent.intent === "read_config"') : app_js.index('intent.intent === "run_requested"')
-        ]
-
-        self.assertIn("answerRuntimeQuestion(input)", summary_branch)
-        self.assertIn('"/api/geant4/summary"', app_js)
-        self.assertNotIn("/api/geant4/run", summary_branch)
-        self.assertNotIn("/api/simulation/design", summary_branch)
-        self.assertIn("answerConfigQuestion()", config_branch)
-        self.assertIn('"/api/config/summary"', app_js)
-        self.assertNotIn("/api/geant4/run", config_branch)
-        self.assertNotIn("/api/simulation/design", config_branch)
+        self.assertIn('postJson("/api/v3/agent/turn"', app_js)
+        self.assertNotIn('"/api/geant4/run"', app_js)
+        self.assertNotIn('"/api/simulation/design"', app_js)
+        self.assertNotIn("classifyIntent", app_js)
 
     def test_frontend_runtime_actions_validate_before_run_and_viewer(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        run_branch = app_js[app_js.index("async function runGeant4") : app_js.index("async function openViewer")]
-        viewer_branch = app_js[app_js.index("async function openViewer") : app_js.index("async function refreshGeant4State")]
+        turn_branch = app_js[app_js.index("async function sendTurn") : app_js.index("async function loadRuntimeConfig")]
 
-        self.assertIn("validateGeant4Config(events, true)", run_branch)
-        self.assertIn("ensureCandidateCommitted()", run_branch)
-        self.assertLess(run_branch.index("ensureCandidateCommitted()"), run_branch.index('"/api/geant4/run"'))
-        self.assertLess(run_branch.index("validateGeant4Config(events, true)"), run_branch.index('"/api/geant4/run"'))
-        self.assertIn("actionToken(\"run_beam\"", run_branch)
-        self.assertIn("action_id", run_branch)
-        self.assertIn('"/api/geant4/viewer/open"', viewer_branch)
-        self.assertIn("actionToken(\"viewer_open\"", viewer_branch)
+        self.assertIn("allow_in_memory: false", turn_branch)
+        self.assertIn("auto_discover_runtime: true", turn_branch)
+        self.assertIn("llm_design_enabled: true", turn_branch)
+        self.assertNotIn('"/api/geant4/run"', turn_branch)
+        self.assertNotIn("run_confirmed: true", turn_branch)
 
     def test_frontend_keeps_latest_recommended_config_as_runtime_patch(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        self.assertIn("lastRecommendedConfig", app_js)
-        self.assertIn("state.lastRecommendedConfig = data.recommended_config || data.config || state.lastRecommendedConfig", app_js)
-        self.assertIn("function runtimePatch()", app_js)
-        self.assertIn("return state.lastRecommendedConfig || {}", app_js)
+        self.assertIn("state.sessionId", app_js)
+        self.assertIn("localStorage.setItem(\"g4_session_id\"", app_js)
+        self.assertIn("pending_action", app_js)
+        self.assertNotIn("lastRecommendedConfig", app_js)
 
     def test_frontend_model_switch_uses_runtime_available_configs(self) -> None:
         app_js = Path("ui/web/app.js").read_text(encoding="utf-8")
-        runtime_branch = app_js[app_js.index("async function loadRuntimeConfig") : app_js.index("async function setRuntimeConfig")]
-        switch_branch = app_js[app_js.index("async function setRuntimeConfig") : app_js.index("async function sendPrompt")]
+        runtime_branch = app_js[app_js.index("async function loadRuntimeConfig") : app_js.index("function initUI")]
+        send_branch = app_js[app_js.index("async function sendTurn") : app_js.index("async function loadRuntimeConfig")]
 
         self.assertIn("data.available", runtime_branch)
         self.assertNotIn("data.config_paths", runtime_branch)
         self.assertIn("item.provider", runtime_branch)
         self.assertIn("item.model", runtime_branch)
-        self.assertIn('"/api/runtime"', switch_branch)
-        self.assertIn("config_path: path", switch_branch)
-        self.assertIn("await loadRuntimeConfig()", switch_branch)
+        self.assertIn('"/api/runtime"', runtime_branch)
+        self.assertIn("state.llmConfigPath", runtime_branch)
+        self.assertIn("turnPayload.llm_config_path", send_branch)
 
     def test_ui_rebuild_plan_document_exists(self) -> None:
         doc = Path("docs/ui/GEANT4_AGENT_UI_REBUILD_PLAN_CN.md").read_text(encoding="utf-8")
