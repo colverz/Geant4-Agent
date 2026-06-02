@@ -88,7 +88,7 @@ Note:
 Fetch Geant4 NIST material names (official list):
 
 ```powershell
-python knowledge\tools\fetch_geant4_materials.py
+python tools\fetch_geant4_materials.py
 ```
 
 ## Local Web UI
@@ -237,7 +237,7 @@ python nlu/training/bert_lab/bert_lab_data.py --out nlu/training/bert_lab/data/b
 抓取 Geant4 NIST 材料名（官方列表）：
 
 ```powershell
-python knowledge\tools\fetch_geant4_materials.py
+python tools\fetch_geant4_materials.py
 ```
 
 ## 本地 Web 界面
