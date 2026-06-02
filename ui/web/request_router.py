@@ -4,7 +4,12 @@ from typing import Any, Callable
 
 from ui.web.geant4_api import handle_geant4_post
 from ui.web.runtime_state import runtime_config_payload, set_ollama_config_path
-from ui.web.runtime_state import get_candidate_status, get_latest_agent_plan, get_latest_agent_state
+from ui.web.runtime_state import (
+    get_candidate_status,
+    get_latest_agent_plan,
+    get_latest_agent_state,
+    get_latest_agent_state_summary,
+)
 from ui.web.strict_api import (
     handle_strict_audit,
     handle_strict_accept_candidate,
@@ -13,6 +18,7 @@ from ui.web.strict_api import (
     handle_strict_simulation_design,
 )
 from ui.web.async_jobs import create_step_job, get_job
+from ui.web.v3_agent_api import handle_v3_agent_post
 
 
 POST_PATHS = {
@@ -35,6 +41,9 @@ POST_PATHS = {
     "/api/geant4/summary",
     "/api/geant4/log",
     "/api/geant4/viewer/open",
+    "/api/v3/agent/turn",
+    "/api/v3/agent/reset",
+    "/api/v3/agent/state",
 }
 
 
@@ -52,6 +61,9 @@ def handle_post_request(
 ) -> tuple[int, dict[str, Any]]:
     if path.startswith("/api/geant4/"):
         return handle_geant4_post(path, payload)
+
+    if path.startswith("/api/v3/agent/"):
+        return handle_v3_agent_post(path, payload)
 
     if path == "/api/solve":
         return 200, solve_fn(payload)
@@ -86,6 +98,7 @@ def handle_post_request(
             "ok": True,
             "session_id": session_id,
             "agent_state": get_latest_agent_state(session_id),
+            "agent_state_summary": get_latest_agent_state_summary(session_id),
             "agent_plan": get_latest_agent_plan(session_id),
             "candidate_status": get_candidate_status(session_id),
             "action_safety_class": "read_only",
@@ -93,6 +106,8 @@ def handle_post_request(
 
     if path == "/api/runtime":
         cfg_path = str(payload.get("ollama_config_path", "")).strip()
+        if not cfg_path:
+            return 200, {"ok": True, "message": "current runtime config", **runtime_config_payload()}
         ok, message = set_ollama_config_path(cfg_path)
         body = {"ok": ok, "message": message, **runtime_config_payload()}
         return (200 if ok else 400), body

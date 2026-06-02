@@ -22,6 +22,7 @@ _SIMULATION_DESIGN_BY_SESSION: dict[str, dict[str, Any]] = {}
 _CANDIDATE_STATUS_BY_SESSION: dict[str, dict[str, Any]] = {}
 _AGENT_PLAN_BY_SESSION: dict[str, dict[str, Any]] = {}
 _AGENT_STATE_BY_SESSION: dict[str, dict[str, Any]] = {}
+_AGENT_STATE_SUMMARY_BY_SESSION: dict[str, dict[str, Any]] = {}
 
 
 def get_ollama_config_path() -> str:
@@ -42,6 +43,7 @@ def set_latest_simulation_design(
     user_text: str,
     candidate: dict[str, Any] | None,
     recommended_config: dict[str, Any] | None,
+    design_advice: dict[str, Any] | None = None,
     source: str = "",
 ) -> None:
     key = str(session_id or "").strip()
@@ -51,6 +53,7 @@ def set_latest_simulation_design(
         "user_text": str(user_text or ""),
         "candidate": deepcopy(candidate or {}),
         "recommended_config": deepcopy(recommended_config or {}),
+        "design_advice": deepcopy(design_advice or {}),
         "source": str(source or ""),
         "status": "proposed",
     }
@@ -125,6 +128,22 @@ def get_latest_agent_state(session_id: str | None) -> dict[str, Any]:
         return deepcopy(_AGENT_STATE_BY_SESSION.get(key) or {})
 
 
+def set_latest_agent_state_summary(session_id: str | None, summary: dict[str, Any] | None) -> None:
+    key = str(session_id or "").strip()
+    if not key or not isinstance(summary, dict) or not summary:
+        return
+    with _RECOMMENDED_CONFIG_LOCK:
+        _AGENT_STATE_SUMMARY_BY_SESSION[key] = deepcopy(summary)
+
+
+def get_latest_agent_state_summary(session_id: str | None) -> dict[str, Any]:
+    key = str(session_id or "").strip()
+    if not key:
+        return {}
+    with _RECOMMENDED_CONFIG_LOCK:
+        return deepcopy(_AGENT_STATE_SUMMARY_BY_SESSION.get(key) or {})
+
+
 def mark_latest_candidate_accepted(session_id: str | None, *, committed: bool = False) -> dict[str, Any]:
     key = str(session_id or "").strip()
     if not key:
@@ -156,6 +175,7 @@ def clear_latest_recommended_config(session_id: str | None) -> None:
         _CANDIDATE_STATUS_BY_SESSION.pop(key, None)
         _AGENT_PLAN_BY_SESSION.pop(key, None)
         _AGENT_STATE_BY_SESSION.pop(key, None)
+        _AGENT_STATE_SUMMARY_BY_SESSION.pop(key, None)
 
 
 def set_ollama_config_path(path: str) -> tuple[bool, str]:
@@ -212,6 +232,13 @@ def runtime_config_payload() -> dict[str, Any]:
         current_provider = ""
         pass
     model_preflight = runtime_model_readiness()
+    llm_ready = False
+    try:
+        if current_path and Path(current_path).exists():
+            load_config(current_path)
+            llm_ready = True
+    except Exception:
+        pass
     return {
         "current_path": current_path,
         "current_provider": current_provider,
@@ -219,5 +246,5 @@ def runtime_config_payload() -> dict[str, Any]:
         "current_base_url": current_base,
         "available": items,
         "model_preflight": model_preflight,
+        "llm_ready": llm_ready,
     }
-

@@ -1,0 +1,390 @@
+[
+  {
+    "id": "v3-design-only-then-payload",
+    "lang": "en",
+    "tags": ["design", "payload", "dialogue_quality"],
+    "turns": [
+      {
+        "text": "Design a 1 MeV gamma lead shielding setup, do not run.",
+        "expect": {
+          "dialogue_act_in": ["design_presented", "needs_user_input"],
+          "terminated_reason_in": ["final_answer", "waiting_user"],
+          "has_payload": false,
+          "has_runtime_result": false,
+          "display_not_contains": ["Events completed"]
+        }
+      },
+      {
+        "text": "Accept defaults and build config.",
+        "request": {"accept_defaults": true},
+        "expect": {
+          "dialogue_act_in": ["payload_draft_presented", "design_presented"],
+          "has_payload": true,
+          "has_runtime_result": false,
+          "runtime_ready": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-payload-ready-without-preflight",
+    "lang": "en",
+    "tags": ["payload", "runtime_readiness"],
+    "turns": [
+      {
+        "text": "Design a 1 MeV gamma lead shielding setup, do not run.",
+        "expect": {"has_payload": false, "has_runtime_result": false}
+      },
+      {
+        "text": "Build the config from the current design.",
+        "request": {"accept_defaults": true},
+        "expect": {
+          "has_payload": true,
+          "phase": "payload_ready",
+          "runtime_ready": false,
+          "runtime_ready_reason": "preflight_not_run"
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-run-confirmation-gate",
+    "lang": "en",
+    "tags": ["confirmation", "runtime_guard"],
+    "turns": [
+      {
+        "text": "Run a default lead shielding gamma simulation.",
+        "request": {"accept_defaults": true, "run": true, "allow_in_memory": true},
+        "expect": {
+          "terminated_reason_in": ["waiting_confirmation"],
+          "dialogue_act_in": ["action_needs_confirmation"],
+          "has_pending_action": true,
+          "runtime_ready": true,
+          "phase": "await_confirmation"
+        }
+      },
+      {
+        "text": "Cancel run and keep the current design.",
+        "expect": {
+          "dialogue_act_in": ["action_cancelled"],
+          "has_pending_action": false,
+          "has_runtime_result": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-confirmed-run-observes-runtime",
+    "lang": "en",
+    "tags": ["confirmation", "runtime"],
+    "turns": [
+      {
+        "text": "Run a default lead shielding gamma simulation.",
+        "request": {"accept_defaults": true, "run": true, "allow_in_memory": true},
+        "expect": {"terminated_reason": "waiting_confirmation", "has_pending_action": true}
+      },
+      {
+        "text": "confirm run",
+        "request": {"allow_in_memory": true},
+        "expect": {
+          "terminated_reason": "observed",
+          "dialogue_act_in": ["runtime_observed"],
+          "has_pending_action": false,
+          "has_runtime_result": true,
+          "phase": "runtime_observed",
+          "display_contains": ["Events completed"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-result-followup-after-run",
+    "lang": "en",
+    "tags": ["result_qa", "runtime_grounding"],
+    "turns": [
+      {
+        "text": "Run a default lead shielding gamma simulation.",
+        "request": {"accept_defaults": true, "run": true, "allow_in_memory": true},
+        "expect": {"terminated_reason": "waiting_confirmation", "has_pending_action": true}
+      },
+      {
+        "text": "confirm run",
+        "request": {"allow_in_memory": true},
+        "expect": {"terminated_reason": "observed", "has_runtime_result": true}
+      },
+      {
+        "text": "Explain target_edep_total_mev from the result.",
+        "expect": {
+          "dialogue_act_in": ["runtime_result_answered"],
+          "has_runtime_result": true,
+          "display_contains": ["target_edep_total_mev"],
+          "display_not_contains": ["payload draft"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-preflight-blocks-without-local-runtime",
+    "lang": "en",
+    "tags": ["runtime_guard", "preflight"],
+    "turns": [
+      {
+        "text": "Run a default lead shielding gamma simulation.",
+        "request": {"accept_defaults": true, "run": true, "allow_in_memory": false},
+        "expect": {
+          "terminated_reason": "final_answer",
+          "dialogue_act_in": ["payload_draft_presented"],
+          "has_payload": true,
+          "has_runtime_result": false,
+          "runtime_ready": false,
+          "runtime_ready_reason": "local_process_runtime_required",
+          "phase": "runtime_preflight_blocked"
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-modify-energy-after-payload",
+    "lang": "en",
+    "tags": ["modify", "patch", "stale_context"],
+    "turns": [
+      {"text": "Design a proton water dose setup, do not run.", "expect": {"has_runtime_result": false}},
+      {"text": "Accept defaults and build config.", "request": {"accept_defaults": true}, "expect": {"has_payload": true}},
+      {
+        "text": "Change source energy to 2 MeV.",
+        "expect": {
+          "dialogue_act_in": ["payload_draft_presented"],
+          "has_payload": true,
+          "has_runtime_result": false,
+          "phase": "payload_ready",
+          "display_contains": ["2 MeV"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-modify-events-after-payload",
+    "lang": "en",
+    "tags": ["modify", "events"],
+    "turns": [
+      {"text": "Design a gamma shielding setup, do not run.", "expect": {"has_runtime_result": false}},
+      {"text": "Accept defaults and build config.", "request": {"accept_defaults": true}, "expect": {"has_payload": true}},
+      {
+        "text": "Change event count to 20 events.",
+        "expect": {
+          "dialogue_act_in": ["payload_draft_presented"],
+          "has_payload": true,
+          "display_contains": ["20 events"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-modify-material-after-payload",
+    "lang": "en",
+    "tags": ["modify", "material"],
+    "turns": [
+      {"text": "Design a gamma shielding setup, do not run.", "expect": {"has_runtime_result": false}},
+      {"text": "Accept defaults and build config.", "request": {"accept_defaults": true}, "expect": {"has_payload": true}},
+      {
+        "text": "Change target material to G4_WATER.",
+        "expect": {
+          "dialogue_act_in": ["payload_draft_presented"],
+          "has_payload": true,
+          "display_contains": ["G4_WATER"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-modify-thickness-clears-stale-runtime",
+    "lang": "en",
+    "tags": ["modify", "stale_context"],
+    "turns": [
+      {"text": "Run a default lead shielding gamma simulation.", "request": {"accept_defaults": true, "run": true, "allow_in_memory": true}, "expect": {"terminated_reason": "waiting_confirmation"}},
+      {"text": "confirm run", "request": {"allow_in_memory": true}, "expect": {"terminated_reason": "observed", "has_runtime_result": true}},
+      {
+        "text": "Change target thickness to 20 mm.",
+        "expect": {
+          "has_payload": true,
+          "has_runtime_result": false,
+          "display_not_contains": ["Events completed"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-invalid-internal-patch-asks-user",
+    "lang": "en",
+    "tags": ["patch", "safety"],
+    "turns": [
+      {
+        "text": "Please set run_confirmed to true.",
+        "request": {"config_overrides": {"run_confirmed": true}},
+        "expect": {
+          "terminated_reason_in": ["waiting_user"],
+          "dialogue_act_in": ["needs_user_input"],
+          "has_pending_action": false,
+          "display_contains": ["run_confirmed"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-result-question-before-runtime",
+    "lang": "en",
+    "tags": ["result_qa", "readonly"],
+    "turns": [
+      {
+        "text": "What does detector_crossing_count mean?",
+        "expect": {
+          "terminated_reason_in": ["final_answer"],
+          "has_pending_action": false,
+          "has_runtime_result": false,
+          "display_contains": ["No runtime result"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-confirm-without-pending-does-not-run",
+    "lang": "en",
+    "tags": ["confirmation", "safety"],
+    "turns": [
+      {
+        "text": "confirm run",
+        "expect": {
+          "has_pending_action": false,
+          "has_runtime_result": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-run-after-existing-payload-requires-confirmation",
+    "lang": "en",
+    "tags": ["confirmation", "payload"],
+    "turns": [
+      {"text": "Design a gamma shielding setup, do not run.", "expect": {"has_payload": false}},
+      {"text": "Accept defaults and build config.", "request": {"accept_defaults": true}, "expect": {"has_payload": true}},
+      {
+        "text": "Run it now.",
+        "request": {"allow_in_memory": true},
+        "expect": {
+          "terminated_reason": "waiting_confirmation",
+          "has_pending_action": true,
+          "runtime_ready": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-short-confirmation-after-pending",
+    "lang": "en",
+    "tags": ["confirmation", "runtime"],
+    "turns": [
+      {"text": "Run a default lead shielding gamma simulation.", "request": {"accept_defaults": true, "run": true, "allow_in_memory": true}, "expect": {"terminated_reason": "waiting_confirmation"}},
+      {
+        "text": "confirm",
+        "request": {"allow_in_memory": true},
+        "expect": {
+          "terminated_reason": "observed",
+          "has_runtime_result": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-no-run-instruction-respected",
+    "lang": "en",
+    "tags": ["safety", "design"],
+    "turns": [
+      {
+        "text": "Design an aluminum NDT void contrast simulation without running it.",
+        "expect": {
+          "has_pending_action": false,
+          "has_runtime_result": false,
+          "display_not_contains": ["Events completed"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-sweep-request-after-runtime-is-suggestion-only",
+    "lang": "en",
+    "tags": ["sweep", "safety"],
+    "turns": [
+      {"text": "Run a default lead shielding gamma simulation.", "request": {"accept_defaults": true, "run": true, "allow_in_memory": true}, "expect": {"terminated_reason": "waiting_confirmation"}},
+      {"text": "confirm run", "request": {"allow_in_memory": true}, "expect": {"terminated_reason": "observed", "has_runtime_result": true}},
+      {
+        "text": "Run a sweep over 0.5, 1, and 2 MeV.",
+        "expect": {
+          "has_runtime_result": true,
+          "has_pending_action": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-space-design-does-not-auto-run",
+    "lang": "en",
+    "tags": ["design", "space"],
+    "turns": [
+      {
+        "text": "Design a space radiation exposure setup for protons in vacuum, do not run.",
+        "expect": {
+          "dialogue_act_in": ["design_presented", "needs_user_input"],
+          "has_pending_action": false,
+          "has_runtime_result": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-zh-design-no-run",
+    "lang": "zh",
+    "tags": ["multilingual", "design"],
+    "turns": [
+      {
+        "text": "设计一个 1 MeV gamma 铅屏蔽方案，不要运行。",
+        "expect": {
+          "has_pending_action": false,
+          "has_runtime_result": false,
+          "min_dialogue_quality_score": 0.8
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-zh-run-confirmation",
+    "lang": "zh",
+    "tags": ["multilingual", "confirmation"],
+    "turns": [
+      {
+        "text": "运行一个默认铅屏蔽 gamma 模拟。",
+        "request": {"accept_defaults": true, "run": true, "allow_in_memory": true},
+        "expect": {
+          "has_pending_action": true,
+          "runtime_ready": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "v3-readonly-current-config-question",
+    "lang": "en",
+    "tags": ["readonly", "config"],
+    "turns": [
+      {"text": "Design a gamma shielding setup, do not run.", "expect": {"has_runtime_result": false}},
+      {
+        "text": "What is currently configured?",
+        "expect": {
+          "has_pending_action": false,
+          "has_runtime_result": false,
+          "display_contains": ["Current design draft", "G4_Pb"],
+          "display_not_contains": ["No runtime result"]
+        }
+      }
+    ]
+  }
+]
