@@ -133,13 +133,11 @@ def _coerce_int(value: Any, fallback: int = 0) -> int:
 def _shape_name(value: Any, fallback: str = "box") -> str:
     raw = str(value or fallback).strip().lower()
     aliases = {
-        "single_box": "box",
-        "box": "box",
-        "cube": "box",
-        "single_tubs": "tubs",
-        "tubs": "tubs",
-        "tube": "tubs",
-        "cylinder": "tubs",
+        "single_box": "box", "box": "box", "cube": "box", "slab": "box",
+        "single_tubs": "tubs", "tubs": "tubs", "tube": "tubs", "cylinder": "tubs",
+        "single_sphere": "sphere", "sphere": "sphere", "orb": "sphere", "single_orb": "sphere",
+        "single_cons": "cons", "cons": "cons", "cone": "cons",
+        "single_trd": "trd", "trd": "trd",
     }
     return aliases.get(raw, fallback)
 
@@ -318,7 +316,7 @@ def _geometry_volumes(
                 role="target",
                 parent="World",
                 size_mm=(size_x_mm, size_y_mm, size_z_mm) if root_shape == "box" else None,
-                radius_mm=radius_mm if root_shape == "tubs" else None,
+                radius_mm=radius_mm if root_shape in ("tubs", "sphere") else None,
                 half_length_mm=half_length_mm if root_shape == "tubs" else None,
             ),
         )

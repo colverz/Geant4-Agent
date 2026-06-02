@@ -208,6 +208,27 @@ class Geant4McpAdapterTest(unittest.TestCase):
         self.assertEqual(run_obs.payload["returncode"], 0)
         self.assertIn("geant4 wrapper ok", "\n".join(log_obs.payload["lines"]))
 
+    def test_local_process_adapter_preview_preserves_config_run_events(self) -> None:
+        adapter = LocalProcessGeant4Adapter([sys.executable, "-c", "print('ok')"])
+        server = Geant4McpServer(adapter=adapter)
+
+        apply_obs = server.call_tool(
+            ToolCallRequest(
+                tool_name="apply_config_patch",
+                arguments={
+                    "patch": {
+                        "geometry": {"structure": "single_box"},
+                        "source": {"particle": "gamma", "energy": 1.0},
+                        "physics_list": {"name": "FTFP_BERT"},
+                        "run": {"events": 12},
+                    }
+                },
+            )
+        )
+
+        self.assertEqual(apply_obs.status, RuntimeActionStatus.COMPLETED)
+        self.assertEqual(apply_obs.payload["runtime_payload"]["run"]["events"], 12)
+
     def test_local_process_adapter_loads_simulation_result_from_artifact_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             artifact_dir = Path(tmpdir) / "artifacts"

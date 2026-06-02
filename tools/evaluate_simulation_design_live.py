@@ -312,7 +312,7 @@ def _process_case(case: dict[str, Any], *, live_llm: bool, llm_config: str, mode
         "errors": errors,
         "llm_used": llm_used,
         "goal": goal,
-        "prompt_profile": "simulation_design_live_v1",
+        "prompt_profile": "simulation_design_live_v2_human_collab",
         "raw_llm_response": raw_text,
         "candidate": candidate,
         "reference_pack_summary": {

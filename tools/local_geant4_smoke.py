@@ -7,6 +7,7 @@ import sys
 from core.runtime.types import RuntimeActionStatus, ToolCallRequest
 from core.simulation import build_runtime_smoke_report
 from mcp.geant4.adapter import InMemoryGeant4Adapter, build_geant4_adapter_from_env
+from mcp.geant4.runtime_discovery import discover_local_geant4_runtime
 from mcp.geant4.server import Geant4McpServer
 
 
@@ -42,6 +43,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run a local Geant4 adapter smoke test when runtime env is configured.")
     parser.add_argument("--events", type=int, default=1)
     parser.add_argument("--require-runtime", action="store_true", help="Fail instead of skipping when no runtime command is configured.")
+    parser.add_argument("--auto-discover-runtime", action="store_true", help="Use the repo-local compiled Geant4 app when runtime env is not configured.")
     parser.add_argument("--json", action="store_true", help="Emit a compact JSON report for automation.")
     parser.add_argument("--print-env-help", action="store_true", help="Print the required opt-in runtime environment variables and exit.")
     args = parser.parse_args()
@@ -50,10 +52,18 @@ def main() -> int:
         return 0
     events = max(1, int(args.events))
 
-    adapter = build_geant4_adapter_from_env()
+    env = None
+    discovery = None
+    if args.auto_discover_runtime:
+        discovery = discover_local_geant4_runtime()
+        if discovery.found:
+            env = discovery.env()
+    adapter = build_geant4_adapter_from_env(env)
     if isinstance(adapter, InMemoryGeant4Adapter):
         message = "SKIP: GEANT4_RUNTIME_COMMAND_JSON or GEANT4_RUNTIME_COMMAND is not configured."
         print(message)
+        if discovery is not None:
+            print(json.dumps({"runtime_discovery": discovery.to_dict()}, ensure_ascii=False))
         print(runtime_env_help())
         return 1 if args.require_runtime else 0
 
@@ -95,6 +105,8 @@ def main() -> int:
         summary_payload=summary_obs.payload,
     )
     if args.json:
+        if discovery is not None:
+            report["runtime_discovery"] = discovery.to_dict()
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("OK: local Geant4 smoke completed.")

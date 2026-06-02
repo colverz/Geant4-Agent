@@ -10,10 +10,13 @@ from typing import Any
 from core.audit.audit_log import append_audit_entry
 from core.agent.composite_intent import detect_composite_intent
 from core.agent.context_pack import build_context_pack
+from core.agent.design_acceptance import build_design_acceptance_patch
+from core.agent.design_advisor import build_design_advice
 from core.agent.intent_router import route_user_turn
 from core.agent.llm_candidate_contract import build_workflow_llm_candidate_report
 from core.agent.simulation_design import build_simulation_design_candidate
 from core.agent.simulation_design_llm import build_llm_simulation_design_candidate
+from core.agent.state_summary import build_agent_state_summary
 from core.agent.staged_patch import build_staged_patch_reference
 from core.agent.turn_trace import NluTurnTrace, stable_hash
 from core.agent.workflow_graph import graph_path_for_intent, terminal_state_for_intent
@@ -212,6 +215,7 @@ def commit_recommended_config(
     config: dict[str, Any],
     *,
     source: str = "accepted_simulation_design",
+    design_advice: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sid = str(session_id or "").strip()
     if not sid:
@@ -232,6 +236,12 @@ def commit_recommended_config(
     with _SESSIONS_LOCK:
         state = get_or_create_session(sid)
         before = deep_copy(state.config)
+        design_acceptance_patch = build_design_acceptance_patch(
+            config,
+            base_config=before,
+            design_advice=design_advice,
+            source=source,
+        )
         for key in sorted(allowed_top_level):
             value = config.get(key)
             if value is None:
@@ -259,6 +269,7 @@ def commit_recommended_config(
             "committed_paths": list(committed_paths),
             "diff_paths": diff_paths(before, state.config),
             "ok": bool(report.ok),
+            "design_acceptance_patch_hash": design_acceptance_patch.get("patch_hash"),
         }
         state.audit_trail.append(audit_entry)
         config_out = deep_copy(state.config)
@@ -268,6 +279,7 @@ def commit_recommended_config(
         "action": "accept_candidate",
         "action_safety_class": ActionSafetyClass.CONFIG_MUTATION.value,
         "committed_paths": committed_paths,
+        "design_acceptance_patch": design_acceptance_patch,
         "missing_fields": list(report.missing_required_paths),
         "is_complete": bool(report.ok),
         "config": config_out,
@@ -1366,9 +1378,38 @@ def process_turn(
         recommended_config, recommended_config_assumptions = _simulation_design_recommended_config(
             simulation_design_payload
         )
+        design_advice = build_design_advice(
+            simulation_design_payload,
+            recommended_config=recommended_config,
+            lang=lang,
+        )
         message = _render_simulation_design_message(simulation_design_payload, lang=lang)
         state.history.append({"role": "assistant", "content": message})
         raw_dialogue = build_raw_dialogue(state.history)
+        agent_state_summary = build_agent_state_summary(
+            lang=lang,
+            intent="simulation_design",
+            safety_class=ActionSafetyClass.READ_ONLY.value,
+            terminal_state="read_only_answer",
+            understood=[str(simulation_design_payload.get("goal") or text)],
+            applied_paths=[],
+            rejected_paths=[],
+            missing_fields=[],
+            missing_fields_friendly=[],
+            asked_fields=[],
+            asked_fields_friendly=[],
+            pending_confirmation_paths=[],
+            runtime_ready=bool(recommended_config),
+            runtime_action_guarded=False,
+            guarded_runtime_intent_pending=False,
+            tool_calls_blocked=["run_beam", "viewer_open"],
+            llm_used=llm_design_used,
+            fallback_reason=design_fallback_reason,
+            notes=[
+                "simulation_design_is_read_only",
+                "recommended_config_requires_user_acceptance",
+            ],
+        )
         return {
             "session_id": state.session_id,
             "phase": state.phase.value,
@@ -1378,6 +1419,7 @@ def process_turn(
             "raw_dialogue": raw_dialogue,
             "is_complete": False,
             "simulation_design": simulation_design_payload,
+            "design_advice": design_advice,
             "simulation_design_source": simulation_design_source,
             "recommended_config": recommended_config,
             "recommended_config_assumptions": recommended_config_assumptions,
@@ -1391,6 +1433,7 @@ def process_turn(
             "action_safety_class": ActionSafetyClass.READ_ONLY.value,
             "config": before_config,
             "field_sources": state.field_sources,
+            "agent_state_summary": agent_state_summary,
             "nlu_turn_trace": {
                 "schema_version": "nlu_turn_trace.v1",
                 "turn_id_before": turn_id_before,
@@ -1411,8 +1454,10 @@ def process_turn(
                     "intent_decision": intent_decision.to_dict(),
                     "composite_intent": composite_intent.to_dict(),
                     "context_pack": context_pack.to_dict(),
+                    "agent_state_summary": agent_state_summary,
                 },
                 "simulation_design": simulation_design_payload,
+                "design_advice": design_advice,
                 "recommended_config": recommended_config,
                 "recommended_config_assumptions": recommended_config_assumptions,
                 "simulation_design_llm": {
@@ -1422,6 +1467,7 @@ def process_turn(
                     "prompt_validation": (llm_design or {}).get("prompt_validation"),
                     "reference_pack": (llm_design or {}).get("reference_pack"),
                 },
+                "agent_state_summary": agent_state_summary,
             },
             "history": state.history[-10:],
             "audit_size": len(state.audit_trail),
@@ -2139,6 +2185,34 @@ def process_turn(
             stable_hash({"base": final_context_pack.to_dict(), "final_intent": trace_intent}),
         )
         nlu_turn_trace.context_pack_hash = final_context_pack.context_pack_hash
+    agent_state_summary = build_agent_state_summary(
+        lang=lang,
+        intent=trace_intent,
+        safety_class=trace_safety.value,
+        terminal_state=trace_terminal.value,
+        understood=to_friendly_labels(applied_paths, lang) if applied_paths else list(asked_fields_friendly),
+        applied_paths=applied_paths,
+        rejected_paths=rejected_paths,
+        missing_fields=final_missing_paths,
+        missing_fields_friendly=to_friendly_labels(final_missing_paths, lang),
+        asked_fields=asked_fields,
+        asked_fields_friendly=asked_fields_friendly,
+        pending_confirmation_paths=pending_confirmation_paths,
+        runtime_ready=is_complete,
+        runtime_action_guarded=trace_terminal.value == "runtime_action_guarded",
+        guarded_runtime_intent_pending=composite_intent.requires_staged_runtime_guard,
+        tool_calls_blocked=trace_blocked_tools,
+        llm_used=llm_used,
+        fallback_reason=fallback_reason,
+        llm_stage_failures=llm_stage_failures,
+        llm_schema_errors=llm_schema_errors,
+        notes=[
+            "composite_runtime_request_blocked"
+            if composite_intent.requires_staged_runtime_guard
+            else "",
+            "partial_geometry_guard_triggered" if partial_geometry_guard_triggered else "",
+        ],
+    )
     internal_trace = {
         "agent": {
             "intent_decision": intent_decision.to_dict(),
@@ -2146,6 +2220,7 @@ def process_turn(
             "context_pack": final_context_pack.to_dict(),
             "initial_context_pack": context_pack.to_dict(),
             "nlu_turn_trace": nlu_turn_trace.to_dict(),
+            "agent_state_summary": agent_state_summary,
         },
         "nlu": {
             "llm_used": llm_used,
@@ -2213,6 +2288,7 @@ def process_turn(
         "asked_fields_friendly": asked_fields_friendly,
         "open_questions": state.open_questions,
         "question_attempts": state.question_attempts,
+        "agent_state_summary": agent_state_summary,
         "normalized_text": normalized_text,
         "normalization": normalization_payload,
         "pipelines": {"geometry": pipeline_selection.geometry, "source": pipeline_selection.source},
@@ -2317,6 +2393,26 @@ def get_session_config_summary(session_id: str, *, lang: str = "zh") -> dict[str
         )
         if missing_labels:
             message += f" Still missing: {', '.join(missing_labels[:4])}."
+    agent_state_summary = build_agent_state_summary(
+        lang=lang,
+        intent="read_config",
+        safety_class=ActionSafetyClass.READ_ONLY.value,
+        terminal_state="read_only_answer",
+        understood=[message],
+        applied_paths=[],
+        rejected_paths=[],
+        missing_fields=missing_paths,
+        missing_fields_friendly=missing_labels,
+        asked_fields=last_asked_paths,
+        asked_fields_friendly=asked_labels,
+        pending_confirmation_paths=[str(item.get("path", "")) for item in pending_overwrite if isinstance(item, dict)],
+        runtime_ready=bool(report.ok and not missing_paths and not pending_overwrite),
+        runtime_action_guarded=False,
+        guarded_runtime_intent_pending=False,
+        tool_calls_blocked=[],
+        llm_used=False,
+        fallback_reason="read_only_config_summary",
+    )
     return {
         "ok": True,
         "session_id": sid,
@@ -2325,6 +2421,7 @@ def get_session_config_summary(session_id: str, *, lang: str = "zh") -> dict[str
         "phase_title": phase_title(phase, lang),
         "is_complete": bool(report.ok and not missing_paths and not pending_overwrite),
         "message": message,
+        "agent_state_summary": agent_state_summary,
         "config_identity": config_identity,
         "missing_fields": missing_paths,
         "missing_fields_friendly": missing_labels,

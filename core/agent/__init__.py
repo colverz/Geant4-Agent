@@ -12,6 +12,8 @@ from .candidate_patch import (
 )
 from .composite_intent import CompositeIntent, detect_composite_intent
 from .context_pack import ContextPack, KnowledgeSnippet, build_context_pack
+from .design_advisor import DESIGN_ADVICE_SCHEMA_VERSION, DesignAdvice, DesignOption, build_design_advice
+from .design_acceptance import DESIGN_ACCEPTANCE_PATCH_SCHEMA_VERSION, DesignAcceptancePatch, build_design_acceptance_patch
 from .evidence_grounding import EvidenceGroundingContext, EvidenceGroundingResult, check_candidate_update_grounding
 from .intent_router import IntentDecision, route_user_turn
 from .llm_candidate_contract import (
@@ -49,6 +51,7 @@ from .idempotency import (
 )
 from .interrupt_resume import InterruptResumeController, InterruptResumeResult, InterruptResumeStatus
 from .staged_patch import StagedPatch, StagedPatchStatus, StagedPatchStore, build_staged_patch_reference
+from .state_summary import AGENT_STATE_SUMMARY_SCHEMA_VERSION, AgentStateSummary, build_agent_state_summary
 from .staged_patch_bridge import (
     StagedPatchCompatibilityPreview,
     apply_confirmation_candidate,
@@ -63,6 +66,11 @@ __all__ = [
     "CandidatePatchEnvelope",
     "CandidatePatchConfirmationPreview",
     "CompositeIntent",
+    "DESIGN_ADVICE_SCHEMA_VERSION",
+    "DESIGN_ACCEPTANCE_PATCH_SCHEMA_VERSION",
+    "DesignAdvice",
+    "DesignAcceptancePatch",
+    "DesignOption",
     "EvidenceGroundingContext",
     "EvidenceGroundingResult",
     "GuardedActionRequest",
@@ -81,9 +89,11 @@ __all__ = [
     "ALLOWED_NEXT_ACTIONS",
     "AGENT_PLAN_SCHEMA_VERSION",
     "AGENT_STATE_SCHEMA_VERSION",
+    "AGENT_STATE_SUMMARY_SCHEMA_VERSION",
     "CRITIC_REPORT_SCHEMA_VERSION",
     "AgentPlan",
     "AgentState",
+    "AgentStateSummary",
     "SIMULATION_DESIGN_SCHEMA_VERSION",
     "SimulationDesignCandidate",
     "CriticReport",
@@ -98,11 +108,14 @@ __all__ = [
     "WorkflowNode",
     "WorkflowTerminalState",
     "build_context_pack",
+    "build_design_advice",
+    "build_design_acceptance_patch",
     "build_llm_candidate_contract",
     "build_workflow_llm_candidate_report",
     "build_simulation_design_candidate",
     "build_agent_plan",
     "build_agent_state",
+    "build_agent_state_summary",
     "build_critic_report",
     "build_simulation_design_reference_pack",
     "build_llm_simulation_design_candidate",

@@ -242,6 +242,14 @@ def _config_detector_enabled(config: dict[str, Any]) -> bool:
     return bool(detector.get("enabled")) if isinstance(detector, dict) else False
 
 
+def _config_events(config: dict[str, Any], fallback: int = 1) -> int:
+    run = config.get("run") if isinstance(config.get("run"), dict) else {}
+    try:
+        return max(1, int(run.get("events", fallback)))
+    except (TypeError, ValueError):
+        return max(1, int(fallback))
+
+
 def _config_material(config: dict[str, Any]) -> str | None:
     materials = config.get("materials")
     if not isinstance(materials, dict):
@@ -565,7 +573,7 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
     def apply_config_patch(self, patch: dict[str, Any]) -> ExecutionObservation:
         self._config = _deep_merge(self._config, patch)
         self._last_result_payload = None
-        self._runtime_payload = build_runtime_payload(self._config)
+        self._runtime_payload = build_runtime_payload(build_simulation_spec(self._config, events=_config_events(self._config)))
         self._snapshot.geometry_ready = bool(self._config.get("geometry"))
         self._snapshot.source_ready = bool(self._config.get("source"))
         self._snapshot.physics_ready = bool(self._config.get("physics_list") or self._config.get("physics"))
@@ -662,7 +670,10 @@ class LocalProcessGeant4Adapter(Geant4RuntimeAdapter):
             ) as handle:
                 import json
 
-                runtime_payload = deepcopy(self._runtime_payload or build_runtime_payload(self._config))
+                runtime_payload = deepcopy(
+                    self._runtime_payload or build_runtime_payload(build_simulation_spec(self._config, events=int(events)))
+                )
+                runtime_payload.setdefault("run", {})["events"] = int(events)
                 runtime_payload.pop("raw_config", None)
                 runtime_payload.pop("payload_sha256", None)
                 runtime_payload["payload_sha256"] = hashlib.sha256(

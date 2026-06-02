@@ -344,10 +344,10 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
         ),
     ),
     (PromptTask.RUNTIME_RESULT_EXPLAIN, "zh"): PromptProfile(
-        id="runtime_result_explain_zh_v1",
+        id="runtime_result_explain_zh_v2_human_collab",
         task=PromptTask.RUNTIME_RESULT_EXPLAIN,
         lang="zh",
-        version="v1",
+        version="v2_human_collab",
         output_contract=PromptOutputContract.GROUNDED_REWRITE,
         temperature=0.2,
         validator_name="grounded_rewrite_no_new_numbers_lang_match",
@@ -355,14 +355,15 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
             "你是 Geant4 模拟结果解释层。请把 base_message 改写得更自然，但必须严格受 report 约束。"
             "不得新增任何数值、物理结论、过程解释或 report 中不存在的事实。"
             "如果字段缺失，必须保留缺失含义。只输出最终中文回复。\n\n"
+            "v2 style: answer like a concise research collaborator; state completion, name the key recorded metrics, and give one grounded next step. Avoid report tone and long lists.\n"
             "Input JSON:\n$payload_json\n\nRewrite now."
         ),
     ),
     (PromptTask.RUNTIME_RESULT_EXPLAIN, "en"): PromptProfile(
-        id="runtime_result_explain_en_v1",
+        id="runtime_result_explain_en_v2_human_collab",
         task=PromptTask.RUNTIME_RESULT_EXPLAIN,
         lang="en",
-        version="v1",
+        version="v2_human_collab",
         output_contract=PromptOutputContract.GROUNDED_REWRITE,
         temperature=0.2,
         validator_name="grounded_rewrite_no_new_numbers_lang_match",
@@ -370,14 +371,15 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
             "You are the Geant4 simulation-result explanation layer. Rewrite base_message naturally, "
             "but stay strictly grounded in report. Do not add any new numbers, physics conclusions, process explanations, "
             "or facts not present in the report. If a field is missing, preserve that meaning. "
+            "Answer like a concise research collaborator: state completion, name the key recorded metrics, and give one grounded next step. Avoid report tone and long lists. "
             "Return only the final English answer.\n\nInput JSON:\n$payload_json\n\nRewrite now."
         ),
     ),
     (PromptTask.RUNTIME_RESULT_QA, "zh"): PromptProfile(
-        id="runtime_result_qa_zh_v1",
+        id="runtime_result_qa_zh_v2_human_collab",
         task=PromptTask.RUNTIME_RESULT_QA,
         lang="zh",
-        version="v1",
+        version="v2_human_collab",
         output_contract=PromptOutputContract.GROUNDED_REWRITE,
         temperature=0.2,
         validator_name="grounded_rewrite_no_new_numbers_lang_match",
@@ -386,21 +388,22 @@ _PROFILES: dict[tuple[PromptTask, str], PromptProfile] = {
             "不得新增任何数值、因果解释、物理结论或 report 中不存在的事实。"
             "如果 report 不足以回答，必须明确说无法从当前结果确认。只输出最终中文回复。\n\n"
             "用户问题：$user_question\n"
+            "v2 style: answer directly, then name the recorded metric that supports the answer. If evidence is insufficient, say so plainly. Avoid report tone.\n"
             "Input JSON:\n$payload_json\n\nAnswer now."
         ),
     ),
     (PromptTask.RUNTIME_RESULT_QA, "en"): PromptProfile(
-        id="runtime_result_qa_en_v1",
+        id="runtime_result_qa_en_v2_human_collab",
         task=PromptTask.RUNTIME_RESULT_QA,
         lang="en",
-        version="v1",
+        version="v2_human_collab",
         output_contract=PromptOutputContract.GROUNDED_REWRITE,
         temperature=0.2,
         validator_name="grounded_rewrite_no_new_numbers_lang_match",
         template=(
             "You are the Geant4 simulation-result Q&A layer. Answer the user question using only report and base_message. "
             "Do not add new numbers, causal explanations, physics conclusions, or facts not present in the report. "
-            "If the report is insufficient, say that the current result cannot confirm it. Return only the final English answer.\n\n"
+            "If the report is insufficient, say that the current result cannot confirm it. Answer directly, then name the recorded metric that supports the answer. Avoid report tone. Return only the final English answer.\n\n"
             "User question: $user_question\n"
             "Input JSON:\n$payload_json\n\nAnswer now."
         ),

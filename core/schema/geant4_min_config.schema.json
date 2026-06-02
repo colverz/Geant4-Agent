@@ -1,113 +1,63 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Geant4MinimalConfig",
+  "title": "Geant4MinimalConfigCompatibility",
   "type": "object",
+  "required": ["geometry", "materials", "source", "run"],
   "properties": {
     "geometry": {
       "type": "object",
-      "description": "Geometry structure and parameters (Assembly DSL or references)",
+      "additionalProperties": true,
       "properties": {
-        "graph_program": {
-          "type": "object",
-          "description": "Primary graph-program representation of geometry (DSL node graph)"
-        },
         "structure": {"type": "string"},
         "params": {"type": "object"},
-        "volume_names": {
-          "type": "array",
-          "items": {"type": "string"},
-          "description": "Optional list of volume names for material mapping"
-        }
-      },
-      "anyOf": [
-        {"required": ["graph_program"]},
-        {"required": ["structure", "params"]}
-      ],
-      "additionalProperties": true
+        "graph_program": {"type": "object"}
+      }
     },
     "materials": {
       "type": "object",
-      "description": "Material mapping and environment",
+      "additionalProperties": true,
       "properties": {
         "volume_material_map": {
           "type": "array",
           "items": {
             "type": "object",
+            "required": ["volume", "material"],
             "properties": {
               "volume": {"type": "string"},
               "material": {"type": "string"}
             },
-            "required": ["volume", "material"],
             "additionalProperties": false
           }
         },
-        "environment": {
-          "type": "object",
-          "properties": {
-            "atmosphere": {"type": "string"},
-            "temperature_K": {"type": "number"},
-            "pressure_Pa": {"type": "number"}
-          },
-          "additionalProperties": true
-        }
-      },
-      "required": ["volume_material_map"],
-      "additionalProperties": true
+        "environment": {"type": "object", "additionalProperties": true}
+      }
     },
     "physics_list": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Geant4 physics list name (see knowledge/data/physics_lists.json)"
-        }
-      },
-      "required": ["name"],
-      "additionalProperties": true
+      "oneOf": [
+        {"type": "string"},
+        {"type": "object", "additionalProperties": true}
+      ]
     },
     "source": {
       "type": "object",
-      "description": "Primary generator settings",
+      "additionalProperties": true,
       "properties": {
-        "particle": {
-          "type": "string",
-          "description": "Particle name (see knowledge/data/particles.json)"
-        },
-        "energy_MeV": {"type": "number"},
-        "position": {
-          "type": "object",
-          "properties": {
-            "type": {"type": "string"},
-            "value": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
-          },
-          "required": ["type", "value"]
-        },
-        "direction": {
-          "type": "object",
-          "properties": {
-            "type": {"type": "string"},
-            "value": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
-          },
-          "required": ["type", "value"]
-        }
-      },
-      "required": ["particle", "energy_MeV", "position"],
+        "particle": {"type": "string"},
+        "energy_mev": {"type": "number"},
+        "type": {"type": "string"}
+      }
+    },
+    "scoring": {
+      "type": "object",
       "additionalProperties": true
     },
-    "output": {
+    "run": {
       "type": "object",
-      "description": "Output/scoring settings",
+      "additionalProperties": true,
       "properties": {
-        "format": {
-          "type": "string",
-          "description": "Output format (see knowledge/data/output_formats.json)"
-        },
-        "path": {"type": "string"}
-      },
-      "required": ["format", "path"],
-      "additionalProperties": true
+        "events": {"type": "integer", "minimum": 1}
+      }
     }
   },
-  "required": ["geometry", "materials", "physics_list", "source", "output"],
-  "additionalProperties": false
+  "additionalProperties": true
 }

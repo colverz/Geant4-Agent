@@ -74,6 +74,7 @@ def build_runtime_result_message(report: dict[str, Any] | None, *, lang: str = "
                     f"几何={_fmt(config.get('geometry_structure'))}，"
                     f"材料={_fmt(config.get('material'))}，"
                     f"粒子={_fmt(config.get('particle'))}，"
+                    f"源能量={_fmt(config.get('source_energy_mev'))} MeV，"
                     f"物理列表={_fmt(config.get('physics_list'))}。"
                 ),
                 (
@@ -98,6 +99,7 @@ def build_runtime_result_message(report: dict[str, Any] | None, *, lang: str = "
                 f"geometry={_fmt(config.get('geometry_structure'))}, "
                 f"material={_fmt(config.get('material'))}, "
                 f"particle={_fmt(config.get('particle'))}, "
+                f"source_energy={_fmt(config.get('source_energy_mev'))} MeV, "
                 f"physics={_fmt(config.get('physics_list'))}."
             ),
             (
@@ -184,6 +186,7 @@ def build_runtime_result_question_answer(
                 f"material={_fmt(config.get('material'))}，"
                 f"source_type={_fmt(config.get('source_type'))}，"
                 f"particle={_fmt(config.get('particle'))}，"
+                f"source_energy={_fmt(config.get('source_energy_mev'))} MeV，"
                 f"physics_list={_fmt(config.get('physics_list'))}。"
             )
         if asks_completion:
@@ -192,6 +195,8 @@ def build_runtime_result_question_answer(
                 f"完成率 {_completion_percent(completion_fraction)}。"
             )
         return (
+            f"本次配置：material={_fmt(config.get('material'))}，particle={_fmt(config.get('particle'))}，"
+            f"source_energy={_fmt(config.get('source_energy_mev'))} MeV。"
             f"这次运行完成事件数为 {_fmt(events_completed)} / {_fmt(events_requested)}。"
             f"关键指标包括 target_edep_total_mev={_fmt(target_edep)}、"
             f"target_hit_events={_fmt(target_hits)}、detector_crossing_count={_fmt(detector_crossings)}、"
@@ -233,6 +238,7 @@ def build_runtime_result_question_answer(
             f"material={_fmt(config.get('material'))}, "
             f"source_type={_fmt(config.get('source_type'))}, "
             f"particle={_fmt(config.get('particle'))}, "
+            f"source_energy={_fmt(config.get('source_energy_mev'))} MeV, "
             f"physics_list={_fmt(config.get('physics_list'))}."
         )
     if asks_completion:
@@ -241,6 +247,8 @@ def build_runtime_result_question_answer(
             f"completion {_completion_percent(completion_fraction)}."
         )
     return (
+        f"Configuration: material={_fmt(config.get('material'))}, particle={_fmt(config.get('particle'))}, "
+        f"source_energy={_fmt(config.get('source_energy_mev'))} MeV. "
         f"This run completed {_fmt(events_completed)} / {_fmt(events_requested)} events. "
         f"Key metrics are target_edep_total_mev={_fmt(target_edep)}, "
         f"target_hit_events={_fmt(target_hits)}, detector_crossing_count={_fmt(detector_crossings)}, "

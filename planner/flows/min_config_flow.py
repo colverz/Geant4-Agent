@@ -24,7 +24,7 @@ def build_prompt(user_text: str, schema_text: str, system_text: str) -> str:
 def generate_min_config(
     user_text: str,
     schema_path: str = "core/schema/geant4_min_config.schema.json",
-    system_path: str = "core/prompts/min_config_system.txt",
+    system_path: str = "core/prompting/min_config_system.txt",
     ollama_config: str = "nlu/llm_support/configs/ollama_config.json",
 ) -> Dict[str, Any]:
     schema_text = load_text(schema_path)
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a minimal Geant4 config via Ollama")
     parser.add_argument("--text", required=True)
     parser.add_argument("--schema", default="core/schema/geant4_min_config.schema.json")
-    parser.add_argument("--system", default="core/prompts/min_config_system.txt")
+    parser.add_argument("--system", default="core/prompting/min_config_system.txt")
     parser.add_argument("--ollama_config", default="nlu/llm_support/configs/ollama_config.json")
     args = parser.parse_args()
 

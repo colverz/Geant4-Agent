@@ -14,6 +14,7 @@ from core.agent.simulation_design import (
 )
 from core.agent.simulation_design_llm import normalize_simulation_design_candidate
 from core.agent.simulation_design_llm import build_simulation_design_prompt
+from core.agent.simulation_design_llm import PROMPT_PROFILE_ID
 from core.orchestrator.session_manager import process_turn, reset_session
 from ui.web.request_router import handle_post_request
 
@@ -69,9 +70,13 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         pack = build_simulation_design_reference_pack("真空环境中的 gamma 传输模拟")
         prompt = build_simulation_design_prompt("真空环境中的 gamma 传输模拟", pack, lang="zh")
 
+        self.assertEqual(PROMPT_PROFILE_ID, "simulation_design_live_v2_human_collab")
         self.assertIn("full catalogs", prompt)
         self.assertIn("query_hints are only orientation hints", prompt)
         self.assertIn("Do not behave like a keyword extractor", prompt)
+        self.assertIn("concise senior colleague", prompt)
+        self.assertIn("Keep assumptions to at most 3 short items", prompt)
+        self.assertIn("plain collaborative Chinese", prompt)
         self.assertIn("G4_Galactic", prompt)
         self.assertIn("G4_Pb", prompt)
 
@@ -162,7 +167,31 @@ class SimulationDesignKnowledgeTest(unittest.TestCase):
         normalized = normalize_simulation_design_candidate(raw, "gamma shielding benchmark")
 
         self.assertIn("gamma attenuation", normalized["recommended_setup"]["design_rationale"])
-        self.assertEqual(len(normalized["recommended_setup"]["alternatives_considered"]), 1)
+        self.assertEqual(normalized["recommended_setup"]["alternatives_considered"], ["G4_WATER rejected because it is a phantom material"])
+
+    def test_llm_normalization_compacts_human_style_fields(self) -> None:
+        raw = {
+            "recommended_setup": {
+                "geometry": "single_box",
+                "material": "G4_Pb",
+                "source": "beam",
+                "scoring": ["detector_crossing_count"],
+                "user_explanation": "铅适合先做伽马屏蔽透射基线。",
+            },
+            "observables": ["detector_crossing_count"],
+            "assumptions": [
+                "铅屏蔽厚度默认 50 mm。",
+                "源到靶和靶到探测器距离先用默认值。",
+                "探测器为硅片。",
+                "环境按真空处理。",
+            ],
+        }
+
+        normalized = normalize_simulation_design_candidate(raw, "gamma shielding benchmark")
+
+        self.assertEqual(len(normalized["assumptions"]), 3)
+        self.assertEqual(normalized["assumptions"][0], "铅屏蔽厚度默认 50 mm")
+        self.assertEqual(normalized["recommended_setup"]["user_explanation"], "铅适合先做伽马屏蔽透射基线")
 
     def test_chinese_void_contrast_selects_void_references_and_supported_region_scoring(self) -> None:
         pack = build_simulation_design_reference_pack("铝块内部空洞缺陷的区域 contrast 模拟")

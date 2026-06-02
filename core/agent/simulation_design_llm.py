@@ -14,7 +14,7 @@ from core.agent.simulation_design import (
 from nlu.llm_support import ollama_client
 
 
-PROMPT_PROFILE_ID = "simulation_design_live_v1"
+PROMPT_PROFILE_ID = "simulation_design_live_v2_human_collab"
 
 
 def _json_dumps(value: Any) -> str:
@@ -28,6 +28,13 @@ def build_simulation_design_prompt(user_goal: str, reference_pack: dict[str, Any
         "Your job is to understand the user's physical goal, propose a practical simulation design, and keep the design executable by the current runtime.\n"
         "Return JSON only. Do not use markdown. Do not expose hidden chain-of-thought. Do not invent runtime capabilities.\n"
         "The candidate is read-only: do not claim that a simulation was run and do not create final config.\n"
+        "Write natural-language fields like a concise senior colleague helping the user think, not like a validation report.\n"
+        "Avoid bureaucratic phrasing such as 'the system', 'the user requirement', 'this module', or long nested clauses.\n"
+        "Use direct, grounded language: name the physical choice, why it helps, and what remains uncertain.\n"
+        "Keep assumptions to at most 3 short items. Merge ordinary distance/size defaults into one item when possible.\n"
+        "Keep design_rationale to one or two short sentences. Do not repeat the same fact already present in geometry/material/source.\n"
+        "Keep alternatives_considered as a JSON array of at most 3 short strings, each with a practical reason.\n"
+        "For Chinese natural-language strings, use plain collaborative Chinese; avoid academic report tone and duplicated punctuation.\n"
         "Think internally in this order before writing JSON: physical goal -> target object -> environment -> source model -> detector/scoring -> runtime support -> user decisions.\n"
         "Prefer a useful runnable candidate with explicit assumptions over repeatedly asking for missing ordinary parameters.\n"
         "Use reasonable defaults only when they are standard/simple and list them in assumptions.\n"
@@ -43,8 +50,18 @@ def build_simulation_design_prompt(user_goal: str, reference_pack: dict[str, Any
         "material is the primary target/scoring material unless there is no target and the user is explicitly modeling only an environment.\n"
         "environment_material is the surrounding medium or world-like transport medium when relevant.\n"
         "void_material is the material inside an embedded defect or cavity when relevant.\n"
-        "geometry must be one canonical ID from: single_box, step_wedge, pipe, void, inclusion, multi_layer.\n"
-        "A target slab plus a downstream detector is still geometry=single_box with detector set; do not call it multi_layer.\n"
+        "geometry is a structured object describing the physical setup. Format:\n"
+        '  {"volumes": [{"name": "descriptive", "shape": "box|sphere|tubs|cons|trd", "material": "G4_ ID",\n'
+        '    "dimensions": {"size_x_mm": N, ...}  // shape-appropriate keys (see below),\n'
+        '    "position_mm": [x, y, z]}],  // optional, default origin\n'
+        '   "environment": {"material": "G4_Galactic for vacuum/space, G4_AIR for air"}}\n'
+        "Shape-appropriate dimension keys:\n"
+        "  box: size_x_mm, size_y_mm, size_z_mm\n"
+        "  sphere: radius_mm\n"
+        "  tubs/cylinder: radius_mm, half_length_mm (along z)\n"
+        "  cons: radius1_mm, radius2_mm, half_length_mm\n"
+        "For multi-volume setups (layers, embedded voids, step wedges), use multiple volumes\n"
+        "with appropriate positions. Describe the physical setup, not Geant4 implementation.\n"
         "source must be one canonical ID from: beam, point, isotropic.\n"
         "observables and recommended_setup.scoring must use canonical IDs only: target_edep, detector_crossing_count, detector_edep, plane_crossing_count, region_contrast, depth_bins, transmission_factor.\n"
         "transmission_factor is a derived observable. It is acceptable when detector_crossing_count or plane_crossing_count is included; do not mark transmission_factor itself unsupported.\n"
@@ -105,10 +122,10 @@ def normalize_simulation_design_candidate(raw: dict[str, Any], goal: str) -> dic
         "goal": str(raw.get("goal") or goal),
         "recommended_setup": setup,
         "observables": observables,
-        "assumptions": _string_list(raw.get("assumptions")),
-        "simplifications": list(dict.fromkeys(simplifications)),
+        "assumptions": _compact_natural_language_items(raw.get("assumptions"), limit=3),
+        "simplifications": _compact_natural_language_items(simplifications, limit=4),
         "unsupported_capabilities": unsupported,
-        "user_decisions_required": [str(item) for item in raw.get("user_decisions_required") or [] if str(item)],
+        "user_decisions_required": _compact_natural_language_items(raw.get("user_decisions_required"), limit=4),
         "knowledge_references": _canonical_references(raw.get("knowledge_references") or [], setup, observables, unsupported),
         "capability_check": raw.get("capability_check") if isinstance(raw.get("capability_check"), dict) else {},
         "next_action": str(raw.get("next_action") or "needs_more_information"),
@@ -179,6 +196,30 @@ def _string_list(value: Any) -> list[str]:
     return [str(value)]
 
 
+def _compact_natural_language_items(value: Any, *, limit: int) -> list[str]:
+    compacted: list[str] = []
+    for item in _string_list(value):
+        text = _clean_natural_language_item(item)
+        if text:
+            compacted.append(text)
+    return list(dict.fromkeys(compacted))[:limit]
+
+
+def _clean_natural_language_item(value: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = re.sub(r"[。．.；;，,、\s]+$", "", text)
+    text = text.replace("。。", "。").replace("，，", "，")
+    return text.strip()
+
+
+def _normalize_setup_text_field(key: str, value: Any) -> Any:
+    if key == "alternatives_considered":
+        return _compact_natural_language_items(value, limit=3)
+    if key in {"design_rationale", "user_explanation"}:
+        return _clean_natural_language_item(" ".join(_string_list(value)))
+    return value
+
+
 def _filter_irrelevant_unsupported(unsupported: list[str], *, goal: str, observables: list[str]) -> list[str]:
     text = str(goal or "").lower()
     observable_set = set(observables)
@@ -220,14 +261,18 @@ def _normalize_setup(setup: dict[str, Any], raw_setup: Any, *, goal: str = "") -
     text = json.dumps(raw_setup, ensure_ascii=False).lower() if raw_setup is not None else ""
     goal_text = str(goal or "").lower()
     geometry_value = setup.get("geometry")
-    if isinstance(geometry_value, dict):
-        geometry_value = geometry_value.get("type") or geometry_value.get("shape") or geometry_value.get("description")
-    geometry = _canonical_from_text(
-        geometry_value or text,
-        ("step_wedge", "single_box", "pipe", "void", "inclusion", "multi_layer"),
-    )
-    if not geometry and "single box" in text:
-        geometry = "single_box"
+    # New format: LLM outputs structured geometry with volumes list — keep as-is
+    if isinstance(geometry_value, dict) and geometry_value.get("volumes"):
+        geometry = geometry_value  # Pass dict through to config builder
+    else:
+        if isinstance(geometry_value, dict):
+            geometry_value = geometry_value.get("type") or geometry_value.get("shape") or geometry_value.get("description")
+        geometry = _canonical_from_text(
+            geometry_value or text,
+            ("step_wedge", "single_box", "pipe", "void", "inclusion", "multi_layer"),
+        )
+        if not geometry and "single box" in text:
+            geometry = "single_box"
     source_value = setup.get("source")
     if isinstance(source_value, dict):
         source_value = source_value.get("type") or source_value.get("mode") or source_value.get("description")
@@ -276,9 +321,10 @@ def _normalize_setup(setup: dict[str, Any], raw_setup: Any, *, goal: str = "") -
         "source_direction",
         "design_rationale",
         "alternatives_considered",
+        "user_explanation",
     ):
         if key in setup:
-            normalized[key] = setup[key]
+            normalized[key] = _normalize_setup_text_field(key, setup[key])
     return normalized
 
 

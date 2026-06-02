@@ -67,7 +67,7 @@ class RuntimeResultExplanationTest(unittest.TestCase):
 
         self.assertEqual(result["source"], "deterministic")
         self.assertIn("Events: 4 / 4", result["message"])
-        self.assertEqual(result["prompt_profile_id"], "runtime_result_explain_en_v1")
+        self.assertEqual(result["prompt_profile_id"], "runtime_result_explain_en_v2_human_collab")
         self.assertTrue(result["prompt_validation"]["ok"])
 
     def test_naturalize_runtime_result_message_accepts_grounded_llm_rewrite(self) -> None:
@@ -126,7 +126,7 @@ class RuntimeResultExplanationTest(unittest.TestCase):
         result = naturalize_runtime_result_question_answer("Did the source hit the target?", _report(), lang="en")
 
         self.assertEqual(result["source"], "deterministic")
-        self.assertEqual(result["prompt_profile_id"], "runtime_result_qa_en_v1")
+        self.assertEqual(result["prompt_profile_id"], "runtime_result_qa_en_v2_human_collab")
         self.assertIn("target_hit_events", result["message"])
         self.assertTrue(result["prompt_validation"]["ok"])
 
