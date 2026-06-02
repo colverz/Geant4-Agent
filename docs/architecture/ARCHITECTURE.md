@@ -1,120 +1,79 @@
-# Architecture Redesign Draft
+# Geant4 Agent Architecture
 
-This document proposes a layered architecture that upgrades **BERT_Lab** from a geometry-only helper into a **multi-domain NLU core**. The goal is to avoid patchwork logic by making each layer’s responsibilities explicit and stable.
+Current status: v3 is the main product path. v2, strict, and legacy modules are
+kept only as compatibility surfaces or reusable asset libraries.
 
-**Design goals**
-1. BERT_Lab becomes the **Semantic Core**, not just a geometry parser.
-2. LLM is used for **planning and dialogue**, not for low-level parsing.
-3. Builders are deterministic: given a semantic frame, they generate configs.
-4. Verifiers are conservative: they check feasibility and report gaps.
+## Main Flow
 
-## Layers (4+1)
-1. **NLU Layer (BERT_Lab)**
-   - Tasks: structure classification, parameter extraction, entity spotting (materials, particles, physics list, output).
-   - Output: `SemanticFrame` (single unified structure).
-
-2. **Planner Layer (LLM + rules)**
-   - Decides which domain to ask about next.
-   - Generates human-friendly clarification questions.
-   - Does NOT do geometry math.
-
-3. **Builder Layer (Geometry + Config)**
-   - Converts `SemanticFrame` into DSL/config.
-   - No guessing, only deterministic assembly.
-
-4. **Verifier Layer (Feasibility + Constraints)**
-   - Checks DSL/config for feasibility.
-   - Emits structured errors + suggestions.
-
-5. **UI Layer**
-   - Maintains session state.
-   - Multi-turn dialogue with user.
-
-## Data Flow
-User text → **NLU** → `SemanticFrame` → **Planner** → ask user → user reply → **NLU** → ...  
-When complete: **Builder** → config/DSL → **Verifier** → final output.
-
-## SemanticFrame (single contract)
-`core/semantic_frame.py` is the canonical structure. Every layer reads/writes this.
-
-Example (minimal):
-```json
-{
-  "geometry": {"structure": "single_box", "params": {"module_x": 1000, "module_y": 1000, "module_z": 1000}},
-  "materials": {"selected_materials": ["G4_Cu"], "volume_material_map": {}},
-  "source": {"type": "point", "particle": "gamma"},
-  "physics": {"physics_list": "FTFP_BERT"},
-  "output": {"format": "root"},
-  "environment": {"temperature": null, "pressure": null},
-  "notes": []
-}
+```text
+User
+-> ui/web
+-> /api/v3/agent/turn
+-> V3AgentTurnService
+-> V3SessionStore
+-> V3ContextPack
+-> AgentController
+-> Reasoner
+-> ToolRegistry
+-> mcp/geant4 runtime adapter
+-> runtime observation
+-> V3ContextPack + V3StateSummary
+-> UI
 ```
 
-## Directory Mapping (after adjustment)
-- `nlu/bert_lab/` → NLU layer (BERT-based parsing)
-- `planner/flows/` → LLM-driven planning and question generation
-- `builder/geometry/` → Geometry DSL + feasibility
-- `knowledge/` → Authoritative lists and constraints
-- `ui/web/` → Web UI + session state
-- `core/` → shared schema + semantic frame
+In plain terms:
 
-## Immediate Refactor Tasks (non-breaking)
-1. Expand BERT_Lab label space to include **materials/particles/physics/output**.
-2. Add a thin adapter that converts BERT output into `SemanticFrame`.
-3. Move all UI logic to consume/emit `SemanticFrame`, not raw params.
-4. Keep LLM as **planner/questioner**, never a geometry calculator.
+- The UI sends user turns to one v3 endpoint.
+- The service loads the session, builds a compact context summary, and saves
+  the updated state after every turn.
+- The controller asks the reasoner what to do next, checks risk, calls tools,
+  and records observations.
+- The Geant4 adapter builds payloads, runs preflight checks, runs the local
+  runtime only after confirmation, and returns evidence.
+- The UI renders the answer, trace, pending action, and suggested next steps.
 
----
+## Directory Responsibilities
 
-# 架构改造设计稿（中文）
+- `core/agent_v3/`: v3 agent contracts, state, context, session, controller,
+  reasoner, dialogue composition, and Geant4 tool wiring.
+- `mcp/geant4/`: runtime adapter boundary, payload conversion, discovery, and
+  MCP-facing server code. It should not contain agent decision logic.
+- `ui/web/`: browser UI and v3 API wrappers. Default product behavior should
+  use `/api/v3/agent/*`.
+- `core/agent/`, `core/orchestrator/`, `planner/`: legacy or reusable asset
+  layers. v3 may reuse pure helpers, but must not inherit their session control
+  flow.
+- `nlu/`: LLM provider adapters and compatibility NLU assets. v3 reasoning
+  should use structured contracts, not the old intent pipeline.
+- `builder/geometry/` and `knowledge/`: deterministic geometry and domain
+  reference assets.
+- `docs/archive/`, `docs/reports/`, `legacy/`: historical outputs and frozen
+  compatibility material.
 
-本设计将 **BERT_Lab** 升级为“多域语义核心”，解决目前“几何补丁式逻辑”的问题。目标是让每一层职责明确、可扩展、可测试。
+## v3 Design Rules
 
-**设计目标**
-1. BERT_Lab 变成**语义核心**，不止是几何解析。
-2. LLM 只负责**规划和对话**，不做底层几何计算。
-3. Builder 必须确定性输出（不猜测）。
-4. Verifier 只做保守验证与提示。
+1. LLM output may propose actions, but deterministic code validates and applies
+   them.
+2. Runtime execution must pass preflight and user confirmation.
+3. Result explanation must use `latest_runtime_facts` as the source of truth.
+4. UI actions should send explicit metadata, not depend on matching button
+   text.
+5. Keyword and regex helpers are allowed only as fallbacks, not as the main
+   agent policy.
+6. Tool schemas and risk levels are part of the architecture, not decoration.
 
-## 分层（4+1）
-1. **NLU层（BERT_Lab）**
-   - 结构分类、参数抽取、材料/粒子/物理过程/输出格式识别
-   - 输出统一 `SemanticFrame`
+## Active Architecture Docs
 
-2. **Planner层（LLM + 规则）**
-   - 决定接下来要问什么
-   - 生成用户友好的追问
-   - 不参与几何计算
+- `docs/architecture/README.md`: document map.
+- `docs/architecture/GEANT4_AGENT_REBUILD_PROGRESS_2026-05-21.md`: running
+  implementation log for v3.
+- `docs/architecture/GEANT4_AGENT_V3_INTELLIGENCE_DESIGN_2026-05-25.md`:
+  next-stage design for non-keyword agent intelligence.
+- `docs/architecture/reuse_archive/`: v2 asset reuse and legacy candidate
+  index.
 
-3. **Builder层（几何 + 配置构建）**
-   - 将 `SemanticFrame` 转为 DSL / config
-   - 不猜测、不补脑
+## Compatibility Boundary
 
-4. **Verifier层（可行性 + 约束）**
-   - 保守判定
-   - 输出错误与建议
-
-5. **UI层**
-   - 维护对话状态
-   - 多轮交互
-
-## 数据流
-用户输入 → **NLU** → `SemanticFrame` → **Planner** → 追问 → 用户回答 → **NLU** → ...  
-补齐后：**Builder** → config/DSL → **Verifier** → 输出结果。
-
-## SemanticFrame（统一契约）
-`core/semantic_frame.py` 为所有层共享结构。
-
-## 目录映射（已调整）
-- `nlu/bert_lab/` → NLU 层
-- `planner/flows/` → 规划与追问
-- `builder/geometry/` → 几何 DSL + 可行性
-- `knowledge/` → 约束与知识库
-- `ui/web/` → Web UI
-- `core/` → 共享 schema + 语义帧
-
-## 下一步（不破坏原功能）
-1. 扩展 BERT_Lab 标签空间（材料/粒子/物理过程/输出格式）
-2. 增加 BERT→SemanticFrame 适配器
-3. UI 全部基于 `SemanticFrame` 流转
-4. LLM 只做 Planner，不碰几何计算
+Legacy endpoints and strict APIs are intentionally not deleted yet. They exist
+for old tests, comparison, and migration safety. New work should not add product
+behavior there unless it is explicitly a compatibility fix.

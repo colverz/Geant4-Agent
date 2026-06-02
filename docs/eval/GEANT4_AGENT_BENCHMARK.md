@@ -681,13 +681,34 @@ Recommended local baseline with logs:
 
 .venv\Scripts\python.exe tools\evaluate_llm_scenario_model_matrix.py `
   --casebank docs\eval\llm_scenario_live_casebank.json `
-  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --llm-config nlu\llm_support\configs\your_provider.local.json `
   --model deepseek-v4-flash `
   --live-llm `
   --outdir docs\reports\eval `
   --run-id deepseek-flash-live `
   --json
 ```
+
+Recommended v3 dialogue baseline:
+
+```powershell
+.venv\Scripts\python.exe tools\evaluate_v3_dialogue_casebank.py `
+  --casebank docs\eval\v3_dialogue_casebank.json `
+  --outdir docs\reports\eval `
+  --run-id v3-dialogue-baseline `
+  --json
+```
+
+Optional adapter probe for command-only eval harness integration:
+
+```powershell
+'{"id":"adapter-probe","prompts":["What does detector_crossing_count mean?"]}' |
+  .venv\Scripts\python.exe tools\evaluate_v3_dialogue_casebank.py --adapter
+```
+
+The v3 dialogue evaluator reports per-turn trajectory records plus suite-level
+dialogue-quality and naturalization metrics. Naturalization remains opt-in via
+`--naturalize`; deterministic runs are the default baseline.
 
 ## LLM Benchmark Review
 
@@ -726,7 +747,7 @@ Suggested live review:
 ```powershell
 .venv\Scripts\python.exe tools\review_geant4_agent_benchmark.py `
   --benchmark docs\eval\agentic_benchmark_v1.json `
-  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --llm-config nlu\llm_support\configs\your_provider.local.json `
   --model deepseek-v4-flash `
   --live-llm `
   --json
@@ -737,7 +758,7 @@ For multi-model review:
 ```powershell
 .venv\Scripts\python.exe tools\review_geant4_agent_benchmark.py `
   --benchmark docs\eval\agentic_benchmark_v1.json `
-  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --llm-config nlu\llm_support\configs\your_provider.local.json `
   --model deepseek-v4-flash `
   --model deepseek-v4-pro `
   --live-llm `
@@ -863,7 +884,7 @@ Opt-in model matrix command:
 ```powershell
 .venv\Scripts\python.exe tools\evaluate_llm_scenario_model_matrix.py `
   --casebank docs\eval\llm_scenario_live_casebank.json `
-  --llm-config nlu\llm_support\configs\deepseek_api.local.json `
+  --llm-config nlu\llm_support\configs\your_provider.local.json `
   --model deepseek-v4-flash `
   --model deepseek-v4-pro `
   --live-llm `
