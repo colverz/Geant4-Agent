@@ -165,7 +165,7 @@ Return JSON only:
   "user_goal": "short restatement of the latest user intent",
   "referenced_state": "none|design|payload|runtime_result|pending_action",
   "requested_changes": [
-    {{"field": "source_energy_mev|run_events|target_material|target_thickness_mm|geometry_dimensions_mm", "value": "...", "unit": "", "evidence": "short quote or reason"}}
+    {{"field": "source_energy_mev|run_events|target_material|target_thickness_mm|geometry_dimensions_mm|enable_downstream_scoring", "value": "...", "unit": "", "evidence": "short quote or reason"}}
   ],
   "constraints": {{}},
   "confirmation": "confirmed|rejected|not_applicable",

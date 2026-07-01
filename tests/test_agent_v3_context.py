@@ -53,6 +53,41 @@ def test_context_pack_uses_safe_summaries_not_raw_runtime_payload() -> None:
     assert "do-not-copy" not in str(context)
 
 
+def test_context_pack_summarizes_target_thickness_without_raw_geometry() -> None:
+    state = V3AgentState(session_id="ctx-thickness", goal="gamma shielding")
+    state.add_observation(
+        V3Observation(
+            source=GEANT4_RUNTIME_TOOL,
+            status=V3ObservationStatus.OK,
+            data={
+                "runtime_payload": {
+                    "geometry": {
+                        "material": "G4_Pb",
+                        "structure": "single_box",
+                        "params": {"module_x": 100.0, "module_y": 100.0, "module_z": 20.0},
+                    },
+                    "source": {"particle": "gamma", "energy_mev": 1.0, "type": "beam"},
+                },
+                "result_summary": {
+                    "run": {"events_requested": 10, "events_completed": 10},
+                    "configuration": {"material": "G4_Pb", "particle": "gamma", "source_type": "beam"},
+                    "scoring": {
+                        "detector_crossing": {"detector_crossing_count": 0},
+                        "plane_crossing": {"plane_crossing_count": 0},
+                    },
+                },
+            },
+        )
+    )
+
+    context = build_v3_context_pack(state, last_user_turn="explain")
+
+    facts = context["latest_runtime_facts"]
+    assert facts["target_thickness_mm"] == 20.0
+    assert "module_x" not in str(context)
+    assert "module_y" not in str(context)
+
+
 def test_workflow_state_summary_tracks_phase_plan_and_assumptions() -> None:
     state = V3AgentState(session_id="ctx-2", goal="gamma shielding")
     state.add_observation(

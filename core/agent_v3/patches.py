@@ -16,6 +16,7 @@ _ALLOWED_FIELDS = {
     "target_material",
     "target_thickness_mm",
     "geometry_dimensions_mm",
+    "enable_downstream_scoring",
 }
 
 _STALE_ARTIFACT_IDS_BY_SOURCE = {
@@ -54,6 +55,9 @@ _FIELD_ALIASES = {
     "target_thickness_mm": "target_thickness_mm",
     "geometry.dimensions_mm": "geometry_dimensions_mm",
     "geometry_dimensions_mm": "geometry_dimensions_mm",
+    "downstream_scoring": "enable_downstream_scoring",
+    "enable_downstream_scoring": "enable_downstream_scoring",
+    "scoring.downstream": "enable_downstream_scoring",
 }
 
 
@@ -288,6 +292,8 @@ def _normalize_value(field: str, value: Any) -> tuple[bool, Any]:
                 return False, parsed
             dims.append(parsed)
         return True, dims
+    if field == "enable_downstream_scoring":
+        return True, _truthy_bool(value)
     return False, "unsupported"
 
 
@@ -299,6 +305,15 @@ def _positive_float(value: Any) -> tuple[bool, Any]:
     if parsed <= 0:
         return False, "must_be_positive"
     return True, parsed
+
+
+def _truthy_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value or "").strip().lower()
+    return text in {"1", "true", "yes", "on", "enable", "enabled", "add"}
 
 
 __all__ = [

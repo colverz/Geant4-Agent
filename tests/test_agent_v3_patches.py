@@ -17,6 +17,7 @@ def test_build_patches_from_config_overrides_normalizes_known_fields() -> None:
             "run_events": "12",
             "target_material": "G4_WATER",
             "target_thickness_mm": "20",
+            "enable_downstream_scoring": "true",
         },
         evidence="unit-test",
     )
@@ -27,12 +28,14 @@ def test_build_patches_from_config_overrides_normalizes_known_fields() -> None:
         "run_events": 12,
         "target_material": "G4_WATER",
         "target_thickness_mm": 20.0,
+        "enable_downstream_scoring": True,
     }
     assert [patch.path for patch in result.patches] == [
         "source_energy_mev",
         "run_events",
         "target_material",
         "target_thickness_mm",
+        "enable_downstream_scoring",
     ]
     assert result.patches[0].to_dict()["evidence"] == "unit-test"
 

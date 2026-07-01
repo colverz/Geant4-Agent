@@ -169,6 +169,7 @@ def _latest_payload_summary(state: V3AgentState) -> dict[str, Any]:
         "source_type": source.get("type"),
         "source_energy_mev": source.get("energy_mev"),
         "events": run.get("events"),
+        "target_thickness_mm": _target_thickness_mm(geometry),
         "applied_overrides": dict(data.get("applied_overrides") or {}) if isinstance(data.get("applied_overrides"), dict) else {},
     } if obs else {}
 
@@ -196,6 +197,7 @@ def _latest_runtime_facts(state: V3AgentState) -> dict[str, Any]:
         "particle": _first_present(config.get("particle"), source.get("particle")),
         "source_type": _first_present(config.get("source_type"), source.get("type")),
         "source_energy_mev": _first_present(source.get("energy_mev"), payload.get("energy")),
+        "target_thickness_mm": _target_thickness_mm(geometry),
         "physics_list": _first_present(config.get("physics_list"), payload.get("physics_list")),
         "target_edep_total_mev": target.get("target_edep_total_mev"),
         "detector_crossing_count": detector.get("detector_crossing_count"),
@@ -312,6 +314,44 @@ def _first_present(*values: Any) -> Any:
         if value is not None and value != "":
             return value
     return None
+
+
+def _target_thickness_mm(geometry: dict[str, Any]) -> float | None:
+    params = geometry.get("params") if isinstance(geometry.get("params"), dict) else {}
+    dimensions = geometry.get("dimensions") if isinstance(geometry.get("dimensions"), dict) else {}
+    for value in (
+        params.get("module_z"),
+        geometry.get("size_z_mm"),
+        dimensions.get("size_z_mm"),
+        geometry.get("target_thickness_mm"),
+        geometry.get("thickness_mm"),
+    ):
+        parsed = _positive_float(value)
+        if parsed is not None:
+            return parsed
+    volumes = geometry.get("volumes")
+    if isinstance(volumes, list):
+        for volume in volumes:
+            if not isinstance(volume, dict):
+                continue
+            size = volume.get("size_mm")
+            if isinstance(size, list) and len(size) >= 3:
+                parsed = _positive_float(size[2])
+                if parsed is not None:
+                    return parsed
+            volume_dimensions = volume.get("dimensions") if isinstance(volume.get("dimensions"), dict) else {}
+            parsed = _positive_float(volume_dimensions.get("size_z_mm"))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _positive_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 __all__ = [

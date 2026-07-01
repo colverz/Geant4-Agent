@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import uuid
-import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -19,10 +18,12 @@ from .context import (
 )
 from .dialogue_composer import compose_v3_dialogue
 from .patches import apply_patches_to_state, build_patches_from_config_overrides, build_patches_from_requested_changes
+from .pending_action import V3PendingAction, V3PendingActionManager
 from .proposal_critic import review_v3_proposal
 from .reasoners import BasicGeant4Reasoner, LLMGeant4Reasoner
 from .response_naturalizer import V3ResponseNaturalizer
 from .response_quality import evaluate_v3_response_quality
+from .runtime_policy import V3RuntimePolicy, runtime_policy_from_turn, set_runtime_policy
 from .session import V3SessionStore
 from .tools import (
     GEANT4_PAYLOAD_BUILDER_TOOL,
@@ -124,13 +125,16 @@ class V3AgentTurnService:
                         default=_positive_int(turn.metadata.get("events"), default=1000),
                     )
         turn.metadata["turn_understanding"] = understanding.to_dict()
-        pending_action = _pending_action(previous_state)
+        pending_action = V3PendingActionManager.get(previous_state)
         cancelled_pending_action: dict[str, Any] | None = None
         if previous_state is not None and patch_result.config_overrides:
             patch_apply_result = apply_patches_to_state(previous_state, patch_result)
             turn.metadata["state_patch_apply"] = patch_apply_result.to_dict()
         has_explicit_confirmation_event = bool(turn.metadata.get("confirmation_event"))
-        event_matches_pending = _confirmation_event_matches(turn.metadata.get("confirmation_event"), pending_action)
+        event_matches_pending = V3PendingActionManager.confirmation_event_matches(
+            turn.metadata.get("confirmation_event"),
+            pending_action,
+        )
         understanding_confirms_pending = (
             understanding.confirmation == "confirmed"
             and pending_action is not None
@@ -164,54 +168,51 @@ class V3AgentTurnService:
                 "source": "text_fallback",
             }
         if pending_action and is_confirmed:
-            _apply_pending_action_to_turn(turn, pending_action)
-        # Also handle "confirm run" when there's a payload but no pending_action
-        if not pending_action and is_confirmed and previous_state is not None:
-            has_payload = any(o.source == GEANT4_PAYLOAD_BUILDER_TOOL for o in previous_state.observations)
-            if has_payload:
-                turn.metadata["run"] = True
-                turn.metadata["run_confirmed"] = True
-                turn.metadata["accept_defaults"] = True
+            confirmed_by = "confirmation_event" if has_explicit_confirmation_event else "user_text"
+            V3PendingActionManager.apply_to_turn(turn, pending_action, confirmed_by=confirmed_by)
         if pending_action and is_rejected:
-            cancelled_pending_action = pending_action
-            previous_state.metadata.pop("pending_action", None)
+            cancelled_pending_action = pending_action.to_dict()
+            V3PendingActionManager.clear(previous_state)
             turn.metadata["suppress_run"] = True
-        # Use BasicGeant4Reasoner for confirm/cancel; LLM for understanding/analysis
-        has_payload_for_confirm = (not pending_action and is_confirmed
-                                   and previous_state is not None
-                                   and any(o.source == GEANT4_PAYLOAD_BUILDER_TOOL for o in previous_state.observations))
-        use_basic = bool((pending_action and (is_confirmed or is_rejected))
-                         or has_payload_for_confirm)
-        controller = build_v3_agent_controller(
-            llm_config="" if use_basic else turn.metadata.get("llm_config_path", ""),
-            lang=turn.locale,
-        )
-        # Detect sweep: user-requested or LLM auto-suggested
-        sweep_spec = _detect_sweep_request(turn, previous_state)
-        if sweep_spec and previous_state is not None:
-            previous_state.metadata["suggested_next_actions"] = [_suggestion_from_sweep(sweep_spec)]
-            turn.metadata["suppress_run"] = True
-        result = controller.run(turn, state=previous_state)
+        if pending_action is None and (
+            is_confirmed or (is_rejected and _looks_like_standalone_cancellation(turn.user_text))
+        ):
+            result = _no_pending_confirmation_result(turn, previous_state, confirmed=is_confirmed)
+        else:
+            # Use BasicGeant4Reasoner for confirm/cancel; LLM for understanding/analysis
+            use_basic = bool(pending_action and (is_confirmed or is_rejected))
+            controller = build_v3_agent_controller(
+                llm_config="" if use_basic else turn.metadata.get("llm_config_path", ""),
+                lang=turn.locale,
+            )
+            # Detect sweep: user-requested or LLM auto-suggested
+            sweep_spec = _detect_sweep_request(turn, previous_state)
+            if sweep_spec and previous_state is not None:
+                previous_state.metadata["suggested_next_actions"] = [_suggestion_from_sweep(sweep_spec)]
+                turn.metadata["suppress_run"] = True
+            result = controller.run(turn, state=previous_state)
         if cancelled_pending_action is not None:
             result.terminated_reason = "final_answer"
+        if isinstance(turn.metadata.get("execution_authorization"), dict):
+            result.state.metadata["last_execution_authorization"] = turn.metadata["execution_authorization"]
         result.state.metadata["turn_understanding"] = turn.metadata["turn_understanding"]
         if isinstance(turn.metadata.get("state_patch"), dict):
             result.state.metadata["last_state_patch"] = turn.metadata["state_patch"]
         if isinstance(turn.metadata.get("state_patch_apply"), dict):
             result.state.metadata["last_state_patch_apply"] = turn.metadata["state_patch_apply"]
+        result.state.metadata["last_turn_id"] = str(uuid.uuid4())
         pending_action = _extract_pending_action(result)
         if pending_action:
-            result.state.metadata["pending_action"] = pending_action
+            V3PendingActionManager.store(result.state, pending_action)
         elif result.terminated_reason in {"observed", "final_answer", "blocked"}:
-            result.state.metadata.pop("pending_action", None)
+            V3PendingActionManager.clear(result.state)
         resolve_open_questions_if_answered(result.state, config_overrides=turn.metadata.get("config_overrides"))
         _persist_suggested_next_actions(turn, result.state)
-        result.state.metadata["last_turn_id"] = str(uuid.uuid4())
         update_v3_workflow_state(result.state, last_user_turn=turn.user_text)
         self.states[turn.session_id] = result.state
         self._save_state(result.state)
         response = serialize_turn_result(result)
-        response["pending_action"] = _pending_action(result.state)
+        response["pending_action"] = V3PendingActionManager.get_dict(result.state)
         if cancelled_pending_action is not None:
             response["cancelled_pending_action"] = cancelled_pending_action
         # Pass LLM suggestions to UI (from turn metadata, stored by reasoner)
@@ -280,6 +281,7 @@ def build_turn_input(payload: dict[str, Any]) -> tuple[V3TurnInput, Any | None]:
     auto_discover_runtime = bool(payload.get("auto_discover_runtime"))
     runtime_discovery = discover_local_geant4_runtime() if auto_discover_runtime else None
     runtime_env = runtime_discovery.env() if runtime_discovery is not None and runtime_discovery.found else {}
+    runtime_policy = V3RuntimePolicy.from_payload(payload, runtime_env=runtime_env)
     accept_defaults = bool(payload.get("accept_defaults"))
     config_overrides: dict[str, Any] = dict(payload.get("config_overrides") or {})  # LLMGeant4Reasoner injects these
     if "run_events" in config_overrides:
@@ -288,9 +290,7 @@ def build_turn_input(payload: dict[str, Any]) -> tuple[V3TurnInput, Any | None]:
         "accept_defaults": accept_defaults,
         "events": events,
         "run": bool(payload.get("run")),
-        "run_confirmed": bool(payload.get("run_confirmed")),
-        "allow_in_memory": bool(payload.get("allow_in_memory")),
-        "runtime_env": runtime_env,
+        "run_confirmed": False,
         "llm_design_enabled": bool(payload.get("llm_design_enabled")),
         "llm_result_enabled": bool(payload.get("llm_result_enabled")),
         "llm_naturalize_enabled": bool(payload.get("llm_naturalize_enabled")),
@@ -298,6 +298,7 @@ def build_turn_input(payload: dict[str, Any]) -> tuple[V3TurnInput, Any | None]:
         "config_overrides": config_overrides,
         "confirmation_event": normalize_confirmation_event(payload.get("confirmation_event")),
     }
+    set_runtime_policy(metadata, runtime_policy)
     if metadata["config_overrides"]:
         metadata["accept_defaults"] = True
     if payload.get("run_id"):
@@ -354,59 +355,8 @@ def serialize_turn_result(result: V3AgentResult) -> dict[str, Any]:
     }
 
 
-def _extract_pending_action(result: V3AgentResult) -> dict[str, Any] | None:
-    if result.terminated_reason != "waiting_confirmation":
-        return None
-    for observation in reversed(result.observations):
-        if observation.source != "commit_gate":
-            continue
-        proposal = observation.data.get("proposal") if isinstance(observation.data, dict) else None
-        if not isinstance(proposal, dict):
-            continue
-        return {
-            "schema_version": "geant4_agent_v3_pending_action.v1",
-            "action_id": _pending_action_id(result, proposal),
-            "kind": proposal.get("kind"),
-            "intent": proposal.get("intent"),
-            "risk_level": proposal.get("risk_level"),
-            "requires_confirmation": True,
-            "expected_observation": proposal.get("expected_observation") or "",
-            "tool_call": proposal.get("tool_call"),
-            "confirmation_prompts": ["确认", "确认运行", "执行吧", "取消"],
-        }
-    return None
-
-
-def _pending_action(state: V3AgentState | None) -> dict[str, Any] | None:
-    if state is None:
-        return None
-    pending = state.metadata.get("pending_action")
-    return pending if isinstance(pending, dict) else None
-
-
-def _pending_action_id(result: V3AgentResult, proposal: dict[str, Any]) -> str:
-    tool_call = proposal.get("tool_call") if isinstance(proposal.get("tool_call"), dict) else {}
-    raw = "|".join(
-        [
-            str(result.state.session_id),
-            str(proposal.get("kind") or ""),
-            str(proposal.get("intent") or ""),
-            str(tool_call.get("tool_name") or ""),
-            str(tool_call.get("idempotency_key") or ""),
-        ]
-    )
-    return "v3-action-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def _confirmation_event_matches(event: Any, pending_action: dict[str, Any] | None) -> bool:
-    if not isinstance(event, dict):
-        return True
-    action_id = str(event.get("action_id") or "").strip()
-    if not action_id:
-        return True
-    if not pending_action:
-        return False
-    return action_id == str(pending_action.get("action_id") or "").strip()
+def _extract_pending_action(result: V3AgentResult) -> V3PendingAction | None:
+    return V3PendingAction.from_commit_gate_result(result)
 
 
 def _persist_suggested_next_actions(turn: V3TurnInput, state: V3AgentState) -> None:
@@ -477,20 +427,57 @@ def _prepare_state_for_modified_draft(state: V3AgentState) -> None:
         state.artifacts.pop(artifact_id, None)
 
 
-def _apply_pending_action_to_turn(turn: V3TurnInput, pending_action: dict[str, Any]) -> None:
-    if pending_action.get("kind") != "run_simulation":
-        return
-    tool_call = pending_action.get("tool_call") if isinstance(pending_action.get("tool_call"), dict) else {}
-    arguments = tool_call.get("arguments") if isinstance(tool_call.get("arguments"), dict) else {}
-    turn.metadata["run"] = True
-    turn.metadata["accept_defaults"] = True
-    turn.metadata["run_confirmed"] = True
-    if arguments.get("events"):
-        turn.metadata["events"] = _positive_int(arguments.get("events"), default=turn.metadata.get("events", 1000))
-    if "allow_in_memory" in arguments:
-        turn.metadata["allow_in_memory"] = bool(arguments.get("allow_in_memory"))
-    if not turn.metadata.get("runtime_env") and isinstance(arguments.get("env"), dict):
-        turn.metadata["runtime_env"] = arguments["env"]
+def _no_pending_confirmation_result(
+    turn: V3TurnInput,
+    state: V3AgentState | None,
+    *,
+    confirmed: bool,
+) -> V3AgentResult:
+    turn.metadata["run"] = False
+    turn.metadata["run_confirmed"] = False
+    turn.metadata["suppress_run"] = True
+    agent_state = state or V3AgentState(session_id=turn.session_id, goal=turn.user_text)
+    if not agent_state.goal:
+        agent_state.goal = turn.user_text
+    if confirmed:
+        message = (
+            "当前没有等待确认的运行行动。请先告诉我要运行哪个方案，或点击运行按钮生成待确认行动。"
+            if not _is_en_locale(turn.locale)
+            else "There is no pending run action to confirm. Ask me to run a specific draft first, or use the run action to create a confirmation step."
+        )
+    else:
+        message = (
+            "当前没有等待取消的运行行动。我不会启动 Geant4。"
+            if not _is_en_locale(turn.locale)
+            else "There is no pending run action to cancel. I will not start Geant4."
+        )
+    return V3AgentResult(
+        answer=V3Answer(
+            message=message,
+            understanding=agent_state.goal,
+            evidence=[
+                {
+                    "source": "pending_action",
+                    "status": "missing",
+                    "reason": "no_pending_action_to_confirm" if confirmed else "no_pending_action_to_cancel",
+                }
+            ],
+            next_options=(
+                ["运行当前方案", "查看当前配置", "修改方案"]
+                if not _is_en_locale(turn.locale)
+                else ["Run current draft", "View current configuration", "Modify design"]
+            ),
+            runtime_status="not_started",
+        ),
+        state=agent_state,
+        trace=[],
+        observations=[],
+        terminated_reason="final_answer",
+    )
+
+
+def _is_en_locale(locale: str) -> bool:
+    return str(locale).lower().startswith("en")
 
 
 def _looks_like_cancellation(text: str) -> bool:
@@ -503,6 +490,15 @@ def _looks_like_cancellation(text: str) -> bool:
     chinese_tokens = ("取消", "先不", "不要运行", "不运行", "别跑", "暂停")
     english_pattern = r"\b(" + "|".join(re.escape(token) for token in english_tokens) + r")\b"
     return bool(re.search(english_pattern, normalized)) or any(token in text for token in chinese_tokens)
+
+
+def _looks_like_standalone_cancellation(text: str) -> bool:
+    normalized = text.strip().lower()
+    if not normalized:
+        return False
+    english_exact = {"cancel", "cancel run", "stop", "stop run", "do not run", "don't run", "never mind"}
+    chinese_exact = {"取消", "取消运行", "先不", "先不要", "不要运行", "不运行", "别跑", "暂停"}
+    return normalized in english_exact or text.strip() in chinese_exact
 
 
 def _positive_int(value: Any, *, default: int) -> int:
@@ -531,6 +527,8 @@ def _infer_config_overrides_from_text(text: str) -> dict[str, Any]:
     thickness = _extract_thickness_mm(lowered)
     if thickness is not None:
         overrides["target_thickness_mm"] = thickness
+    if _extract_downstream_scoring_request(lowered):
+        overrides["enable_downstream_scoring"] = True
     material = _extract_material_id(normalized)
     if material:
         overrides["target_material"] = material
@@ -551,6 +549,8 @@ def _looks_like_modification_request(text: str) -> bool:
         "adjust",
         "increase",
         "decrease",
+        "add",
+        "enable",
     )
     chinese_tokens = ("改", "换", "设为", "设置", "调整", "增加", "降低", "再跑", "再运行")
     return any(token in lowered for token in english_tokens) or any(token in text for token in chinese_tokens)
@@ -593,6 +593,12 @@ def _extract_thickness_mm(text: str) -> float | None:
         return None
     value = float(match.group(1))
     return value * 10.0 if match.group(2).lower() == "cm" else value
+
+
+def _extract_downstream_scoring_request(text: str) -> bool:
+    has_downstream_target = "downstream" in text and any(token in text for token in ("scoring", "detector", "plane"))
+    has_scoring_action = any(token in text for token in ("add", "enable", "include", "with"))
+    return has_downstream_target and has_scoring_action
 
 
 def _extract_material_id(text: str) -> str:
@@ -646,24 +652,13 @@ def _extract_material_id(text: str) -> str:
 
 
 def _looks_like_confirmation(text: str) -> bool:
-    normalized_clean = text.strip().lower()
-    if any(token in normalized_clean for token in ("confirm", "approved", "approve", "go ahead", "yes run")):
-        return True
-    if any(token in text for token in ("确认", "可以运行", "同意运行", "开始运行", "执行吧", "跑吧")):
-        return True
-
     normalized = text.strip().lower()
     if not normalized:
         return False
     english_tokens = ("confirm", "approved", "approve", "go ahead", "yes run")
     chinese_tokens = ("确认", "可以运行", "同意运行", "开始运行", "执行吧", "跑吧")
-    return any(token in normalized for token in english_tokens) or any(token in text for token in chinese_tokens)
-    normalized = text.strip().lower()
-    if not normalized:
-        return False
-    english_tokens = ("confirm", "approved", "approve", "go ahead", "yes run")
-    chinese_tokens = ("确认", "可以运行", "同意运行", "开始运行", "执行吧", "跑吧")
-    return any(token in normalized for token in english_tokens) or any(token in text for token in chinese_tokens)
+    english_pattern = r"\b(" + "|".join(re.escape(token) for token in english_tokens) + r")\b"
+    return bool(re.search(english_pattern, normalized)) or any(token in text for token in chinese_tokens)
 
 
 # ── Iterative optimization ───────────────────────────────────────
@@ -684,7 +679,7 @@ def _execute_optimization_step(controller: Any, turn: V3TurnInput, state: V3Agen
     turn.metadata["accept_defaults"] = True
     turn.metadata["run"] = True
     turn.metadata["run_confirmed"] = False
-    turn.metadata["allow_in_memory"] = bool(turn.metadata.get("allow_in_memory"))
+    runtime_policy_from_turn(turn)
     _prepare_state_for_modified_draft(state)
     result = controller.run(turn, state=state)
 
@@ -794,7 +789,7 @@ def _execute_sweep(controller: Any, turn: V3TurnInput, state: V3AgentState | Non
         turn.metadata["accept_defaults"] = True
         turn.metadata["run"] = True
         turn.metadata["run_confirmed"] = False
-        turn.metadata["allow_in_memory"] = bool(turn.metadata.get("allow_in_memory"))
+        runtime_policy_from_turn(turn)
         result = controller.run(turn, state=state)
         rt_data = None
         for obs in result.observations:

@@ -230,7 +230,60 @@ def _apply_config_overrides(config: dict[str, Any], overrides: Any) -> dict[str,
             geometry["params"] = geometry_params
             config["geometry"] = geometry
             applied["target_thickness_mm"] = thickness
+    if bool(overrides.get("enable_downstream_scoring")):
+        _enable_downstream_scoring(config)
+        applied["enable_downstream_scoring"] = True
     return applied
+
+
+def _enable_downstream_scoring(config: dict[str, Any]) -> None:
+    geometry = config.get("geometry") if isinstance(config.get("geometry"), dict) else {}
+    params = geometry.get("params") if isinstance(geometry.get("params"), dict) else {}
+    module_x = _positive_float(params.get("module_x"), 10.0)
+    module_y = _positive_float(params.get("module_y"), 10.0)
+    module_z = _positive_float(params.get("module_z"), 10.0)
+
+    simulation = config.get("simulation") if isinstance(config.get("simulation"), dict) else {}
+    detector = simulation.get("detector") if isinstance(simulation.get("detector"), dict) else {}
+    if not detector:
+        detector = {
+            "enabled": True,
+            "name": "Detector",
+            "material": "G4_Si",
+            "position": {"type": "vector", "value": [0.0, 0.0, max(40.0, module_z + 20.0)]},
+            "size_triplet_mm": [max(20.0, module_x), max(20.0, module_y), 2.0],
+        }
+    else:
+        detector["enabled"] = True
+        detector.setdefault("name", "Detector")
+        detector.setdefault("material", "G4_Si")
+    simulation["detector"] = detector
+    config["simulation"] = simulation
+
+    scoring = config.get("scoring") if isinstance(config.get("scoring"), dict) else {}
+    scoring["target_edep"] = True
+    scoring["detector_crossings"] = True
+    scoring["plane_crossings"] = True
+    scoring.setdefault("plane", {"name": "ExitPlane", "z_mm": max(40.0, module_z + 10.0)})
+    config["scoring"] = scoring
+
+    materials = config.get("materials") if isinstance(config.get("materials"), dict) else {}
+    selected = materials.get("selected_materials") if isinstance(materials.get("selected_materials"), list) else []
+    if "G4_Si" not in selected:
+        selected.append("G4_Si")
+    volume_material_map = materials.get("volume_material_map") if isinstance(materials.get("volume_material_map"), dict) else {}
+    volume_material_map.setdefault("Detector", "G4_Si")
+    materials["selected_materials"] = selected
+    materials["volume_material_map"] = volume_material_map
+    config["materials"] = materials
+
+
+def _positive_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
 
 
 def _simulation_spec_summary(spec: Any) -> dict[str, Any]:

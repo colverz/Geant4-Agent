@@ -167,6 +167,21 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertFalse(turn.metadata["run_confirmed"])
         self.assertEqual(turn.metadata["confirmation_event"], {"action_id": "run-1", "decision": "confirm"})
 
+    def test_build_turn_input_ignores_public_run_confirmed_flag(self) -> None:
+        turn, _ = build_turn_input(
+            {
+                "session_id": "external-run-confirmed",
+                "text": "run now",
+                "run": True,
+                "run_confirmed": True,
+                "allow_in_memory": True,
+            }
+        )
+
+        self.assertTrue(turn.metadata["run"])
+        self.assertFalse(turn.metadata["run_confirmed"])
+        self.assertNotIn("execution_authorization", turn.metadata)
+
     def test_run_turn_uses_language_run_intent_and_waits_for_confirmation(self) -> None:
         service = self._make_service()
         result = service.run_turn(
@@ -187,6 +202,7 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertEqual(result["pending_action"]["kind"], "run_simulation")
         self.assertTrue(result["pending_action"]["requires_confirmation"])
         self.assertTrue(result["pending_action"]["action_id"].startswith("v3-action-"))
+        self.assertEqual(result["pending_action"]["created_turn_id"], result["state"]["metadata"]["last_turn_id"])
 
         state_status, state_payload = service.get_state_payload("confirm-flow", lang="zh")
         self.assertEqual(state_status, 200)
@@ -224,6 +240,11 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertTrue(result["summary"]["has_runtime_result"])
         self.assertEqual(result["context"]["latest_runtime_facts"]["particle"], "gamma")
         self.assertEqual(result["state"]["metadata"]["turn_understanding"]["confirmation"], "confirmed")
+        authorization = result["state"]["metadata"]["last_execution_authorization"]
+        self.assertEqual(authorization["schema_version"], "geant4_agent_v3_execution_authorization.v1")
+        self.assertTrue(authorization["action_id"].startswith("v3-action-"))
+        self.assertEqual(authorization["confirmed_by"], "user_text")
+        self.assertTrue(authorization["authorized_tool_call_hash"])
 
     def test_confirmation_event_executes_pending_runtime_action(self) -> None:
         service = self._make_service()
@@ -251,6 +272,9 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertEqual(result["terminated_reason"], "observed")
         self.assertIsNone(result["pending_action"])
         self.assertEqual(result["state"]["metadata"]["turn_understanding"]["source"], "explicit_event")
+        authorization = result["state"]["metadata"]["last_execution_authorization"]
+        self.assertEqual(authorization["action_id"], first["pending_action"]["action_id"])
+        self.assertEqual(authorization["confirmed_by"], "confirmation_event")
 
     def test_short_confirmation_turn_executes_pending_runtime_action(self) -> None:
         service = self._make_service()
@@ -276,6 +300,86 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertEqual(result["terminated_reason"], "observed")
         self.assertEqual(result["observations"][-1]["source"], "geant4_runtime_tool")
         self.assertIsNone(result["pending_action"])
+
+    def test_confirmation_without_pending_does_not_create_run_action_for_any_backend(self) -> None:
+        service = self._make_service()
+
+        for allow_in_memory in (False, True):
+            with self.subTest(allow_in_memory=allow_in_memory):
+                result = service.run_turn(
+                    {
+                        "session_id": f"confirm-no-pending-{allow_in_memory}",
+                        "text": "confirm run",
+                        "lang": "en",
+                        "allow_in_memory": allow_in_memory,
+                    }
+                )
+
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["terminated_reason"], "final_answer")
+                self.assertIsNone(result["pending_action"])
+                self.assertFalse(result["summary"]["has_payload"])
+                self.assertFalse(result["summary"]["has_runtime_result"])
+                self.assertNotIn("geant4_payload_builder_tool", [item["source"] for item in result["observations"]])
+                self.assertNotIn("geant4_runtime_tool", [item["source"] for item in result["observations"]])
+                self.assertIn("no pending run action", result["display_message"])
+                self.assertEqual(result["state"]["metadata"]["turn_understanding"]["confirmation"], "confirmed")
+
+    def test_confirmation_without_pending_after_payload_does_not_execute_or_auto_confirm(self) -> None:
+        service = self._make_service()
+        session_id = "confirm-no-pending-after-payload"
+        service.run_turn(
+            {
+                "session_id": session_id,
+                "text": "Design a gamma shielding setup, do not run.",
+                "allow_in_memory": True,
+            }
+        )
+        payload_result = service.run_turn(
+            {
+                "session_id": session_id,
+                "text": "Accept defaults and build config.",
+                "accept_defaults": True,
+                "allow_in_memory": True,
+            }
+        )
+        self.assertTrue(payload_result["summary"]["has_payload"])
+        self.assertIsNone(payload_result["pending_action"])
+
+        result = service.run_turn(
+            {
+                "session_id": session_id,
+                "text": "confirm run",
+                "lang": "en",
+                "allow_in_memory": True,
+            }
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["terminated_reason"], "final_answer")
+        self.assertIsNone(result["pending_action"])
+        self.assertTrue(result["summary"]["has_payload"])
+        self.assertFalse(result["summary"]["has_runtime_result"])
+        self.assertNotIn("geant4_runtime_tool", [item["source"] for item in result["observations"]])
+        self.assertIn("no pending run action", result["display_message"])
+
+    def test_public_run_confirmed_request_does_not_bypass_pending_action(self) -> None:
+        service = self._make_service()
+        result = service.run_turn(
+            {
+                "session_id": "public-run-confirmed-blocked",
+                "text": "run a default lead shielding gamma simulation",
+                "run": True,
+                "run_confirmed": True,
+                "allow_in_memory": True,
+                "events": 2,
+            }
+        )
+
+        self.assertEqual(result["terminated_reason"], "waiting_confirmation")
+        self.assertIsNotNone(result["pending_action"])
+        self.assertFalse(result["summary"]["has_runtime_result"])
+        self.assertNotIn("last_execution_authorization", result["state"]["metadata"])
 
     def test_cancel_turn_clears_pending_runtime_action(self) -> None:
         service = self._make_service()
@@ -530,6 +634,90 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertEqual(result["dialogue_act"], "runtime_result_answered")
         self.assertIn("target_edep_total_mev", result["display_message"])
         self.assertNotIn("payload draft", result["display_message"].lower())
+
+    def test_result_suggestion_increase_events_rebuilds_payload_and_waits(self) -> None:
+        service = self._make_service()
+        service.run_turn(
+            {
+                "session_id": "suggestion-rerun",
+                "text": "run a default lead shielding gamma simulation",
+                "lang": "en-US",
+                "events": 2,
+                "allow_in_memory": True,
+            }
+        )
+        observed = service.run_turn(
+            {
+                "session_id": "suggestion-rerun",
+                "text": "confirm run",
+                "lang": "en-US",
+                "allow_in_memory": True,
+            }
+        )
+        prefill = next(
+            item["prefill"]
+            for item in observed["dialogue"]["next_suggestions"]
+            if item["text"] == "Increase events and rerun"
+        )
+
+        result = service.run_turn(
+            {
+                "session_id": "suggestion-rerun",
+                "text": prefill,
+                "lang": "en-US",
+                "allow_in_memory": True,
+            }
+        )
+
+        self.assertEqual(prefill, "change event count to 20 events and run again")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["terminated_reason"], "waiting_confirmation")
+        self.assertEqual(result["pending_action"]["kind"], "run_simulation")
+        payload_observation = next(item for item in result["observations"] if item["source"] == "geant4_payload_builder_tool")
+        self.assertEqual(payload_observation["data"]["applied_overrides"], {"run_events": 20})
+        self.assertEqual(payload_observation["data"]["simulation_spec"]["run"]["events"], 20)
+
+    def test_add_downstream_scoring_rerun_rebuilds_payload_and_waits(self) -> None:
+        service = self._make_service()
+        session_id = "suggestion-add-downstream-scoring"
+        service.run_turn(
+            {
+                "session_id": session_id,
+                "text": "run a default lead shielding gamma simulation",
+                "events": 2,
+                "allow_in_memory": True,
+            }
+        )
+        service.run_turn(
+            {
+                "session_id": session_id,
+                "text": "confirm run",
+                "allow_in_memory": True,
+            }
+        )
+
+        result = service.run_turn(
+            {
+                "session_id": session_id,
+                "text": "add downstream detector and plane scoring and run again",
+                "allow_in_memory": True,
+            }
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["terminated_reason"], "waiting_confirmation")
+        self.assertEqual(result["pending_action"]["kind"], "run_simulation")
+        self.assertEqual(
+            result["state"]["metadata"]["last_state_patch"]["config_overrides"],
+            {"enable_downstream_scoring": True},
+        )
+        payload_observation = next(item for item in result["observations"] if item["source"] == "geant4_payload_builder_tool")
+        self.assertEqual(payload_observation["data"]["applied_overrides"], {"enable_downstream_scoring": True})
+        runtime_payload = payload_observation["data"]["runtime_payload"]
+        self.assertTrue(runtime_payload["detector_enabled"])
+        self.assertTrue(runtime_payload["scoring"]["detector_crossings"])
+        self.assertTrue(runtime_payload["scoring"]["plane_crossings"])
+        self.assertFalse(result["summary"]["has_runtime_result"])
 
     def test_auto_sweep_from_llm_is_saved_as_suggestion_not_executed_same_turn(self) -> None:
         service = self._make_service()

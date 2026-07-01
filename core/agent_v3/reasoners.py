@@ -18,7 +18,9 @@ from .patches import (
     build_patches_from_requested_changes,
     config_overrides_from_llm_parameters,
 )
+from .pending_action import runtime_authorization_source, runtime_execution_authorized
 from .result_explainer import build_v3_runtime_result_answer, looks_like_result_question
+from .runtime_policy import runtime_tool_arguments
 from .tools.geant4_tools import (
     GEANT4_CAPABILITY_TOOL,
     GEANT4_DESIGN_TEMPLATE_TOOL,
@@ -222,8 +224,7 @@ class BasicGeant4Reasoner:
                     arguments={
                         "payload_builder_observation": payload,
                         "events": turn.metadata.get("events", 1000),
-                        "allow_in_memory": bool(turn.metadata.get("allow_in_memory")),
-                        "env": turn.metadata.get("runtime_env") if isinstance(turn.metadata.get("runtime_env"), dict) else {},
+                        **runtime_tool_arguments(turn),
                     },
                     risk_level=V3ToolRiskLevel.DRAFT_ONLY,
                 ),
@@ -232,22 +233,23 @@ class BasicGeant4Reasoner:
         preflight = _latest_observation_data(state, GEANT4_RUNTIME_PREFLIGHT_TOOL)
         preflight_status = _latest_observation_status(state, GEANT4_RUNTIME_PREFLIGHT_TOOL)
         if _run_requested(turn) and payload and preflight_status == "ok" and not _has_observation(state, GEANT4_RUNTIME_TOOL):
+            authorized = runtime_execution_authorized(turn.metadata)
             return V3ActionProposal(
                 kind=V3ActionKind.RUN_SIMULATION,
                 intent="run_geant4_runtime",
+                arguments={"authorization_source": runtime_authorization_source(turn.metadata)},
                 tool_call=V3ToolCall(
                     tool_name=GEANT4_RUNTIME_TOOL,
                     arguments={
                         "payload_builder_observation": payload,
                         "events": turn.metadata.get("events", 1000),
-                        "allow_in_memory": bool(turn.metadata.get("allow_in_memory")),
-                        "env": turn.metadata.get("runtime_env") if isinstance(turn.metadata.get("runtime_env"), dict) else {},
+                        **runtime_tool_arguments(turn),
                     },
                     risk_level=V3ToolRiskLevel.RUNTIME_EXECUTION,
                     idempotency_key=str(turn.metadata.get("run_id") or f"{turn.session_id}:run"),
                 ),
                 risk_level=V3ToolRiskLevel.RUNTIME_EXECUTION,
-                confirmed=bool(turn.metadata.get("run_confirmed")),
+                confirmed=authorized,
                 expected_observation="Geant4 runtime observation",
             )
         if _run_requested(turn) and runtime_observation:
@@ -732,7 +734,7 @@ Return JSON:
   If the user describes multi-layer, use multiple volumes with appropriate positions.
 "requested_changes": optional list of user-requested edits to an existing design/payload.
   Use this only when the user is revising an existing setup.
-  Each item: {{"field": "source_energy_mev|run_events|target_material|target_thickness_mm|geometry_dimensions_mm", "value": ..., "evidence": "short reason"}}.
+  Each item: {{"field": "source_energy_mev|run_events|target_material|target_thickness_mm|geometry_dimensions_mm|enable_downstream_scoring", "value": ..., "evidence": "short reason"}}.
 "physics_check": list any physics concerns. Check:
   - Environment material appropriate? (vacuum/space → must use G4_Galactic, NOT G4_AIR)
   - Energy range reasonable for the material? (e.g. 1 keV gamma won't penetrate lead)
@@ -1035,7 +1037,8 @@ Return JSON only. No markdown."""
                     risk_level=risk,
                 )
         requires_confirmation = bool(parsed.get("requires_confirmation"))
-        if kind == V3ActionKind.RUN_SIMULATION and not bool(turn.metadata.get("run_confirmed")):
+        authorized = runtime_execution_authorized(turn.metadata)
+        if kind == V3ActionKind.RUN_SIMULATION and not authorized:
             requires_confirmation = True
         return V3ActionProposal(
             kind=kind,
@@ -1044,7 +1047,7 @@ Return JSON only. No markdown."""
             tool_call=tool_call,
             risk_level=tool_call.risk_level if tool_call else V3ToolRiskLevel.READ_ONLY,
             requires_confirmation=requires_confirmation,
-            confirmed=bool(turn.metadata.get("run_confirmed")),
+            confirmed=authorized,
         )
 
 
