@@ -3,6 +3,13 @@
 Current status: v3 is the main product path. v2, strict, and legacy modules are
 kept only as compatibility surfaces or reusable asset libraries.
 
+Current product strategy: functionality first, with safety and state invariants
+as guardrails. New work should prioritize user-visible workflows such as
+natural configuration changes, useful result explanation, UI suggestions, and
+multi-turn continuity. Robustness work remains important when it protects those
+flows or prevents runtime/confirmation regressions, but it is no longer the
+default primary goal for every round.
+
 ## Main Flow
 
 ```text
@@ -35,7 +42,8 @@ In plain terms:
 ## Directory Responsibilities
 
 - `core/agent_v3/`: v3 agent contracts, state, context, session, controller,
-  reasoner, dialogue composition, and Geant4 tool wiring.
+  reasoner, pending action lifecycle, dialogue composition, and Geant4 tool
+  wiring.
 - `mcp/geant4/`: runtime adapter boundary, payload conversion, discovery, and
   MCP-facing server code. It should not contain agent decision logic.
 - `ui/web/`: browser UI and v3 API wrappers. Default product behavior should
@@ -59,8 +67,24 @@ In plain terms:
 4. UI actions should send explicit metadata, not depend on matching button
    text.
 5. Keyword and regex helpers are allowed only as fallbacks, not as the main
-   agent policy.
+   agent policy. User-facing parameter changes should prefer LLM/structured
+   turn understanding or system-generated structured metadata; fallback parsing
+   must be visible in eval metrics.
 6. Tool schemas and risk levels are part of the architecture, not decoration.
+7. Runtime authorization should flow through `V3PendingAction` and
+   `V3ExecutionAuthorization`; legacy `metadata["pending_action"]` remains only
+   as compatible storage during migration.
+
+## Eval Harnesses
+
+- `tools/evaluate_v3_safety_invariants.py`: guards confirmation, runtime
+  authorization, and backend-invariant safety behavior.
+- `tools/evaluate_v3_dialogue_casebank.py`: guards user-visible dialogue,
+  suggestions, and multi-turn continuity.
+- `tools/evaluate_v3_agent_intelligence.py`: guards intelligent operation. It
+  records `turn_understanding.source`, state patches, suggestions, and pending
+  actions so LLM/structured understanding does not silently degrade into broad
+  keyword fallback.
 
 ## Active Architecture Docs
 
@@ -69,6 +93,12 @@ In plain terms:
   implementation log for v3.
 - `docs/architecture/GEANT4_AGENT_V3_INTELLIGENCE_DESIGN_2026-05-25.md`:
   next-stage design for non-keyword agent intelligence.
+- `docs/architecture/GEANT4_AGENT_V3_EVAL_AND_UPGRADE_PLAYBOOK_2026-06-04.md`:
+  operating manual and acceptance gates for future v3 development.
+- `docs/architecture/V3_PHASE_REVIEW_2026-06-06.md`: latest phase review and
+  next-priority route check.
+- `docs/architecture/V3_UPDATE_LOG.md`: plain-language update log for each v3
+  mainline implementation round.
 - `docs/architecture/reuse_archive/`: v2 asset reuse and legacy candidate
   index.
 

@@ -64,8 +64,9 @@ button,input,select,textarea{font:inherit;color:inherit}
   letter-spacing:-0.04em;color:var(--ink);line-height:1.08;margin-bottom:12px
 }
 .welcome p{color:var(--muted);font-size:16px;line-height:1.6;margin-bottom:24px;max-width:480px;margin-left:auto;margin-right:auto}
-.quick-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.quick-btn{padding:8px 18px;border:1px solid var(--hairline);border-radius:999px;
+.quick-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center}
+.quick-btn{min-height:36px;padding:8px 18px;border:1px solid var(--hairline);border-radius:999px;
+  display:inline-flex;align-items:center;justify-content:center;text-align:center;
   font-size:13px;font-weight:500;color:var(--muted);background:var(--canvas);cursor:pointer;transition:all 120ms}
 .quick-btn:hover{border-color:var(--primary);color:var(--primary)}
 
@@ -98,8 +99,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .rm strong{font-size:18px;font-weight:600;font-family:var(--font-mono);color:var(--ink)}
 
 /* suggestions */
-.suggestions{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+.suggestions{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
 .suggestion-btn{padding:8px 16px;border:1px solid var(--hairline);border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;
+  min-height:36px;max-width:min(100%, 260px);white-space:normal;
   font-size:13px;font-weight:500;color:var(--muted);background:var(--canvas);cursor:pointer;transition:all 120ms}
 .suggestion-btn:hover{border-color:var(--primary);color:var(--primary)}
 
@@ -113,14 +116,15 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* composer */
 .composer-area{padding:0 48px 24px;background:var(--canvas)}
-.pending-bar{max-width:760px;margin:0 auto 14px;display:flex;align-items:center;gap:14px;
+.pending-bar{max-width:760px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;gap:14px;
   padding:12px 18px;border-radius:8px;background:var(--surface-card);border:1px solid var(--hairline);
-  font-size:13px}
-.pending-bar span{flex:1;color:var(--ink);font-weight:500}
+  font-size:13px;flex-wrap:wrap;text-align:center}
+.pending-bar span{flex:1 1 240px;color:var(--ink);font-weight:500}
 .suggestion-bar{max-width:760px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
   gap:8px;flex-wrap:wrap;padding:0 16px}
 .suggestion-bar .btn-ghost{min-height:36px;padding:9px 14px;border-radius:8px;background:var(--canvas);
   color:var(--body-strong, var(--ink));border-color:var(--hairline);line-height:1.25;text-align:center}
+.suggestion-bar .suggestion-btn{flex:0 1 auto}
 .suggestion-bar .btn-ghost:hover{border-color:var(--primary);color:var(--primary);background:#fffdf9}
 .composer{max-width:760px;margin:0 auto;border:1px solid var(--hairline);border-radius:8px;
   background:var(--canvas);overflow:hidden;transition:border-color 150ms}
@@ -135,11 +139,11 @@ select.field-sm{cursor:pointer}
 .btn-primary{padding:10px 22px;border:0;border-radius:8px;color:var(--on-primary);
   background:var(--primary);font-weight:500;font-size:14px;cursor:pointer;transition:background 120ms}
 .btn-primary:hover{background:var(--primary-active)}
-.btn-primary.sm{padding:6px 14px;font-size:12px}
+.btn-primary.sm{padding:6px 14px;font-size:12px;min-height:32px;display:inline-flex;align-items:center;justify-content:center;text-align:center}
 .btn-ghost{padding:10px 18px;border:1px solid var(--hairline);border-radius:8px;
   color:var(--muted);background:transparent;cursor:pointer;font-size:13px;font-weight:500}
 .btn-ghost:hover{border-color:var(--muted)}
-.btn-ghost.sm{padding:6px 12px;font-size:12px}
+.btn-ghost.sm{padding:6px 12px;font-size:12px;min-height:32px;display:inline-flex;align-items:center;justify-content:center;text-align:center}
 .activity-strip{max-width:760px;margin:0 auto 8px;color:var(--muted-soft);font-size:12px;text-align:center}
 
 /* slide panel */

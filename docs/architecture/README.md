@@ -11,6 +11,15 @@ This directory keeps the current architecture docs small and navigable.
   smarter agent that avoids keyword/dictionary routing.
 - `GEANT4_AGENT_V3_NEXT_IMPLEMENTATION_PLAN_2026-05-25.md`: phased execution
   plan based on architecture review, eval harness, and MCP tool design skills.
+- `GEANT4_AGENT_V3_EVAL_AND_UPGRADE_PLAYBOOK_2026-06-04.md`: current operating
+  manual for v3 architecture upgrades, eval gates, phased migration, and merge
+  criteria.
+- `V3_PHASE_REVIEW_2026-06-06.md`: latest phase review confirming the v3-first
+  route and next upgrade priorities.
+- `V3_STAGE_CONCLUSION_2026-06-11.md`: stage conclusion for completed v3
+  functionality, verification, remaining risks, and next mainline.
+- `V3_UPDATE_LOG.md`: plain-language running log for each v3 mainline update
+  round.
 - `reuse_archive/`: v2 asset inventory and legacy candidate list.
 
 ## Supporting References

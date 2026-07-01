@@ -34,7 +34,20 @@ def test_frontend_keeps_multiturn_controls_wired() -> None:
     assert "auto_discover_runtime: true" in app_js
     assert "allow_in_memory: false" in app_js
     assert "document.createElement(\"button\")" in app_js
+    assert "suggestion-btn btn-ghost sm" in app_js
+    assert "button.dataset.prefill = item.prefill" in app_js
+    assert "button.setAttribute(\"aria-label\", item.prefill)" in app_js
     assert "confirmation_event" in app_js
     assert "decision: \"confirm\"" in app_js
     assert "confirmationEvent" in app_js
     assert "extraPayload.confirmation_event" in app_js
+
+
+def test_frontend_suggestion_buttons_are_centered_and_stable() -> None:
+    css = (ROOT / "ui" / "web" / "style.css").read_text(encoding="utf-8")
+    assert ".suggestion-bar" in css
+    assert "justify-content:center" in css
+    assert ".suggestion-bar .suggestion-btn" in css
+    assert "display:inline-flex" in css
+    assert "text-align:center" in css
+    assert "white-space:normal" in css

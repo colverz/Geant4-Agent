@@ -166,9 +166,12 @@ function showSuggestions(data) {
   bar.className = "suggestion-bar";
   unique.forEach((item) => {
     const button = document.createElement("button");
-    button.className = "btn-ghost sm";
+    button.className = "suggestion-btn btn-ghost sm";
     button.type = "button";
     button.textContent = item.label;
+    button.dataset.prefill = item.prefill;
+    button.title = item.prefill;
+    button.setAttribute("aria-label", item.prefill);
     button.addEventListener("click", () => {
       const extraPayload = {};
       if (item.action) extraPayload.action_event = item.action;
