@@ -256,6 +256,154 @@ class V3DialogueComposerTest(unittest.TestCase):
 
         self.assertEqual(dialogue.evidence_used, [{"source": "geant4_runtime_tool", "status": "ok"}])
 
+    def test_runtime_observed_suggestions_have_actionable_prefill(self) -> None:
+        response = {
+            "terminated_reason": "observed",
+            "answer": {"message": "runtime done"},
+            "observations": [
+                {
+                    "source": "geant4_runtime_tool",
+                    "status": "ok",
+                    "data": {
+                        "result_summary": {
+                            "run": {"events_completed": 10},
+                            "scoring": {"target": {"target_edep_total_mev": 12.5}},
+                        }
+                    },
+                }
+            ],
+        }
+
+        dialogue = compose_v3_dialogue(response, locale="en-US")
+
+        self.assertEqual(dialogue.dialogue_act, "runtime_observed")
+        self.assertEqual(dialogue.next_suggestions[0]["text"], "Explain result")
+        self.assertEqual(dialogue.next_suggestions[0]["prefill"], "explain the latest Geant4 runtime result")
+        self.assertEqual(dialogue.next_suggestions[1]["text"], "Increase events and rerun")
+        self.assertEqual(dialogue.next_suggestions[1]["prefill"], "change event count to 100 events and run again")
+
+    def test_runtime_observed_adds_fact_based_sweep_suggestion(self) -> None:
+        response = {
+            "terminated_reason": "observed",
+            "answer": {"message": "runtime done"},
+            "context": {
+                "latest_runtime_facts": {
+                    "material": "G4_Pb",
+                    "particle": "gamma",
+                    "source_energy_mev": 1.0,
+                    "events_completed": 10,
+                    "detector_crossing_count": 0,
+                    "plane_crossing_count": 0,
+                }
+            },
+            "observations": [
+                {
+                    "source": "geant4_runtime_tool",
+                    "status": "ok",
+                    "data": {
+                        "result_summary": {
+                            "run": {"events_completed": 10},
+                            "scoring": {
+                                "detector_crossing": {"detector_crossing_count": 0},
+                                "plane_crossing": {"plane_crossing_count": 0},
+                            },
+                        }
+                    },
+                }
+            ],
+        }
+
+        dialogue = compose_v3_dialogue(response, locale="en-US")
+
+        sweep = next(item for item in dialogue.to_dict()["next_suggestions"] if item.get("kind") == "result_driven_sweep")
+        self.assertEqual(sweep["prefill"], "run sweep 0.5 1 2 MeV")
+        self.assertEqual(sweep["fact_basis"]["material"], "G4_Pb")
+
+    def test_runtime_observed_prioritizes_fact_based_thickness_suggestion(self) -> None:
+        response = {
+            "terminated_reason": "observed",
+            "answer": {"message": "runtime done"},
+            "context": {
+                "latest_runtime_facts": {
+                    "material": "G4_Pb",
+                    "particle": "gamma",
+                    "source_energy_mev": 1.0,
+                    "target_thickness_mm": 20.0,
+                    "events_completed": 10,
+                    "detector_crossing_count": 0,
+                    "plane_crossing_count": 0,
+                }
+            },
+            "observations": [
+                {
+                    "source": "geant4_runtime_tool",
+                    "status": "ok",
+                    "data": {
+                        "result_summary": {
+                            "run": {"events_completed": 10},
+                            "scoring": {
+                                "detector_crossing": {"detector_crossing_count": 0},
+                                "plane_crossing": {"plane_crossing_count": 0},
+                            },
+                        }
+                    },
+                }
+            ],
+        }
+
+        dialogue = compose_v3_dialogue(response, locale="en-US")
+
+        suggestions = dialogue.to_dict()["next_suggestions"]
+        self.assertEqual(len(suggestions), 4)
+        self.assertEqual(suggestions[3]["kind"], "result_driven_thickness_change")
+        self.assertEqual(suggestions[3]["prefill"], "change target thickness to 10 mm and run again")
+
+    def test_runtime_observed_adds_scoring_suggestion_when_downstream_metrics_missing(self) -> None:
+        response = {
+            "terminated_reason": "observed",
+            "answer": {"message": "runtime done"},
+            "context": {
+                "latest_runtime_facts": {
+                    "material": "G4_Pb",
+                    "particle": "gamma",
+                    "source_energy_mev": 1.0,
+                    "target_edep_total_mev": 12.5,
+                    "detector_crossing_count": None,
+                    "plane_crossing_count": None,
+                }
+            },
+            "observations": [
+                {
+                    "source": "geant4_runtime_tool",
+                    "status": "ok",
+                    "data": {"result_summary": {"run": {"events_completed": 10}}},
+                }
+            ],
+        }
+
+        dialogue = compose_v3_dialogue(response, locale="en-US")
+
+        suggestions = dialogue.to_dict()["next_suggestions"]
+        self.assertEqual(suggestions[3]["kind"], "result_driven_scoring_addition")
+        self.assertEqual(suggestions[3]["prefill"], "add downstream detector and plane scoring and run again")
+
+    def test_runtime_answer_suggestions_have_actionable_prefill(self) -> None:
+        response = {
+            "terminated_reason": "final_answer",
+            "answer": {
+                "message": "The latest runtime result is explainable.",
+                "evidence": [{"source": "geant4_runtime_tool", "status": "ok"}],
+            },
+            "observations": [],
+        }
+
+        dialogue = compose_v3_dialogue(response, locale="en-US")
+
+        self.assertEqual(dialogue.dialogue_act, "runtime_result_answered")
+        self.assertEqual(dialogue.next_suggestions[0]["text"], "Ask more about result")
+        self.assertIn("latest runtime result", dialogue.next_suggestions[0]["prefill"])
+        self.assertEqual(dialogue.next_suggestions[1]["prefill"], "change event count to 1000 events and run again")
+
     def test_current_configuration_answer_is_not_rewritten_as_design_prompt(self) -> None:
         response = {
             "terminated_reason": "final_answer",

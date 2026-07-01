@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .result_recommendations import build_runtime_result_recommendations
+
 
 def _is_en(locale: str) -> bool:
     return str(locale).lower().startswith("en")
@@ -46,6 +48,14 @@ class V3DialogueMessage:
 
 def compose_v3_dialogue(response: dict[str, Any], *, locale: str = "zh-CN") -> V3DialogueMessage:
     raw_message = _raw_answer_message(response)
+    if _answer_has_missing_pending_action(response):
+        return V3DialogueMessage(
+            display_message=raw_message,
+            raw_message=raw_message,
+            dialogue_act="final_answer",
+            evidence_used=_evidence(response),
+            next_suggestions=_answer_options(response),
+        )
     if isinstance(response.get("cancelled_pending_action"), dict):
         return V3DialogueMessage(
             display_message=_msg(
@@ -113,6 +123,10 @@ def _suggestion_to_dict(item: Any) -> dict[str, Any]:
             out["confirmation_event"] = dict(item["confirmation_event"])
         if item.get("kind"):
             out["kind"] = str(item["kind"])
+        if item.get("rationale"):
+            out["rationale"] = str(item["rationale"])
+        if isinstance(item.get("fact_basis"), dict):
+            out["fact_basis"] = dict(item["fact_basis"])
         return out
     text = str(item or "").strip()
     return {"text": text, "prefill": text}
@@ -195,30 +209,52 @@ def _compose_runtime_message(response: dict[str, Any], raw_message: str, locale:
             locale,
         )
         act = "runtime_observed"
+    suggestions = _localized_suggestions(
+        ["解释结果", "增加事件数再运行", "查看 runtime observation"],
+        ["Explain result", "Increase events and rerun", "View runtime observation"],
+        locale,
+    )
+    event_prefill = _increase_events_prefill(response, locale)
+    if _is_en(locale):
+        suggestions[0]["prefill"] = "explain the latest Geant4 runtime result"
+        suggestions[1]["prefill"] = event_prefill
+        suggestions[2]["prefill"] = "show the latest runtime observation"
+    else:
+        suggestions[0]["prefill"] = "解释最新 Geant4 运行结果"
+        suggestions[1]["prefill"] = event_prefill
+        suggestions[2]["prefill"] = "查看最新 runtime observation"
+    suggestions = _merge_suggestions(suggestions, build_runtime_result_recommendations(response, locale=locale), limit=4)
     return V3DialogueMessage(
         display_message=display,
         raw_message=raw_message,
         dialogue_act=act,
         evidence_used=_evidence(response, "geant4_runtime_tool"),
-        next_suggestions=_localized_suggestions(
-            ["解释结果", "修改参数再运行", "查看 runtime observation"],
-            ["Explain result", "Modify and rerun", "View runtime observation"],
-            locale,
-        ),
+        next_suggestions=suggestions,
     )
 
 
 def _compose_runtime_answer_message(response: dict[str, Any], raw_message: str, locale: str) -> V3DialogueMessage:
+    suggestions = _localized_suggestions(
+        ["继续追问结果", "增加事件数再运行", "修改方案"],
+        ["Ask more about result", "Increase events and rerun", "Modify design"],
+        locale,
+    )
+    event_prefill = _increase_events_prefill(response, locale)
+    if _is_en(locale):
+        suggestions[0]["prefill"] = "ask a follow-up question about the latest runtime result"
+        suggestions[1]["prefill"] = event_prefill
+        suggestions[2]["prefill"] = "modify the current simulation design"
+    else:
+        suggestions[0]["prefill"] = "继续追问最新运行结果"
+        suggestions[1]["prefill"] = event_prefill
+        suggestions[2]["prefill"] = "修改当前模拟方案"
+    suggestions = _merge_suggestions(suggestions, build_runtime_result_recommendations(response, locale=locale), limit=4)
     return V3DialogueMessage(
         display_message=raw_message or _msg("当前还没有可解释的 Geant4 运行结果。", "No explainable Geant4 runtime result is available yet.", locale),
         raw_message=raw_message,
         dialogue_act="runtime_result_answered",
         evidence_used=_evidence(response, "geant4_runtime_tool"),
-        next_suggestions=_localized_suggestions(
-            ["继续追问结果", "增加事件数再运行", "修改方案"],
-            ["Ask more about result", "Increase events and rerun", "Modify design"],
-            locale,
-        ),
+        next_suggestions=suggestions,
     )
 
 
@@ -457,6 +493,16 @@ def _answer_has_runtime_evidence(response: dict[str, Any]) -> bool:
     return isinstance(evidence, list) and any(isinstance(item, dict) and item.get("source") == "geant4_runtime_tool" for item in evidence)
 
 
+def _answer_has_missing_pending_action(response: dict[str, Any]) -> bool:
+    evidence = _dict(response.get("answer")).get("evidence")
+    return isinstance(evidence, list) and any(
+        isinstance(item, dict)
+        and item.get("source") == "pending_action"
+        and item.get("status") == "missing"
+        for item in evidence
+    )
+
+
 def _has_invalid_state_patch(response: dict[str, Any]) -> bool:
     patch = _dict(_dict(_dict(response.get("state")).get("metadata")).get("last_state_patch"))
     if patch.get("ok") is False and isinstance(patch.get("errors"), list) and patch.get("errors"):
@@ -534,6 +580,47 @@ def _compact_metrics(scoring: dict[str, Any]) -> str:
     if plane.get("plane_crossing_count") is not None:
         metrics.append(f"plane_crossing_count={plane.get('plane_crossing_count')}")
     return ", ".join(metrics)
+
+
+def _merge_suggestions(base: list[dict[str, Any]], extra: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in [*base, *extra]:
+        key = str(item.get("prefill") or item.get("text") or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _increase_events_prefill(response: dict[str, Any], locale: str) -> str:
+    events = _latest_event_count(response)
+    next_events = max(events * 10, events + 1) if events else 1000
+    if _is_en(locale):
+        return f"change event count to {next_events} events and run again"
+    return f"把事件数改成 {next_events} 个事件并重新运行"
+
+
+def _latest_event_count(response: dict[str, Any]) -> int:
+    runtime = _runtime_data(response)
+    result = _dict(runtime.get("result_summary"))
+    run = _dict(result.get("run"))
+    for value in (
+        run.get("events_requested"),
+        run.get("events_completed"),
+        runtime.get("events"),
+        _dict(_dict(_payload_data(response).get("simulation_spec")).get("run")).get("events"),
+    ):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            return parsed
+    return 0
 
 
 def _join_list(value: Any, *, limit: int = 4, separator: str = ", ") -> str:
