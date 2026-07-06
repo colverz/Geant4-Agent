@@ -17,6 +17,7 @@ from .context import (
     update_v3_workflow_state,
 )
 from .dialogue_composer import compose_v3_dialogue
+from .llm_policy import V3LlmPolicy, llm_policy_from_turn, set_llm_policy
 from .patches import apply_patches_to_state, build_patches_from_config_overrides, build_patches_from_requested_changes
 from .pending_action import V3PendingAction, V3PendingActionManager
 from .proposal_critic import review_v3_proposal
@@ -182,7 +183,9 @@ class V3AgentTurnService:
             # Use BasicGeant4Reasoner for confirm/cancel; LLM for understanding/analysis
             use_basic = bool(pending_action and (is_confirmed or is_rejected))
             controller = build_v3_agent_controller(
-                llm_config="" if use_basic else turn.metadata.get("llm_config_path", ""),
+                llm_config=""
+                if use_basic or not llm_policy_from_turn(turn).planning_enabled
+                else turn.metadata.get("llm_config_path", ""),
                 lang=turn.locale,
             )
             # Detect sweep: user-requested or LLM auto-suggested
@@ -291,6 +294,8 @@ def build_turn_input(payload: dict[str, Any]) -> tuple[V3TurnInput, Any | None]:
         "events": events,
         "run": bool(payload.get("run")),
         "run_confirmed": False,
+        "llm_understanding_enabled": bool(payload.get("llm_understanding_enabled", True)),
+        "llm_planning_enabled": bool(payload.get("llm_planning_enabled", True)),
         "llm_design_enabled": bool(payload.get("llm_design_enabled")),
         "llm_result_enabled": bool(payload.get("llm_result_enabled")),
         "llm_naturalize_enabled": bool(payload.get("llm_naturalize_enabled")),
@@ -298,6 +303,7 @@ def build_turn_input(payload: dict[str, Any]) -> tuple[V3TurnInput, Any | None]:
         "config_overrides": config_overrides,
         "confirmation_event": normalize_confirmation_event(payload.get("confirmation_event")),
     }
+    set_llm_policy(metadata, V3LlmPolicy.from_payload(payload))
     set_runtime_policy(metadata, runtime_policy)
     if metadata["config_overrides"]:
         metadata["accept_defaults"] = True
@@ -317,7 +323,7 @@ def build_turn_input(payload: dict[str, Any]) -> tuple[V3TurnInput, Any | None]:
 
 def _build_mainline_turn_understanding(turn: V3TurnInput, state: V3AgentState | None) -> Any:
     llm_config = str(turn.metadata.get("llm_config_path") or "").strip()
-    if llm_config and not turn.metadata.get("config_overrides"):
+    if llm_config and llm_policy_from_turn(turn).understanding_enabled and not turn.metadata.get("config_overrides"):
         return LLMTurnUnderstandingProvider(llm_config).understand(turn, state)
     return build_v3_turn_understanding(turn, state)
 

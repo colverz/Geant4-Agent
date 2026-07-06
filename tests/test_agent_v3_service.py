@@ -167,6 +167,23 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertFalse(turn.metadata["run_confirmed"])
         self.assertEqual(turn.metadata["confirmation_event"], {"action_id": "run-1", "decision": "confirm"})
 
+    def test_build_turn_input_can_disable_llm_understanding_without_disabling_design(self) -> None:
+        turn, _ = build_turn_input(
+            {
+                "session_id": "design-only-llm",
+                "text": "draft a simulation",
+                "llm_understanding_enabled": False,
+                "llm_planning_enabled": False,
+                "llm_design_enabled": True,
+                "llm_config_path": "model.local.json",
+            }
+        )
+
+        self.assertFalse(turn.metadata["llm_understanding_enabled"])
+        self.assertFalse(turn.metadata["llm_planning_enabled"])
+        self.assertTrue(turn.metadata["llm_design_enabled"])
+        self.assertEqual(turn.metadata["llm_policy"]["schema_version"], "geant4_agent_v3_llm_policy.v1")
+
     def test_build_turn_input_ignores_public_run_confirmed_flag(self) -> None:
         turn, _ = build_turn_input(
             {

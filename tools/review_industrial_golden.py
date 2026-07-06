@@ -4,7 +4,9 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 from tools.create_industrial_golden import DEFAULT_INDUSTRIAL_GOLDEN_DIR, INDUSTRIAL_GOLDEN_SCHEMA_VERSION
@@ -84,6 +86,8 @@ def review_industrial_golden(
     evidence: str = "",
     force: bool = False,
     dry_run: bool = False,
+    promote_dir: Path | None = None,
+    replace_existing: bool = False,
 ) -> dict[str, Any]:
     reviewer = reviewer.strip()
     if not reviewer:
@@ -153,6 +157,17 @@ def review_industrial_golden(
             "errors": ["golden_already_reviewed_use_force_to_update_review_metadata"],
         }
 
+    promoted_file = promote_dir / golden_file.name if promote_dir is not None else None
+    if promoted_file is not None and promoted_file.exists() and not replace_existing:
+        return {
+            "ok": False,
+            "status": "blocked",
+            "failure_category": "promotion_target_exists",
+            "golden_file": str(golden_file),
+            "promoted_file": str(promoted_file),
+            "errors": ["promotion_target_exists_use_replace_existing"],
+        }
+
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
     metrics_hash = _metrics_hash(metrics)
     if dry_run:
@@ -164,6 +179,7 @@ def review_industrial_golden(
             "golden_file": str(golden_file),
             "current_review_status": current_status or None,
             "metrics_hash": metrics_hash,
+            "promoted_file": str(promoted_file) if promoted_file is not None else None,
             "warnings": validation["warnings"],
         }
 
@@ -176,16 +192,39 @@ def review_industrial_golden(
         "previous_status": current_status or None,
         "metrics_hash": metrics_hash,
     }
-    golden_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write_json(golden_file, payload)
+    if promoted_file is not None:
+        _atomic_write_json(promoted_file, payload)
     return {
         "ok": True,
         "status": "reviewed",
         "failure_category": None,
         "case_id": payload.get("case_id"),
         "golden_file": str(golden_file),
+        "promoted_file": str(promoted_file) if promoted_file is not None else None,
         "metrics_hash": payload["review"]["metrics_hash"],
         "warnings": validation["warnings"],
     }
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            temp_path = Path(handle.name)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
 
 
 def main() -> int:
@@ -198,6 +237,8 @@ def main() -> int:
     parser.add_argument("--evidence", default="")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--promote-dir", type=Path, default=None)
+    parser.add_argument("--replace-existing", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -210,6 +251,8 @@ def main() -> int:
         evidence=args.evidence,
         force=args.force,
         dry_run=args.dry_run,
+        promote_dir=args.promote_dir,
+        replace_existing=args.replace_existing,
     )
     if args.json:
         print(json.dumps({"ok": report["ok"], "report": report}, ensure_ascii=False, indent=2))
