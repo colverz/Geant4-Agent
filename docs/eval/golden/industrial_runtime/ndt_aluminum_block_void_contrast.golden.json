@@ -1,26 +1,34 @@
 {
   "schema_version": "geant4_agent_industrial_golden.v1",
-  "case_id": "detector_silicon_gamma_response",
-  "created_at_utc": "2026-07-06T04:54:01Z",
+  "case_id": "ndt_aluminum_block_void_contrast",
+  "created_at_utc": "2026-07-06T04:54:03Z",
   "runtime_fingerprint": {
     "geant4_version": "$Name: geant4-11-04 [MT]$",
     "runtime_wrapper_hash": null,
-    "runtime_payload_hash": "651e008593f150d97b62fb78864f54fa252fe33b009bb8888ed4c7958e1ac253",
+    "runtime_payload_hash": "12d15c8c52c9561713cc829b81a12714a2427a1912cb318b1d3f000f891877ad",
     "physics_list": "FTFP_BERT",
     "seed": 1337,
     "events": 10000,
     "threads": 1,
     "platform": "Windows-10-10.0.22631-SP0"
   },
-  "runtime_payload_hash": "651e008593f150d97b62fb78864f54fa252fe33b009bb8888ed4c7958e1ac253",
+  "runtime_payload_hash": "12d15c8c52c9561713cc829b81a12714a2427a1912cb318b1d3f000f891877ad",
   "metrics": {
-    "detector_crossing_count": {
-      "expected": 9990,
-      "tolerance": 0
+    "contrast_ratio": {
+      "expected": 0.4929156967918227,
+      "tolerance": 0.0
     },
     "detector_edep_total_mev": {
-      "expected": 0.0,
+      "expected": 84.7695,
       "tolerance": 0.0
+    },
+    "solid_region_count": {
+      "expected": 19762,
+      "tolerance": 0
+    },
+    "void_region_count": {
+      "expected": 9741,
+      "tolerance": 0
     }
   },
   "artifact_dir": "F:\\geant4agent\\runtime_artifacts",
@@ -28,10 +36,10 @@
   "review": {
     "status": "reviewed",
     "reviewer": "project-owner",
-    "reviewed_at_utc": "2026-07-06T04:55:11Z",
+    "reviewed_at_utc": "2026-07-06T04:55:12Z",
     "notes": "Promoted after three exact real-Geant4 reproductions.",
     "evidence": "docs/eval/golden/industrial_runtime/REPRODUCIBILITY_2026-07-06.json",
     "previous_status": "unreviewed",
-    "metrics_hash": "f0433379f4d40ad37c8aa597b4f30aa2a36c0a07fc88cb7cd8e548077a6def08"
+    "metrics_hash": "8a8ccf337ae55b742e2df5fcd486417493cff18486d54fa0f824ccb7aa785036"
   }
 }

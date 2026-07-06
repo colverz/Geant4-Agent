@@ -1,0 +1,60 @@
+{
+  "schema_version": "geant4_agent_industrial_golden_evidence.v1",
+  "run_id": "industrial-golden-repro-20260706",
+  "reviewer": "project-owner",
+  "runtime": {
+    "geant4_version": "$Name: geant4-11-04 [MT]$",
+    "physics_list": "FTFP_BERT",
+    "seed": 1337,
+    "events": 10000,
+    "threads": 1
+  },
+  "policy": {
+    "repeat_count": 3,
+    "comparison": "exact",
+    "all_reproducible": true,
+    "tolerances_changed": false
+  },
+  "cases": [
+    {
+      "case_id": "detector_scintillator_gamma_response",
+      "runtime_payload_hash": "a09795cde894ac5fc32935d38c51024e8e7f3d0ef6cedb7d35a65d9c320fc691",
+      "metrics": {"detector_crossing_count": 9993, "detector_edep_total_mev": 0.0}
+    },
+    {
+      "case_id": "detector_silicon_gamma_response",
+      "runtime_payload_hash": "651e008593f150d97b62fb78864f54fa252fe33b009bb8888ed4c7958e1ac253",
+      "metrics": {"detector_crossing_count": 9990, "detector_edep_total_mev": 0.0}
+    },
+    {
+      "case_id": "medical_proton_water_depth_dose",
+      "runtime_payload_hash": "a311e44ad41d4a40786cf8920696a26ff74b892f9a2b0e98a6516a532d1a2f64",
+      "metrics": {"depth_bin_edep_hash": 219750393310587, "peak_depth_mm": -12.5, "target_edep_total_mev": 0.0}
+    },
+    {
+      "case_id": "ndt_aluminum_block_void_contrast",
+      "runtime_payload_hash": "12d15c8c52c9561713cc829b81a12714a2427a1912cb318b1d3f000f891877ad",
+      "metrics": {"contrast_ratio": 0.4929156967918227, "detector_edep_total_mev": 84.7695, "solid_region_count": 19762, "void_region_count": 9741}
+    },
+    {
+      "case_id": "ndt_steel_step_wedge_gamma_detector",
+      "runtime_payload_hash": "1b1de6ffd46380c84539bb976ea1ac4dd152bb7c399db49adf5fa6e76f6674aa",
+      "metrics": {"detector_crossing_count": 5985, "detector_edep_total_mev": 82.6135, "events_completed": 10000, "transmission_ratio": 0.5985}
+    },
+    {
+      "case_id": "shielding_concrete_gamma_transmission",
+      "runtime_payload_hash": "88106d5405a39fbe9b4e371ae175238b2641fa61bcbef349815b2fe7df83126b",
+      "metrics": {"attenuation_ratio": 0.3648824412206103, "shielded_detector_crossing_count": 3647, "unshielded_detector_crossing_count": 9995}
+    },
+    {
+      "case_id": "shielding_lead_gamma_transmission",
+      "runtime_payload_hash": "597b6697dd8a730edd04d93914463fc5ecd185e50d10bd85ac816d1d74029b65",
+      "metrics": {"detector_crossing_count": 4659, "detector_edep_total_mev": 53.9888, "transmission_factor": 0.4659}
+    },
+    {
+      "case_id": "shielding_polyethylene_neutron_moderation",
+      "runtime_payload_hash": "965f98482162f4f8c249d0aa22483c179ae9140f49c023d9f7a3d0c5b7d77491",
+      "metrics": {"plane_crossing_count": 0, "target_edep_total_mev": 18510.7}
+    }
+  ]
+}

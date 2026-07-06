@@ -1,0 +1,45 @@
+{
+  "schema_version": "geant4_agent_industrial_golden.v1",
+  "case_id": "shielding_concrete_gamma_transmission",
+  "created_at_utc": "2026-07-06T04:54:07Z",
+  "runtime_fingerprint": {
+    "geant4_version": "$Name: geant4-11-04 [MT]$",
+    "runtime_wrapper_hash": null,
+    "runtime_payload_hash": "88106d5405a39fbe9b4e371ae175238b2641fa61bcbef349815b2fe7df83126b",
+    "physics_list": "FTFP_BERT",
+    "seed": 1337,
+    "events": 10000,
+    "threads": 1,
+    "platform": "Windows-10-10.0.22631-SP0",
+    "paired_labels": [
+      "shielded",
+      "unshielded"
+    ]
+  },
+  "runtime_payload_hash": "88106d5405a39fbe9b4e371ae175238b2641fa61bcbef349815b2fe7df83126b",
+  "metrics": {
+    "attenuation_ratio": {
+      "expected": 0.3648824412206103,
+      "tolerance": 0.0
+    },
+    "shielded_detector_crossing_count": {
+      "expected": 3647,
+      "tolerance": 0
+    },
+    "unshielded_detector_crossing_count": {
+      "expected": 9995,
+      "tolerance": 0
+    }
+  },
+  "artifact_dir": "",
+  "run_summary_path": "",
+  "review": {
+    "status": "reviewed",
+    "reviewer": "project-owner",
+    "reviewed_at_utc": "2026-07-06T04:55:12Z",
+    "notes": "Promoted after three exact real-Geant4 reproductions.",
+    "evidence": "docs/eval/golden/industrial_runtime/REPRODUCIBILITY_2026-07-06.json",
+    "previous_status": "unreviewed",
+    "metrics_hash": "713765bc3f0b7f37e140d5d6d77a94cd336cf52a0446c5423c3032947e4862c4"
+  }
+}

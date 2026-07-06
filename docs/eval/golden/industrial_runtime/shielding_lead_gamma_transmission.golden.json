@@ -1,18 +1,18 @@
 {
   "schema_version": "geant4_agent_industrial_golden.v1",
   "case_id": "shielding_lead_gamma_transmission",
-  "created_at_utc": "2026-05-15T08:48:55Z",
+  "created_at_utc": "2026-07-06T04:54:11Z",
   "runtime_fingerprint": {
     "geant4_version": "$Name: geant4-11-04 [MT]$",
     "runtime_wrapper_hash": null,
-    "runtime_payload_hash": "e3eaa4a1f71adea100d38d68841673b8b67bbe7a8447f4d9c049b4bed4d37b25",
+    "runtime_payload_hash": "597b6697dd8a730edd04d93914463fc5ecd185e50d10bd85ac816d1d74029b65",
     "physics_list": "FTFP_BERT",
     "seed": 1337,
     "events": 10000,
     "threads": 1,
     "platform": "Windows-10-10.0.22631-SP0"
   },
-  "runtime_payload_hash": "e3eaa4a1f71adea100d38d68841673b8b67bbe7a8447f4d9c049b4bed4d37b25",
+  "runtime_payload_hash": "597b6697dd8a730edd04d93914463fc5ecd185e50d10bd85ac816d1d74029b65",
   "metrics": {
     "detector_crossing_count": {
       "expected": 4659,
@@ -31,10 +31,10 @@
   "run_summary_path": "F:\\geant4agent\\runtime_artifacts\\run_summary.json",
   "review": {
     "status": "reviewed",
-    "reviewer": "codex-engineering-review",
-    "reviewed_at_utc": "2026-05-15T09:48:00Z",
-    "notes": "Engineering review passed: runtime payload hash matches deterministic compiler; run summary matches expected metrics; single-thread seed=1337 rerun reproduced detector_crossing_count=4659, detector_edep_total_mev=53.9888, transmission_factor=0.4659; 10 mm Pb / 1 MeV gamma transmission is consistent with NIST XCOM attenuation order of magnitude. Scope: internal benchmark baseline review, not external physics certification.",
-    "evidence": "NIST XCOM Pb mu/rho at 1 MeV = 7.102E-02 cm2/g; local Geant4 11.04 runtime; runtime_payload_hash=e3eaa4a1f71adea100d38d68841673b8b67bbe7a8447f4d9c049b4bed4d37b25",
+    "reviewer": "project-owner",
+    "reviewed_at_utc": "2026-07-06T04:55:12Z",
+    "notes": "Promoted after three exact real-Geant4 reproductions.",
+    "evidence": "docs/eval/golden/industrial_runtime/REPRODUCIBILITY_2026-07-06.json",
     "previous_status": "unreviewed",
     "metrics_hash": "69898dcafae9dda00e6d9c1ad1f7421160c8e8488255cfb969c291967297228c"
   }

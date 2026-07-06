@@ -18,6 +18,9 @@ This directory keeps the current architecture docs small and navigable.
   route and next upgrade priorities.
 - `V3_STAGE_CONCLUSION_2026-06-11.md`: stage conclusion for completed v3
   functionality, verification, remaining risks, and next mainline.
+- `V3_INDUSTRIAL_RUNTIME_UPDATE_2026-07-06.md`: real Geant4 reproducibility,
+  reviewed golden promotion, v3-native industrial gate, and current live-LLM
+  blocker.
 - `V3_UPDATE_LOG.md`: plain-language running log for each v3 mainline update
   round.
 - `reuse_archive/`: v2 asset inventory and legacy candidate list.
