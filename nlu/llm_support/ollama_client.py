@@ -21,6 +21,8 @@ class OllamaConfig:
     api_key: str | None = None
     api_key_env: str | None = None
     chat_path: str | None = None
+    proxy_url: str | None = None
+    thinking: Dict[str, Any] | None = None
 
 
 def load_config(path: str | Path) -> OllamaConfig:
@@ -33,7 +35,9 @@ def load_config(path: str | Path) -> OllamaConfig:
     if model_override:
         model = model_override
     timeout_override = os.getenv("GEANT4_LLM_TIMEOUT_S", "").strip()
-    timeout_s = int(timeout_override) if timeout_override else int(payload.get("timeout_s", 60))
+    configured_timeout = payload.get("timeout_s", payload.get("timeout_seconds", 60))
+    timeout_s = int(timeout_override) if timeout_override else int(configured_timeout)
+    proxy_url = os.getenv("GEANT4_LLM_PROXY_URL", "").strip() or str(payload.get("proxy_url", "")).strip()
     return OllamaConfig(
         provider=provider,
         base_url=str(payload.get("base_url", "http://localhost:11434")),
@@ -43,6 +47,8 @@ def load_config(path: str | Path) -> OllamaConfig:
         api_key=str(payload.get("api_key", "")).strip() or None,
         api_key_env=str(payload.get("api_key_env", "")).strip() or None,
         chat_path=str(payload.get("chat_path", "")).strip() or None,
+        proxy_url=proxy_url or None,
+        thinking=dict(payload.get("thinking")) if isinstance(payload.get("thinking"), dict) else None,
     )
 
 
@@ -69,10 +75,21 @@ def _final_headers(cfg: OllamaConfig) -> Dict[str, str]:
     return headers
 
 
-def _post_json(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout_s: int) -> Dict[str, Any]:
+def _post_json(
+    url: str,
+    payload: Dict[str, Any],
+    headers: Dict[str, str],
+    timeout_s: int,
+    proxy_url: str | None = None,
+) -> Dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+    if proxy_url:
+        proxy_handler = urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+        response = urllib.request.build_opener(proxy_handler).open(req, timeout=timeout_s)
+    else:
+        response = urllib.request.urlopen(req, timeout=timeout_s)
+    with response as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -84,7 +101,7 @@ def _chat_ollama(prompt: str, cfg: OllamaConfig, options: Dict[str, Any]) -> Dic
         "options": options or {},
     }
     url = cfg.base_url.rstrip("/") + (cfg.chat_path or "/api/generate")
-    return _post_json(url, payload, _final_headers(cfg), cfg.timeout_s)
+    return _post_json(url, payload, _final_headers(cfg), cfg.timeout_s, cfg.proxy_url)
 
 
 def _chat_openai_compatible(prompt: str, cfg: OllamaConfig, options: Dict[str, Any]) -> Dict[str, Any]:
@@ -93,10 +110,12 @@ def _chat_openai_compatible(prompt: str, cfg: OllamaConfig, options: Dict[str, A
         "messages": [{"role": "user", "content": prompt}],
     }
     payload.update(options or {})
+    if cfg.thinking and "thinking" not in payload:
+        payload["thinking"] = dict(cfg.thinking)
     if "temperature" not in payload:
         payload["temperature"] = 0.0
     url = cfg.base_url.rstrip("/") + (cfg.chat_path or "/v1/chat/completions")
-    raw = _post_json(url, payload, _final_headers(cfg), cfg.timeout_s)
+    raw = _post_json(url, payload, _final_headers(cfg), cfg.timeout_s, cfg.proxy_url)
     content = ""
     try:
         content = str(raw.get("choices", [{}])[0].get("message", {}).get("content", ""))

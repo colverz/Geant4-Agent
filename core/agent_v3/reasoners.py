@@ -41,7 +41,7 @@ class BasicGeant4Reasoner:
             return _invalid_patch_proposal(turn, state)
         runtime_observation = _latest_observation_data(state, GEANT4_RUNTIME_TOOL)
         runtime_status = _latest_observation_status(state, GEANT4_RUNTIME_TOOL)
-        if _looks_like_current_configuration_question(turn.user_text):
+        if _looks_like_current_configuration_question(turn.user_text) and not _run_requested(turn):
             design = _latest_design(state)
             payload = _latest_payload(state)
             evidence = []
@@ -144,56 +144,6 @@ class BasicGeant4Reasoner:
                     "options": ["接受默认近似并生成配置", "调整几何/材料/源项", "先只查看方案说明"],
                 },
                 evidence=[{"source": _latest_design_source(state), "role": "design"}],
-            )
-        # User accepted + design has unresolved questions: re-design first.
-        # If the same turn already carries concrete edits or a run request, the user has
-        # effectively chosen to proceed from the current design, so build payload instead
-        # of spending another LLM design pass.
-        should_build_from_current_design = _has_config_overrides(turn) or _run_requested(turn)
-        if (
-            user_explicitly_accepted
-            and design
-            and _needs_user_choice(design)
-            and not should_build_from_current_design
-            and not _has_observation(state, GEANT4_PAYLOAD_BUILDER_TOOL)
-        ):
-            # Count LLM design attempts to prevent infinite loop
-            design_attempts = sum(1 for o in state.observations if o.source == GEANT4_LLM_DESIGN_TOOL)
-            if design_attempts <= 2:
-                return V3ActionProposal(
-                    kind=V3ActionKind.CREATE_DESIGN,
-                    intent="draft_geant4_design_with_llm",
-                    arguments={"artifact_id": "geant4_design_draft"},
-                    tool_call=V3ToolCall(
-                        tool_name=GEANT4_LLM_DESIGN_TOOL,
-                        arguments={
-                            "goal": str(state.goal or "") + " | User answers: " + turn.user_text,
-                            "artifact_id": "geant4_design_draft",
-                            "runtime_capabilities": _latest_runtime_capabilities(state),
-                            "llm_config_path": str(turn.metadata.get("llm_config_path") or ""),
-                            "lang": turn.locale,
-                        },
-                        risk_level=V3ToolRiskLevel.DRAFT_ONLY,
-                    ),
-                    expected_observation="LLM-assisted SimulationDesign draft",
-                )
-            # After 2 design attempts, skip to payload regardless
-            return V3ActionProposal(
-                kind=V3ActionKind.DRAFT_SPEC,
-                intent="draft_geant4_runtime_payload",
-                arguments={"artifact_id": "geant4_runtime_payload_draft"},
-                tool_call=V3ToolCall(
-                    tool_name=GEANT4_PAYLOAD_BUILDER_TOOL,
-                    arguments={
-                        "design": design,
-                        "events": turn.metadata.get("events", 1000),
-                        "config_overrides": _config_overrides(turn),
-                        "accept_defaults": True,
-                        "artifact_id": "geant4_runtime_payload_draft",
-                    },
-                    risk_level=V3ToolRiskLevel.DRAFT_ONLY,
-                ),
-                expected_observation="RuntimePayload draft",
             )
         # Build payload: user accepted, run requested, or config overrides present
         if (user_explicitly_accepted or _run_requested(turn) or _has_config_overrides(turn)) and design and not _has_observation(state, GEANT4_PAYLOAD_BUILDER_TOOL):

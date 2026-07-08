@@ -42,6 +42,43 @@ class LlmClientTest(unittest.TestCase):
 
         self.assertEqual(cfg.model, "deepseek-v4-flash")
 
+    def test_load_config_supports_legacy_timeout_name_and_local_proxy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "cfg.json"
+            p.write_text(
+                json.dumps(
+                    {
+                        "base_url": "https://api.deepseek.com",
+                        "model": "deepseek-chat",
+                        "timeout_seconds": 25,
+                        "proxy_url": "http://127.0.0.1:10808",
+                        "thinking": {"type": "disabled"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cfg = ollama_client.load_config(p)
+
+        self.assertEqual(cfg.timeout_s, 25)
+        self.assertEqual(cfg.proxy_url, "http://127.0.0.1:10808")
+        self.assertEqual(cfg.thinking, {"type": "disabled"})
+
+    def test_post_json_uses_explicit_proxy_opener(self) -> None:
+        opener = mock.Mock()
+        opener.open.return_value = _FakeResponse({"ok": True})
+        with mock.patch("nlu.llm_support.ollama_client.urllib.request.build_opener", return_value=opener) as build:
+            result = ollama_client._post_json(
+                "https://api.deepseek.com/v1/chat/completions",
+                {"model": "deepseek-chat"},
+                {"Content-Type": "application/json"},
+                25,
+                "http://127.0.0.1:10808",
+            )
+
+        self.assertEqual(result, {"ok": True})
+        build.assert_called_once()
+        opener.open.assert_called_once()
+
     def test_chat_ollama_payload_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "cfg.json"
@@ -82,6 +119,7 @@ class LlmClientTest(unittest.TestCase):
                         "chat_path": "/v1/chat/completions",
                         "model": "gpt-4.1-mini",
                         "api_key": "dummy",
+                        "thinking": {"type": "disabled"},
                     }
                 ),
                 encoding="utf-8",
@@ -100,6 +138,7 @@ class LlmClientTest(unittest.TestCase):
         self.assertEqual(captured["url"], "https://api.openai.com/v1/chat/completions")
         self.assertEqual(captured["body"]["messages"][0]["content"], "hello")
         self.assertEqual(captured["body"]["temperature"], 0.0)
+        self.assertEqual(captured["body"]["thinking"], {"type": "disabled"})
         self.assertTrue(captured["auth"].startswith("Bearer "))
         self.assertEqual(out["response"], "{\"ok\":true}")
 

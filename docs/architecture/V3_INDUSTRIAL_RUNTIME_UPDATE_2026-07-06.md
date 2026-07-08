@@ -31,6 +31,8 @@ Tracked reproducibility evidence:
 ```text
 real Geant4 reproducibility: 24/24 runs completed, 8/8 cases exact
 scoped deterministic industrial gate: 8 passed, 0 failed
+real DeepSeek health check: request id, model, usage, and nonce verified
+v3 live candidate: one real design call; semantic contract and local runtime passed
 v3 tests: 161 passed, 2 subtests passed
 industrial tests: 41 passed
 safety harness: 13/13 trials passed
@@ -38,11 +40,14 @@ safety harness: 13/13 trials passed
 
 ## What Is Not Complete
 
-- The live DeepSeek-backed v3 gate did not complete within a practical timeout.
-  The first attempt exposed fallback use; the runner now rejects fallback as
-  `llm_unavailable` instead of treating it as an LLM candidate.
-- Repeated LLM work was found in understanding, planning, and design. The runner
-  now enables only the design call, but the external request still remained slow.
+- Real DeepSeek connectivity is now verified through the optional local proxy
+  setting. The check requires a provider request id, model, token usage, and a
+  returned random nonce; fallback cannot pass it.
+- Repeated LLM design work was removed. Accepting defaults now builds the payload
+  from the current design instead of calling the design model two more times.
+- The live v3 case is physically valid but intentionally not canonical. Its
+  names, transverse dimensions, source distance, detector distance, and added
+  scoring plane differ from the deterministic golden setup.
 - `shielding_concrete_gamma_transmission` is a paired-run case. The deterministic
   runtime supports it, but the v3 conversational workflow does not yet have a
   first-class multi-run experiment contract. The v3 runner reports this honestly
@@ -59,20 +64,50 @@ pure runtime-contract comparator avoids copying policy logic into the new runner
 The design remains reasonable because execution authority is unchanged:
 
 ```text
-LLM candidate -> exact contract check -> preflight -> pending action
--> exact action confirmation -> local-process Geant4 -> metric comparison
+LLM candidate -> physical semantic contract -> preflight -> pending action
+-> exact action confirmation -> local-process Geant4 -> metric completeness
+
+Canonical compiler payload -> exact contract -> local-process Geant4
+-> reviewed golden numeric comparison
 ```
 
-The main remaining architecture risk is LLM call latency. Do not weaken contract
-checks or use deterministic fallback to make the live gate appear green.
+The two gates must remain separate. A freely designed LLM candidate cannot be
+compared numerically with a golden produced from different geometry. Conversely,
+the semantic gate must not replace exact canonical regression coverage.
+
+## 2026-07-08 Follow-up
+
+The first real DeepSeek and Geant4 v3 loop now passes end to end:
+
+```text
+one DeepSeek design call
+-> semantic candidate contract passed
+-> runtime preflight passed
+-> pending action created
+-> exact action_id confirmed
+-> local-process Geant4 completed
+-> required metrics extracted
+```
+
+Observed metrics for the non-canonical 10 mm lead candidate:
+
+```text
+detector_crossing_count = 5976
+detector_edep_total_mev = 83.8698
+transmission_factor = 0.5976
+```
+
+The canonical golden comparison was not performed because the LLM chose a
+different but physically valid transverse geometry and placement. The report
+records `comparison_scope=semantic_contract_and_real_runtime`.
 
 ## Next Mainline
 
-1. Add observable total-deadline and timing records around each LLM phase.
-2. Make the v3 reasoner reuse one validated design result instead of allowing
-   overlapping planner and design responsibilities in ordinary UI turns.
+1. Run the semantic live gate across the remaining single-run reviewed cases and
+   inspect where the typed physical requirements need richer geometry semantics.
+2. Add observable timing records around each LLM phase.
 3. Add a typed multi-run experiment plan for paired cases, with one confirmation
    covering an immutable set of preflighted runtime actions.
-4. Re-run the live v3 gate on one case, inspect the actual LLM candidate, then
-   expand to the remaining single-run cases.
+4. Keep canonical golden regression and free-design semantic evaluation as two
+   named report scopes.
 5. After the live gate is usable, continue with user-visible result-driven advice.

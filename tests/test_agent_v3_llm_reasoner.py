@@ -161,6 +161,74 @@ class LLMGeant4ReasonerTest(unittest.TestCase):
         assert proposal.tool_call.tool_name == GEANT4_PAYLOAD_BUILDER_TOOL
         assert proposal.tool_call.arguments["config_overrides"]["source_energy_mev"] == 2.0
 
+    def test_accepting_llm_design_builds_payload_without_another_llm_call(self) -> None:
+        reasoner = BasicGeant4Reasoner()
+        turn = V3TurnInput(
+            session_id="s1",
+            user_text="accept defaults",
+            metadata={
+                "accept_defaults": True,
+                "run": False,
+                "llm_design_enabled": True,
+                "llm_config_path": "fake.json",
+                "events": 1000,
+            },
+        )
+        state = V3AgentState(session_id="s1", goal="lead shielding")
+        state.observations.extend(
+            [
+                V3Observation(source=GEANT4_CAPABILITY_TOOL, status=V3ObservationStatus.OK, data={}),
+                V3Observation(
+                    source=GEANT4_LLM_DESIGN_TOOL,
+                    status=V3ObservationStatus.OK,
+                    data={
+                        "design": {
+                            "goal": "lead shielding",
+                            "recommended_setup": {"geometry": "single_box", "material": "G4_Pb"},
+                            "next_action": "ask_user_to_choose_approximation",
+                            "user_decisions_required": ["Accept the approximation."],
+                        }
+                    },
+                ),
+            ]
+        )
+
+        proposal = reasoner.propose(turn, state)
+
+        assert proposal.kind == V3ActionKind.DRAFT_SPEC
+        assert proposal.tool_call is not None
+        assert proposal.tool_call.tool_name == GEANT4_PAYLOAD_BUILDER_TOOL
+
+    def test_explicit_run_of_runtime_payload_reaches_preflight(self) -> None:
+        reasoner = BasicGeant4Reasoner()
+        turn = V3TurnInput(
+            session_id="s1",
+            user_text="Run the checked runtime payload after preflight.",
+            metadata={"run": True, "events": 10, "allow_in_memory": False},
+        )
+        state = V3AgentState(session_id="s1", goal="lead shielding")
+        state.observations.extend(
+            [
+                V3Observation(source=GEANT4_CAPABILITY_TOOL, status=V3ObservationStatus.OK, data={}),
+                V3Observation(
+                    source=GEANT4_LLM_DESIGN_TOOL,
+                    status=V3ObservationStatus.OK,
+                    data={"design": {"recommended_setup": {}, "next_action": "build_candidate_config"}},
+                ),
+                V3Observation(
+                    source=GEANT4_PAYLOAD_BUILDER_TOOL,
+                    status=V3ObservationStatus.OK,
+                    data={"recommended_config": {"run": {"events": 10}}, "runtime_payload": {"run": {"events": 10}}},
+                ),
+            ]
+        )
+
+        proposal = reasoner.propose(turn, state)
+
+        assert proposal.kind == V3ActionKind.DRAFT_SPEC
+        assert proposal.tool_call is not None
+        assert proposal.tool_call.tool_name == GEANT4_RUNTIME_PREFLIGHT_TOOL
+
     def test_llm_parameters_in_initial_design_only_turn_do_not_auto_build_payload(self) -> None:
         reasoner = LLMGeant4Reasoner(llm_config_path="nlu/llm_support/configs/fake.json")
         turn = V3TurnInput(

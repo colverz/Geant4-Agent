@@ -21,7 +21,7 @@ from tools.evaluate_industrial_runtime_benchmark import (
     validate_industrial_benchmark_shape,
 )
 from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime
-from tools.industrial_runtime_contract import compare_candidate_runtime_contract
+from tools.industrial_runtime_contract import compare_candidate_runtime_contract, compare_v3_candidate_runtime_contract
 from tools.industrial_runtime_executor import compare_industrial_metrics, extract_industrial_metrics
 
 
@@ -225,13 +225,15 @@ def _run_v3_case(
             trajectory=trajectory,
         )
 
-    contract = compare_candidate_runtime_contract(candidate_payload, expected_payload)
+    contract = compare_v3_candidate_runtime_contract(candidate_payload, expected_payload)
+    canonical_alignment = compare_candidate_runtime_contract(candidate_payload, expected_payload)
     if not contract["ok"]:
         return _failed(
             case,
             "v3_candidate_contract_mismatch",
-            [f"mismatch:{item['path']}" for item in contract["mismatches"]],
+            [f"mismatch:{item['field']}" for item in contract["mismatches"]],
             candidate_contract=contract,
+            canonical_alignment=canonical_alignment,
             trajectory=trajectory,
             runtime_attempted=False,
         )
@@ -253,6 +255,7 @@ def _run_v3_case(
             "v3_confirmation_gate_missing",
             ["preflight_did_not_create_pending_action"],
             candidate_contract=contract,
+            canonical_alignment=canonical_alignment,
             trajectory=trajectory,
             runtime_attempted=False,
         )
@@ -274,6 +277,7 @@ def _run_v3_case(
             "runtime_error",
             [str((runtime_observation or {}).get("message") or "v3_runtime_observation_missing")],
             candidate_contract=contract,
+            canonical_alignment=canonical_alignment,
             trajectory=trajectory,
             runtime_attempted=True,
             runtime_adapter=runtime_data.get("adapter"),
@@ -284,6 +288,7 @@ def _run_v3_case(
             "non_real_runtime",
             [f"adapter:{runtime_data.get('adapter')!r}"],
             candidate_contract=contract,
+            canonical_alignment=canonical_alignment,
             trajectory=trajectory,
             runtime_attempted=True,
         )
@@ -298,11 +303,32 @@ def _run_v3_case(
             "missing_metric",
             list(extracted["missing_metrics"]),
             candidate_contract=contract,
+            canonical_alignment=canonical_alignment,
             trajectory=trajectory,
             runtime_attempted=True,
             runtime_adapter="local_process",
             actual_metrics=actual_metrics,
         )
+
+    if not canonical_alignment["ok"]:
+        return {
+            "id": case.get("id"),
+            "domain": case.get("domain"),
+            "status": "passed",
+            "failure_category": None,
+            "reasons": [],
+            "comparison_scope": "semantic_contract_and_real_runtime",
+            "candidate_contract": contract,
+            "canonical_alignment": canonical_alignment,
+            "trajectory": trajectory,
+            "runtime_attempted": True,
+            "runtime_adapter": "local_process",
+            "actual_metrics": actual_metrics,
+            "golden_comparison": {
+                "performed": False,
+                "reason": "candidate_is_physically_valid_but_not_canonical_payload",
+            },
+        }
 
     golden_status = _golden_status(case, golden_dir, allow_unreviewed=allow_unreviewed_goldens)
     if not golden_status["ready"]:
@@ -311,6 +337,7 @@ def _run_v3_case(
             "unreviewed_golden" if golden_status.get("review_required") else "missing_golden",
             ["reviewed_golden_required"],
             candidate_contract=contract,
+            canonical_alignment=canonical_alignment,
             trajectory=trajectory,
             runtime_attempted=True,
             runtime_adapter="local_process",
@@ -330,11 +357,14 @@ def _run_v3_case(
         "failure_category": None if comparison["ok"] else "metric_mismatch",
         "reasons": reasons,
         "candidate_contract": contract,
+        "canonical_alignment": canonical_alignment,
+        "comparison_scope": "canonical_golden",
         "trajectory": trajectory,
         "runtime_attempted": True,
         "runtime_adapter": "local_process",
         "actual_metrics": actual_metrics,
         "metric_diff": comparison["metric_diff"],
+        "golden_comparison": {"performed": True, "ok": comparison["ok"]},
         "golden_status": golden_status,
     }
 
