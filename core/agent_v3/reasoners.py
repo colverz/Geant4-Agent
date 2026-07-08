@@ -669,12 +669,9 @@ Return JSON:
 "parameters": extracted physics parameters (use catalog IDs, include ONLY what the user specified):
   energy_mev (number), particle (string from catalog), source_type (beam/point/isotropic),
   material (G4_ ID), environment_material (G4_ ID), events (integer), observables (list),
-  physics_list (optional). Use scenario-appropriate defaults when not specified:
-  - Medical proton: 150 MeV, proton, G4_WATER, depth_bins
-  - Gamma shielding: 1 MeV, gamma, G4_Pb, detector_crossing_count
-  - NDT: 0.5 MeV, gamma, G4_Al, region_contrast
-  - Space radiation: isotropic source, G4_Galactic environment, proton 100 MeV
-  - Neutron: 2 MeV, neutron, G4_POLYETHYLENE, Shielding physics list
+  physics_list (optional). Choose values only from the user's request, the v3
+  context pack, and the knowledge catalog. If a value is necessary but not
+  grounded there, expose it as an ambiguity instead of copying a scenario example.
   geometry: structured object:
     {{"volumes": [{{"name": "descriptive", "shape": "box|sphere|tubs|cons",
       "material": "G4_ ID", "dimensions": {{shape-appropriate keys}} }}],

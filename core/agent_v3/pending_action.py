@@ -66,8 +66,9 @@ class V3PendingAction:
             return None
         prompts = raw.get("confirmation_prompts") if isinstance(raw.get("confirmation_prompts"), list) else []
         tool_call = raw.get("tool_call") if isinstance(raw.get("tool_call"), dict) else {}
+        action_id = str(raw.get("action_id") or "") or _legacy_action_id(raw)
         return cls(
-            action_id=str(raw.get("action_id") or ""),
+            action_id=action_id,
             kind=str(raw.get("kind") or ""),
             intent=str(raw.get("intent") or ""),
             risk_level=str(raw.get("risk_level") or ""),
@@ -157,7 +158,7 @@ class V3PendingActionManager:
             return True
         action_id = str(event.get("action_id") or "").strip()
         if not action_id:
-            return True
+            return False
         if pending_action is None:
             return False
         return action_id == pending_action.action_id
@@ -226,6 +227,21 @@ def _stable_action_id(*, session_id: str, proposal: dict[str, Any]) -> str:
         ]
     )
     return "v3-action-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _legacy_action_id(raw: dict[str, Any]) -> str:
+    payload = json.dumps(
+        {
+            "kind": raw.get("kind"),
+            "intent": raw.get("intent"),
+            "tool_call": raw.get("tool_call"),
+            "created_turn_id": raw.get("created_turn_id"),
+        },
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return "v3-legacy-action-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 def _positive_int(value: Any, *, default: int) -> int:

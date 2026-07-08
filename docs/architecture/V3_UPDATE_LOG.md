@@ -661,3 +661,17 @@ v3 pytest subset
 代码审查重点：判分规则来自任务 invariant，不根据用户措辞猜测；adapter、grader、
 compare 三层职责分开。修复了 observations 在进程内是 tuple、经过 JSON 后是 list 的
 表示差异，现在两种调用方式使用同一种 JSON-native 结果。
+
+## 2026-07-08 - merge-readiness review fixes
+
+本轮在 `main...beta` 审查中修复了四个合并阻断问题：显式确认事件必须携带匹配的
+`action_id`；空 session reset 不再清空全部会话；不安全 session ID 使用带哈希的
+无碰撞文件名并校验 envelope 身份；LLM turn-understanding 不能授予 runtime 权限。
+等待确认时的只读追问会保留 pending action。
+
+同时删除未使用的 v3 intent classifier、未接线的自动 optimization/sweep 执行死代码，
+以及基于 sweep 关键词的 service 分支。comprehension prompt 不再内嵌场景默认字典。
+
+新增 grader calibration 和无 mock 的 live intelligence task。当前结果：calibration
+`4/4`，live intelligence `1/1`，behavior safety `9/9 tasks`、`14/14 trials`。
+标准 `pytest -q` 通过 `pytest.ini` 只收集正式 tests，不再误启动旧 UI 脚本。

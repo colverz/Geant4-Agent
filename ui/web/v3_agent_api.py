@@ -18,7 +18,9 @@ def handle_v3_agent_post(path: str, payload: dict[str, Any]) -> tuple[int, dict[
         return (200 if body.get("ok") else 400), body
     if path == "/api/v3/agent/reset":
         session_id = str(payload.get("session_id") or "").strip()
-        _V3_AGENT_TURN_SERVICE.reset(session_id or None)
+        if not session_id:
+            return 400, {"ok": False, "error": "missing_session_id", "session_id": session_id}
+        _V3_AGENT_TURN_SERVICE.reset(session_id)
         return 200, {"ok": True, "session_id": session_id}
     if path == "/api/v3/agent/state":
         session_id = str(payload.get("session_id") or "").strip()

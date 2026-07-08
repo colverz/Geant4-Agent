@@ -85,3 +85,26 @@ report:
 
 Compare fails on missing candidate trials, passing-to-failing regressions, or
 any failing candidate grade. It also reports score changes by task slice.
+
+## Calibration And Live Intelligence
+
+Run the deterministic grader controls before using it as a merge gate:
+
+```powershell
+.venv\Scripts\python.exe -m eval.v3.calibrate
+```
+
+The calibration bank contains both passing and deliberately incorrect
+trajectories. Any false positive or false negative fails calibration.
+
+The live intelligence bank contains no mocked model responses:
+
+```powershell
+.venv\Scripts\python.exe -m eval.v3.run_suite `
+  --tasks eval\v3\tasks\agent_intelligence_live.jsonl `
+  --live-llm `
+  --llm-config nlu\llm_support\configs\deepseek_api.local.json
+```
+
+Live intelligence remains advisory until the bank covers multiple dialogue
+slices and repeated provider trials.

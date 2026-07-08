@@ -27,7 +27,8 @@ def test_pending_action_manager_reads_legacy_metadata_dict() -> None:
     assert pending is not None
     assert pending.kind == "run_simulation"
     assert pending.schema_version == PENDING_ACTION_SCHEMA_VERSION
-    assert V3PendingActionManager.confirmation_event_matches({}, pending)
+    assert not V3PendingActionManager.confirmation_event_matches({}, pending)
+    assert V3PendingActionManager.confirmation_event_matches({"action_id": pending.action_id}, pending)
     assert not V3PendingActionManager.confirmation_event_matches({"action_id": "wrong"}, pending)
 
 

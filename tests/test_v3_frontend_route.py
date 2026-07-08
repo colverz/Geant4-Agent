@@ -1,6 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
 
+from ui.web.v3_agent_api import handle_v3_agent_post
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -51,3 +53,10 @@ def test_frontend_suggestion_buttons_are_centered_and_stable() -> None:
     assert "display:inline-flex" in css
     assert "text-align:center" in css
     assert "white-space:normal" in css
+
+
+def test_v3_reset_requires_specific_session_id() -> None:
+    status, body = handle_v3_agent_post("/api/v3/agent/reset", {})
+
+    assert status == 400
+    assert body["error"] == "missing_session_id"

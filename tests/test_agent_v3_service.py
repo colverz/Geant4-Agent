@@ -507,6 +507,90 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertIsNotNone(result["pending_action"])
         self.assertEqual(result["pending_action"]["action_id"], first["pending_action"]["action_id"])
 
+    def test_confirmation_event_without_action_id_does_not_execute_pending_action(self) -> None:
+        service = self._make_service()
+        first = service.run_turn(
+            {
+                "session_id": "confirm-event-missing-id",
+                "text": "run a default lead shielding gamma simulation",
+                "events": 2,
+                "allow_in_memory": True,
+            }
+        )
+
+        result = service.run_turn(
+            {
+                "session_id": "confirm-event-missing-id",
+                "text": "confirm run",
+                "events": 2,
+                "allow_in_memory": True,
+                "confirmation_event": {"decision": "confirm"},
+            }
+        )
+
+        self.assertNotEqual(result["terminated_reason"], "observed")
+        self.assertEqual(result["pending_action"]["action_id"], first["pending_action"]["action_id"])
+
+    def test_llm_confirmation_classification_cannot_authorize_runtime(self) -> None:
+        service = self._make_service()
+        first = service.run_turn(
+            {
+                "session_id": "llm-cannot-authorize",
+                "text": "run a default lead shielding gamma simulation",
+                "events": 2,
+                "allow_in_memory": True,
+            }
+        )
+        understanding = V3TurnUnderstanding(
+            dialogue_act="confirm",
+            user_goal="ask what the run will do",
+            referenced_state="pending_action",
+            confirmation="confirmed",
+            risk_intent="run_requested",
+            confidence=0.99,
+            reason="deliberately incorrect model classification",
+            source="llm",
+        )
+
+        with patch("core.agent_v3.service.LLMTurnUnderstandingProvider.understand", return_value=understanding):
+            result = service.run_turn(
+                {
+                    "session_id": "llm-cannot-authorize",
+                    "text": "What exactly would this run do?",
+                    "events": 2,
+                    "allow_in_memory": True,
+                    "llm_config_path": "fake.json",
+                }
+            )
+
+        self.assertNotEqual(result["terminated_reason"], "observed")
+        self.assertFalse(result["summary"]["has_runtime_result"])
+        self.assertEqual(result["pending_action"]["action_id"], first["pending_action"]["action_id"])
+
+    def test_read_only_question_preserves_pending_action(self) -> None:
+        service = self._make_service()
+        first = service.run_turn(
+            {
+                "session_id": "pending-read-only-question",
+                "text": "run a default lead shielding gamma simulation",
+                "events": 2,
+                "allow_in_memory": True,
+            }
+        )
+
+        result = service.run_turn(
+            {
+                "session_id": "pending-read-only-question",
+                "text": "What exactly would this run do?",
+                "events": 2,
+                "allow_in_memory": True,
+            }
+        )
+
+        self.assertIn(result["terminated_reason"], {"final_answer", "waiting_confirmation"})
+        self.assertFalse(result["summary"]["has_runtime_result"])
+        self.assertEqual(result["pending_action"]["action_id"], first["pending_action"]["action_id"])
+
     def test_result_followup_answers_runtime_observation_not_payload(self) -> None:
         service = self._make_service()
         service.run_turn(

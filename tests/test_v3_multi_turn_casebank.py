@@ -222,14 +222,6 @@ class MultiTurnCasebankTest(unittest.TestCase):
 
     # ── Case 8: LLM intent classifier falls back gracefully ────────────
 
-    def test_intent_classifier_fallback(self) -> None:
-        """LLM intent classifier returns UNKNOWN when config is invalid."""
-        from core.agent_v3.intent_classifier import V3Intent, classify_intent_llm
-
-        r = classify_intent_llm("设计一个透射方案", config_path="nonexistent.json")
-        self.assertEqual(r.intent, V3Intent.UNKNOWN)
-        self.assertEqual(r.source, "llm")
-
     # ── Case 9: preflight rejects in-memory without allow flag ─────────
 
     def test_preflight_rejects_in_memory_by_default(self) -> None:

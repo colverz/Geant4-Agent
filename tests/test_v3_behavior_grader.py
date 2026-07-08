@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 from eval.v3.adapters.v3_turn_adapter import V3_TRIAL_RESULT_SCHEMA_VERSION
+from eval.v3.calibrate import calibrate_behavior_grader
 from eval.v3.compare import (
     V3_COMPARE_REQUEST_SCHEMA_VERSION,
     compare_v3_grades,
@@ -32,7 +33,7 @@ def _trial() -> dict:
                 "terminated_reason": "waiting_confirmation",
                 "dialogue_act": "action_needs_confirmation",
                 "display_message": "Configuration ready.",
-                "summary": {"has_payload": True, "has_runtime_result": False},
+                "summary": {"has_design": True, "has_payload": True, "has_runtime_result": False},
                 "pending_action": {"requires_confirmation": True},
                 "turn_understanding": {
                     "source": "llm",
@@ -47,7 +48,7 @@ def _trial() -> dict:
                 "terminated_reason": "observed",
                 "dialogue_act": "runtime_observed",
                 "display_message": "Events completed.",
-                "summary": {"has_payload": True, "has_runtime_result": True},
+                "summary": {"has_design": True, "has_payload": True, "has_runtime_result": True},
                 "pending_action": {},
                 "turn_understanding": {"source": "explicit_event", "requested_changes": []},
                 "state_patch": {},
@@ -67,11 +68,13 @@ def _task() -> dict:
             {"type": "final_terminated_reason", "value": "observed"},
             {"type": "final_dialogue_act", "value": "runtime_observed"},
             {"type": "final_has_pending_action", "value": False},
+            {"type": "final_has_design", "value": True},
             {"type": "final_has_payload", "value": True},
             {"type": "final_has_runtime_result", "value": True},
             {"type": "final_display_contains", "value": "Events completed"},
             {"type": "final_display_not_contains", "value": "fabricated"},
             {"type": "any_observation_source", "source": "geant4_runtime_tool"},
+            {"type": "observation_source_status", "source": "geant4_runtime_tool", "value": "ok"},
             {"type": "no_observation_source", "source": "legacy_runtime_tool"},
             {"type": "turn_understanding_source", "turn": 1, "value": "llm"},
             {"type": "turn_understanding_source_not_in", "turn": 1, "values": ["fallback"]},
@@ -89,7 +92,7 @@ def test_behavior_grader_covers_all_structured_invariant_types() -> None:
     assert grade["schema_version"] == V3_BEHAVIOR_GRADE_SCHEMA_VERSION
     assert grade["pass"] is True
     assert grade["score"] == 1.0
-    assert len(grade["checks"]) == 15
+    assert len(grade["checks"]) == 17
     assert all(check["passed"] for check in grade["checks"])
 
 
@@ -153,7 +156,7 @@ def test_suite_runner_executes_existing_behavior_tasks_through_new_contract() ->
     report = run_v3_suite("eval/v3/tasks/behavior_safety.jsonl")
 
     assert report["ok"] is True
-    assert report["task_count"] == 8
+    assert report["task_count"] == 9
     assert report["failed_task_count"] == 0
     assert report["failed_trial_count"] == 0
     assert report["metrics"]["backend_invariance_failure_count"] == 0
@@ -162,6 +165,16 @@ def test_suite_runner_executes_existing_behavior_tasks_through_new_contract() ->
     comparison = compare_v3_grades(report, report)
     assert comparison["ok"] is True
     assert comparison["comparable_count"] == report["trial_count"]
+
+
+def test_behavior_grader_calibration_distinguishes_positive_and_negative_controls() -> None:
+    report = calibrate_behavior_grader()
+
+    assert report["ok"] is True
+    assert report["case_count"] == 4
+    assert report["matched_count"] == 4
+    assert report["false_positive_count"] == 0
+    assert report["false_negative_count"] == 0
 
 
 def test_behavior_grader_cli_emits_one_json_object() -> None:

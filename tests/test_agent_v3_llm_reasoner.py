@@ -16,6 +16,18 @@ from core.agent_v3.tools.geant4_tools import (
 
 
 class LLMGeant4ReasonerTest(unittest.TestCase):
+    def test_comprehension_prompt_does_not_embed_scenario_default_dictionary(self) -> None:
+        reasoner = LLMGeant4Reasoner(llm_config_path="fake.json", lang="en-US")
+        turn = V3TurnInput(session_id="prompt-no-scenario-dictionary", user_text="Design a detector study.")
+        state = V3AgentState(session_id=turn.session_id)
+
+        prompt = reasoner._comprehension_prompt(turn, state)
+
+        assert "Medical proton: 150 MeV" not in prompt
+        assert "Gamma shielding: 1 MeV" not in prompt
+        assert "Space radiation: isotropic source" not in prompt
+        assert "expose it as an ambiguity" in prompt
+
     def test_falls_back_to_basic_when_no_config_path(self) -> None:
         reasoner = LLMGeant4Reasoner(llm_config_path="")
         turn = V3TurnInput(session_id="s1", user_text="设计铅屏蔽方案")

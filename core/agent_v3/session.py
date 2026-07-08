@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import re
 from dataclasses import dataclass
@@ -40,7 +41,10 @@ class V3SessionStore:
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
     def state_path(self, session_id: str) -> Path:
-        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", session_id)
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", session_id).strip("_") or "session"
+        if safe != session_id:
+            digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:12]
+            safe = f"{safe[:80]}--{digest}"
         return self.sessions_dir / f"{safe}.json"
 
     def save(self, state: V3AgentState, *, last_turn_id: str = "") -> None:
@@ -69,7 +73,11 @@ class V3SessionStore:
             state_data = raw.get("state") if raw.get("schema_version") == V3_SESSION_SCHEMA_VERSION else raw
             if not isinstance(state_data, dict):
                 raise ValueError("session_state_not_object")
-            return V3AgentState.from_dict(state_data)
+            state = V3AgentState.from_dict(state_data)
+            envelope_session_id = str(raw.get("session_id") or state.session_id)
+            if envelope_session_id != session_id or state.session_id != session_id:
+                raise ValueError("session_id_mismatch")
+            return state
         except (json.JSONDecodeError, OSError, ValueError) as exc:
             logger.warning("Failed to load v3 agent session %s from %s: %s", session_id, path, exc)
             self.quarantine(path)

@@ -138,3 +138,32 @@ class SessionPersistenceTest(unittest.TestCase):
         self.assertEqual(restored.goal, "")
         self.assertEqual(restored.observations, [])
         self.assertEqual(restored.metadata, {})
+
+    def test_unsafe_session_ids_have_collision_resistant_paths(self) -> None:
+        slash_path = self.service._state_path("client/a")
+        underscore_path = self.service._state_path("client_a")
+
+        self.assertNotEqual(slash_path, underscore_path)
+        self.service.run_turn({"session_id": "client/a", "text": "hello"})
+        self.service.run_turn({"session_id": "client_a", "text": "hello"})
+
+        self.assertTrue(slash_path.exists())
+        self.assertTrue(underscore_path.exists())
+        self.assertEqual(self.service._load_state("client/a").session_id, "client/a")
+        self.assertEqual(self.service._load_state("client_a").session_id, "client_a")
+
+    def test_session_store_rejects_mismatched_state_identity(self) -> None:
+        state_path = self.service._state_path("expected-session")
+        state_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": V3_SESSION_SCHEMA_VERSION,
+                    "session_id": "other-session",
+                    "state": {"session_id": "other-session", "observations": []},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertIsNone(self.service._load_state("expected-session"))
+        self.assertTrue(list(self.sessions_dir.glob("expected-session.json.corrupt*")))

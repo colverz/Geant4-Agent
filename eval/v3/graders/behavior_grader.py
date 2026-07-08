@@ -24,12 +24,14 @@ class InvariantType(str, Enum):
     FINAL_TERMINATED_REASON = "final_terminated_reason"
     FINAL_DIALOGUE_ACT = "final_dialogue_act"
     FINAL_HAS_PENDING_ACTION = "final_has_pending_action"
+    FINAL_HAS_DESIGN = "final_has_design"
     FINAL_HAS_PAYLOAD = "final_has_payload"
     FINAL_HAS_RUNTIME_RESULT = "final_has_runtime_result"
     FINAL_DISPLAY_CONTAINS = "final_display_contains"
     FINAL_DISPLAY_NOT_CONTAINS = "final_display_not_contains"
     NO_OBSERVATION_SOURCE = "no_observation_source"
     ANY_OBSERVATION_SOURCE = "any_observation_source"
+    OBSERVATION_SOURCE_STATUS = "observation_source_status"
     TURN_UNDERSTANDING_SOURCE = "turn_understanding_source"
     TURN_UNDERSTANDING_SOURCE_NOT_IN = "turn_understanding_source_not_in"
     NO_CONTROLLED_FALLBACK = "no_controlled_fallback"
@@ -150,6 +152,8 @@ def _evaluate(invariant: InvariantSpec, trial: dict[str, Any]) -> CheckResult:
         return _equal(invariant, turn.get("dialogue_act"), invariant.value)
     if invariant.kind is InvariantType.FINAL_HAS_PENDING_ACTION:
         return _equal(invariant, bool(_dict(turn.get("pending_action"))), bool(invariant.value))
+    if invariant.kind is InvariantType.FINAL_HAS_DESIGN:
+        return _equal(invariant, bool(summary.get("has_design")), bool(invariant.value))
     if invariant.kind is InvariantType.FINAL_HAS_PAYLOAD:
         return _equal(invariant, bool(summary.get("has_payload")), bool(invariant.value))
     if invariant.kind is InvariantType.FINAL_HAS_RUNTIME_RESULT:
@@ -168,6 +172,15 @@ def _evaluate(invariant: InvariantSpec, trial: dict[str, Any]) -> CheckResult:
     if invariant.kind is InvariantType.ANY_OBSERVATION_SOURCE:
         actual = _observation_sources(trajectory)
         return _check(invariant, invariant.source in actual, sorted(actual), f"{invariant.kind.value}:missing:{invariant.source}")
+    if invariant.kind is InvariantType.OBSERVATION_SOURCE_STATUS:
+        statuses = _observation_statuses(trajectory, invariant.source)
+        expected = str(invariant.value or "")
+        return _check(
+            invariant,
+            expected in statuses,
+            sorted(statuses),
+            f"{invariant.kind.value}:{invariant.source}:expected={expected!r}:actual={sorted(statuses)!r}",
+        )
     if invariant.kind is InvariantType.TURN_UNDERSTANDING_SOURCE:
         return _equal(invariant, understanding.get("source"), invariant.value)
     if invariant.kind is InvariantType.TURN_UNDERSTANDING_SOURCE_NOT_IN:
@@ -253,6 +266,18 @@ def _observation_sources(trajectory: list[dict[str, Any]]) -> set[str]:
         observations = turn.get("observations") if isinstance(turn.get("observations"), list) else []
         sources.update(str(item.get("source")) for item in observations if isinstance(item, dict) and item.get("source"))
     return sources
+
+
+def _observation_statuses(trajectory: list[dict[str, Any]], source: str) -> set[str]:
+    statuses: set[str] = set()
+    for turn in trajectory:
+        observations = turn.get("observations") if isinstance(turn.get("observations"), list) else []
+        statuses.update(
+            str(item.get("status"))
+            for item in observations
+            if isinstance(item, dict) and item.get("source") == source and item.get("status")
+        )
+    return statuses
 
 
 def _trajectory(trial: dict[str, Any]) -> list[dict[str, Any]]:

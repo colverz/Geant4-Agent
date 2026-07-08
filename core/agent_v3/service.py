@@ -137,7 +137,8 @@ class V3AgentTurnService:
             pending_action,
         )
         understanding_confirms_pending = (
-            understanding.confirmation == "confirmed"
+            has_explicit_confirmation_event
+            and understanding.confirmation == "confirmed"
             and pending_action is not None
             and understanding.referenced_state == "pending_action"
             and event_matches_pending
@@ -145,7 +146,12 @@ class V3AgentTurnService:
         is_confirmed = understanding_confirms_pending or (
             not has_explicit_confirmation_event and _looks_like_confirmation(turn.user_text)
         )
-        is_rejected = (understanding.confirmation == "rejected" and event_matches_pending) or (
+        understanding_rejects_pending = (
+            has_explicit_confirmation_event
+            and understanding.confirmation == "rejected"
+            and event_matches_pending
+        )
+        is_rejected = understanding_rejects_pending or (
             not has_explicit_confirmation_event and _looks_like_cancellation(turn.user_text)
         )
         if is_confirmed and understanding.confirmation != "confirmed":
@@ -189,11 +195,6 @@ class V3AgentTurnService:
                 else turn.metadata.get("llm_config_path", ""),
                 lang=turn.locale,
             )
-            # Detect sweep: user-requested or LLM auto-suggested
-            sweep_spec = _detect_sweep_request(turn, previous_state)
-            if sweep_spec and previous_state is not None:
-                previous_state.metadata["suggested_next_actions"] = [_suggestion_from_sweep(sweep_spec)]
-                turn.metadata["suppress_run"] = True
             result = controller.run(turn, state=previous_state)
         if cancelled_pending_action is not None:
             result.terminated_reason = "final_answer"
@@ -205,8 +206,16 @@ class V3AgentTurnService:
         if isinstance(turn.metadata.get("state_patch_apply"), dict):
             result.state.metadata["last_state_patch_apply"] = turn.metadata["state_patch_apply"]
         result.state.metadata["last_turn_id"] = str(uuid.uuid4())
-        pending_action = _extract_pending_action(result)
-        if pending_action:
+        next_pending_action = _extract_pending_action(result)
+        if next_pending_action:
+            V3PendingActionManager.store(result.state, next_pending_action)
+        elif (
+            pending_action is not None
+            and not is_confirmed
+            and not is_rejected
+            and not patch_result.config_overrides
+            and result.terminated_reason == "final_answer"
+        ):
             V3PendingActionManager.store(result.state, pending_action)
         elif result.terminated_reason in {"observed", "final_answer", "blocked"}:
             V3PendingActionManager.clear(result.state)
@@ -642,20 +651,6 @@ def _extract_material_id(text: str) -> str:
                 return material_id
 
     return ""
-    material_tokens = (
-        ("G4_Pb", ("g4_pb", "lead", "pb", "铅")),
-        ("G4_Cu", ("g4_cu", "copper", "cu", "铜")),
-        ("G4_Al", ("g4_al", "aluminum", "aluminium", "al", "铝")),
-        ("G4_WATER", ("g4_water", "water", "水")),
-        ("G4_POLYETHYLENE", ("g4_polyethylene", "polyethylene", "聚乙烯")),
-        ("G4_CONCRETE", ("g4_concrete", "concrete", "混凝土")),
-        ("G4_Si", ("g4_si", "silicon", "si", "硅")),
-    )
-    lowered = text.lower()
-    for material_id, tokens in material_tokens:
-        if any(token in lowered or token in text for token in tokens):
-            return material_id
-    return ""
 
 
 def _looks_like_confirmation(text: str) -> bool:
@@ -670,166 +665,9 @@ def _looks_like_confirmation(text: str) -> bool:
 
 # ── Iterative optimization ───────────────────────────────────────
 
-def _execute_optimization_step(controller: Any, turn: V3TurnInput, state: V3AgentState) -> Any:
-    """Execute one step of iterative optimization. LLM suggests next parameter value."""
-    opt = turn.metadata.get("optimization")
-    if not isinstance(opt, dict) or opt.get("goal_met"):
-        return controller.run(turn, state=state)
-
-    param = opt.get("parameter", "target_thickness_mm")
-    next_val = opt.get("next_value")
-    if next_val is None:
-        return controller.run(turn, state=state)
-
-    # Run simulation with the suggested next value
-    turn.metadata["config_overrides"] = {param: next_val}
-    turn.metadata["accept_defaults"] = True
-    turn.metadata["run"] = True
-    turn.metadata["run_confirmed"] = False
-    runtime_policy_from_turn(turn)
-    _prepare_state_for_modified_draft(state)
-    result = controller.run(turn, state=state)
-
-    # Present the result with iteration info
-    iter_msg = (f"Iteration: tried {param}={next_val}. "
-                f"Goal: {opt.get('current_metric', 'optimizing')}. "
-                f"Reasoning: {opt.get('reasoning', 'adjusting parameter')}")
-    result.answer = V3Answer(message=iter_msg, understanding=state.goal)
-    return result
-
-
 # ── Sweep trend analysis ─────────────────────────────────────────
 
-def _analyze_sweep_trends(sweep_results: list[dict], label: str, turn: V3TurnInput, state: V3AgentState | None) -> str | None:
-    """Call LLM to analyze trends in sweep data."""
-    llm_config = turn.metadata.get("llm_config_path", "")
-    if not llm_config or len(sweep_results) < 2:
-        return None
-    try:
-        from nlu.llm_support.ollama_client import chat, extract_json
-        data_str = "\n".join(
-            f"  {sr.get('value')}: edep={sr.get('target_edep')} MeV, crossings={sr.get('detector_crossings')}, events={sr.get('events')}"
-            for sr in sweep_results
-        )
-        prompt = f"""You are a physicist analyzing a parameter sweep.
-
-Sweep parameter: {label}
-Goal: {state.goal if state else 'physics simulation'}
-Data:
-{data_str}
-
-Your task:
-1. Identify the TREND: is target_edep increasing or decreasing with the parameter? Crossings?
-2. Explain the PHYSICS: what interaction mechanism explains this trend?
-3. Give a CONCLUSION: what does this mean for the user's goal?
-
-Return JSON:
-"trend": one sentence describing the trend.
-"physics": one sentence explaining the physics.
-"conclusion": one sentence practical takeaway.
-"message": combined natural language analysis in Chinese.
-
-Return JSON only. No markdown."""
-
-        response = chat(prompt, config_path=llm_config)
-        raw = str(response.get("response") or "")
-        parsed = extract_json(raw)
-        if isinstance(parsed, dict) and parsed.get("message"):
-            return parsed["message"]
-    except Exception:
-        pass
-    return None
-
-
 # ── Parameter sweep ──────────────────────────────────────────────
-
-def _detect_sweep_request(turn: V3TurnInput, state: V3AgentState | None) -> dict[str, Any] | None:
-    text = str(turn.user_text or "").lower()
-    if not any(kw in text for kw in ("执行扫描", "参数扫描", "对比扫描", "run sweep", "sweep")):
-        return None
-    if state is None:
-        return None
-    for obs in reversed(state.observations):
-        if obs.source != "geant4_runtime_tool":
-            continue
-        sweep_raw = state.metadata.get("llm_sweep_suggestion")
-        if isinstance(sweep_raw, dict) and sweep_raw.get("values"):
-            return sweep_raw
-        energies = _extract_energy_list(text)
-        if energies:
-            return {"parameter": "source_energy_mev", "values": energies, "label": "Energy (MeV)"}
-        thicknesses = _extract_thickness_list(text)
-        if thicknesses:
-            return {"parameter": "target_thickness_mm", "values": thicknesses, "label": "Thickness (mm)"}
-    return None
-
-
-def _extract_energy_list(text: str) -> list[float]:
-    import re
-    normalized = text.lower().replace(",", " ").replace("，", " ")
-    # Match lists like "0.5, 1.0, 2.0 MeV" or "0.5 1.0 2.0 MeV"
-    if re.search(r"(?:mev|kev|gev)", normalized):
-        matches = re.findall(r"(\d+(?:\.\d+)?)", normalized)
-        return [float(m) for m in matches if float(m) < 10000]  # filter non-energy numbers
-    return []
-
-
-def _extract_thickness_list(text: str) -> list[float]:
-    import re
-    matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:mm|cm)(?:\s*[,，\s]\s*|\s+(?:and|或)\s+)", text)
-    return [float(m) for m in matches] if len(matches) >= 2 else []
-
-
-def _execute_sweep(controller: Any, turn: V3TurnInput, state: V3AgentState | None, sweep_spec: dict[str, Any]) -> Any:
-    import re
-    param = sweep_spec.get("parameter", "source_energy_mev")
-    values = sweep_spec.get("values") if isinstance(sweep_spec.get("values"), list) else []
-    label = sweep_spec.get("label", str(param))
-    if not values or state is None:
-        return controller.run(turn, state=state)
-    sweep_results: list[dict[str, Any]] = []
-    for val in values:
-        # Clear stale observations to force re-execution
-        if state is not None:
-            _prepare_state_for_modified_draft(state)
-        turn.metadata["config_overrides"] = {param: val, "run_events": 5}
-        turn.metadata["accept_defaults"] = True
-        turn.metadata["run"] = True
-        turn.metadata["run_confirmed"] = False
-        runtime_policy_from_turn(turn)
-        result = controller.run(turn, state=state)
-        rt_data = None
-        for obs in result.observations:
-            if obs.source == "geant4_runtime_tool":
-                data = obs.data if isinstance(obs.data, dict) else {}
-                summary = data.get("result_summary", {})
-                sc = summary.get("scoring", {})
-                rt_data = {
-                    "value": val,
-                    "events": (summary.get("run", {}) or {}).get("events_completed", "?"),
-                    "target_edep": (sc.get("target", {}) or {}).get("target_edep_total_mev", "N/A"),
-                    "detector_crossings": (sc.get("detector_crossing", {}) or {}).get("detector_crossing_count", "N/A"),
-                }
-                break
-        sweep_results.append(rt_data or {"value": val, "events": "?", "target_edep": "N/A"})
-        state = result.state
-    # Build raw table
-    lines = [f"Parameter sweep ({label}):"]
-    for sr in sweep_results:
-        lines.append(f"  {sr.get('value','?')}: edep={sr.get('target_edep','N/A')} MeV, crossings={sr.get('detector_crossings','N/A')}, events={sr.get('events','?')}")
-    raw_message = "\n".join(lines)
-
-    # Try LLM trend analysis
-    trend_analysis = _analyze_sweep_trends(sweep_results, label, turn, state)
-    if trend_analysis:
-        raw_message = raw_message + "\n\n" + trend_analysis
-
-    return V3AgentResult(
-        answer=V3Answer(message=raw_message, understanding=state.goal if state else ""),
-        state=state or V3AgentState(session_id=turn.session_id),
-        trace=[], observations=[], terminated_reason="final_answer",
-    )
-
 
 __all__ = [
     "V3_AGENT_TURN_SCHEMA_VERSION",
