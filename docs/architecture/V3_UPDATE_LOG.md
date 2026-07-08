@@ -647,3 +647,17 @@ v3 pytest subset
 边界合理：adapter 不判分、不读取预期答案、不改变确认权限；service 修复只纠正轨迹
 标签，不放宽执行条件。当前主要限制是 live turn understanding 仍可能因低置信度进入
 保守 fallback，这应由后续 grader 按 slice 统计，而不是通过关键词补丁隐藏。
+
+## 2026-07-08 - independent grader and baseline compare
+
+这一轮在 trial adapter 外增加了 deterministic behavior grader、JSONL suite runner
+和 baseline compare。grader 覆盖现有任务使用的 14 类结构化检查，包括最终状态、
+工具证据、理解来源、参数修改和建议按钮；它不调用 agent 或 LLM。
+
+首轮结果：behavior safety `8/8 tasks`、`13/13 trials` 通过，backend invariance
+失败数为 0。相同报告经过 baseline compare 后得到 13 条可比较轨迹、0 regression、
+0 missing、0 candidate failure。
+
+代码审查重点：判分规则来自任务 invariant，不根据用户措辞猜测；adapter、grader、
+compare 三层职责分开。修复了 observations 在进程内是 tuple、经过 JSON 后是 list 的
+表示差异，现在两种调用方式使用同一种 JSON-native 结果。

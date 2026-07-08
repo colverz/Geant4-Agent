@@ -135,8 +135,10 @@ class V3TrialTurnRecord:
     summary: dict[str, Any]
     pending_action: dict[str, Any]
     turn_understanding: dict[str, Any]
+    state_patch: dict[str, Any]
     context: dict[str, Any]
-    observations: tuple[dict[str, Any], ...]
+    dialogue: dict[str, Any]
+    observations: list[dict[str, Any]]
 
 
 def run_v3_trial(request: V3TrialRequest) -> dict[str, Any]:
@@ -228,6 +230,7 @@ def _turn_record(
     state_metadata = _dict(state.get("metadata"))
     summary = _dict(response.get("summary"))
     context = _dict(response.get("context"))
+    dialogue = _dict(response.get("dialogue"))
     observations = response.get("observations") if isinstance(response.get("observations"), list) else []
     return V3TrialTurnRecord(
         turn=index,
@@ -249,6 +252,7 @@ def _turn_record(
         },
         pending_action=_pending_action(response.get("pending_action")),
         turn_understanding=_turn_understanding(state_metadata.get("turn_understanding")),
+        state_patch=_state_patch(state_metadata.get("last_state_patch")),
         context={
             "phase": context.get("phase"),
             "latest_runtime_facts": _dict(context.get("latest_runtime_facts")),
@@ -257,7 +261,8 @@ def _turn_record(
             else [],
             "suggested_next_actions": _suggestions(context.get("suggested_next_actions")),
         },
-        observations=tuple(
+        dialogue={"next_suggestions": _suggestions(dialogue.get("next_suggestions"))},
+        observations=[
             {
                 "source": item.get("source"),
                 "status": item.get("status"),
@@ -265,7 +270,7 @@ def _turn_record(
             }
             for item in observations
             if isinstance(item, dict)
-        ),
+        ],
     )
 
 
@@ -298,6 +303,19 @@ def _turn_understanding(value: Any) -> dict[str, Any]:
         else [],
         "requested_changes": [dict(item) for item in changes if isinstance(item, dict)]
         if isinstance(changes, list)
+        else [],
+    }
+
+
+def _state_patch(value: Any) -> dict[str, Any]:
+    patch = _dict(value)
+    if not patch:
+        return {}
+    overrides = patch.get("config_overrides")
+    return {
+        "config_overrides": dict(overrides) if isinstance(overrides, dict) else {},
+        "errors": [str(item) for item in patch.get("errors") or []]
+        if isinstance(patch.get("errors"), list)
         else [],
     }
 
