@@ -451,8 +451,21 @@ def _build_from_llm_geometry(candidate: dict[str, Any], setup: dict[str, Any], g
             src_pos = [0.0, 0.0, -(z / 2.0 + 50.0)]
         src_dir = [0.0, 0.0, 1.0]
 
+    observables = candidate.get("observables") or []
+
     # Normalize volumes to bridge-compatible format (top-level keys, not dimensions dict)
     bridge_volumes = [_normalize_for_bridge(v) for v in volumes]
+    depth_bin_names: list[str] = []
+    if any("depth" in str(o).lower() or "dose" in str(o).lower() or "profile" in str(o).lower() for o in observables):
+        depth_bin_names = [
+            str(volume.get("name"))
+            for volume in bridge_volumes
+            if str(volume.get("role") or "").strip().lower() == "depth_bin" and volume.get("name")
+        ]
+        if not depth_bin_names:
+            depth_bin_names = _materialize_depth_bins(bridge_volumes, primary_volume, count=20)
+        for name in depth_bin_names:
+            volume_material_map[name] = primary_material
 
     # Build geometry config: pass volumes + world directly
     geo_config: dict[str, Any] = {
@@ -515,31 +528,36 @@ def _build_from_llm_geometry(candidate: dict[str, Any], setup: dict[str, Any], g
         config["materials"]["volume_material_map"]["Detector"] = det_material
 
     # Scoring: derive from observables and geometry
-    observables = candidate.get("observables") or []
     scoring: dict[str, Any] = {"target_edep": True}
     if detector_enabled or any("detector" in str(o).lower() for o in observables):
         scoring["detector_crossings"] = True
     if any("plane" in str(o).lower() or "crossing" in str(o).lower() or "transmission" in str(o).lower() for o in observables):
         scoring["plane_crossings"] = True
         scoring["plane"] = {"name": "ExitPlane", "z_mm": _compute_plane_z(primary_volume)}
-    if any("depth" in str(o).lower() or "dose" in str(o).lower() or "profile" in str(o).lower() for o in observables):
+    if depth_bin_names:
         z_range = _compute_depth_range(primary_volume)
-        scoring["depth_bins"] = {"axis": "z", "bins": 20, "range_mm": z_range}
+        scoring["depth_bins"] = {"axis": "z", "count": len(depth_bin_names), "range_mm": z_range}
     if any("contrast" in str(o).lower() or "void" in str(o).lower() or "inclusion" in str(o).lower() for o in observables):
         scoring["region_contrast"] = True
     # Volume names and roles from LLM volumes
-    vol_names = [str(v.get("name") or "") for v in volumes if v.get("name")]
+    vol_names = [str(v.get("name") or "") for v in bridge_volumes if v.get("name")]
     if vol_names:
         scoring["volume_names"] = vol_names
     # Build role map from volume properties
     roles: dict[str, list[str]] = {}
-    for v in volumes:
+    for v in bridge_volumes:
         name = str(v.get("name") or "")
         role = str(v.get("role") or "").strip().lower()
         if role and name:
             roles.setdefault(role, []).append(name)
     if not roles:
         roles["target"] = vol_names
+    if depth_bin_names:
+        roles["depth_bin"] = depth_bin_names
+        target_names = roles.setdefault("target", [])
+        for name in depth_bin_names:
+            if name not in target_names:
+                target_names.append(name)
     scoring["volume_roles"] = roles
     config["scoring"] = scoring
 
@@ -571,6 +589,49 @@ def _compute_depth_range(vol: dict[str, Any]) -> list[float]:
         return [-hl, hl]
     z = float(dims.get("size_z_mm", 10.0))
     return [-z / 2.0, z / 2.0]
+
+
+def _materialize_depth_bins(
+    bridge_volumes: list[dict[str, Any]],
+    primary_volume: dict[str, Any],
+    *,
+    count: int,
+) -> list[str]:
+    """Partition a box target into executable child volumes used for depth scoring."""
+    if str(primary_volume.get("shape") or "box").lower() != "box":
+        return []
+    dims = primary_volume.get("dimensions")
+    if not isinstance(dims, dict):
+        return []
+    try:
+        size_x = float(dims["size_x_mm"])
+        size_y = float(dims["size_y_mm"])
+        size_z = float(dims["size_z_mm"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    if min(size_x, size_y, size_z) <= 0.0 or count <= 0:
+        return []
+
+    parent_name = str(primary_volume.get("name") or "Target")
+    material = str(primary_volume.get("material") or "G4_WATER")
+    width = size_z / count
+    names: list[str] = []
+    for index in range(count):
+        name = f"{parent_name}_DepthBin{index:02d}"
+        names.append(name)
+        bridge_volumes.append(
+            {
+                "name": name,
+                "shape": "box",
+                "material": material,
+                "role": "depth_bin",
+                "parent": parent_name,
+                "position_mm": [0.0, 0.0, -0.5 * size_z + (index + 0.5) * width],
+                "size_mm": [size_x, size_y, width],
+                "copy_no": index,
+            }
+        )
+    return names
 
 
 def _infer_source_type(goal: str) -> str:

@@ -23,6 +23,7 @@ class RuntimeVolumeSpec:
 class GeometryRuntimeSpec:
     structure: str
     material: str
+    world_material: str = "G4_AIR"
     root_volume_name: str = "Target"
     size_x_mm: float | None = None
     size_y_mm: float | None = None

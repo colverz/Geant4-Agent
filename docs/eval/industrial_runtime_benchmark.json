@@ -148,6 +148,13 @@
         "source": "1 MeV gamma beam",
         "scoring": ["detector_crossing_count", "detector_edep_total_mev", "transmission_factor"]
       },
+      "semantic_requirements": {
+        "target": {"material": "G4_Pb", "thickness_mm": 10.0},
+        "required_materials": ["G4_Pb", "G4_Si"],
+        "source": {"type": "beam", "particle": "gamma", "energy_mev": 1.0, "direction_vec": [0.0, 0.0, 1.0]},
+        "detector": {"policy": "required", "material": "G4_Si"},
+        "required_scoring": ["detector_crossings"]
+      },
       "golden_required": true,
       "golden_metrics": {
         "detector_crossing_count": {"expected": null, "tolerance": 0},
@@ -194,6 +201,13 @@
         "source": "5 MeV neutron beam",
         "scoring": ["plane_crossing_count", "target_edep_total_mev"]
       },
+      "semantic_requirements": {
+        "target": {"material": "G4_POLYETHYLENE", "thickness_mm": null},
+        "required_materials": ["G4_POLYETHYLENE"],
+        "source": {"type": "beam", "particle": "neutron", "energy_mev": 5.0, "direction_vec": [0.0, 0.0, 1.0]},
+        "detector": {"policy": "optional"},
+        "required_scoring": ["target_edep", "plane_crossings"]
+      },
       "golden_required": true,
       "golden_metrics": {
         "plane_crossing_count": {"expected": null, "tolerance": 0},
@@ -237,6 +251,13 @@
         "materials": ["G4_WATER"],
         "source": "150 MeV proton beam",
         "scoring": ["depth_bin_edep", "peak_depth_mm", "target_edep_total_mev"]
+      },
+      "semantic_requirements": {
+        "target": {"material": "G4_WATER", "thickness_mm": null},
+        "required_materials": ["G4_WATER"],
+        "source": {"type": "beam", "particle": "proton", "energy_mev": 150.0, "direction_vec": [0.0, 0.0, 1.0]},
+        "detector": {"policy": "optional"},
+        "required_scoring": ["target_edep", "depth_bins"]
       },
       "golden_required": true,
       "golden_metrics": {
@@ -304,6 +325,13 @@
         "materials": ["G4_AIR", "G4_Si"],
         "source": "1 MeV gamma beam",
         "scoring": ["detector_edep_total_mev", "detector_crossing_count"]
+      },
+      "semantic_requirements": {
+        "target": {"material": null, "thickness_mm": null},
+        "required_materials": ["G4_AIR", "G4_Si"],
+        "source": {"type": "beam", "particle": "gamma", "energy_mev": 1.0, "direction_vec": [0.0, 0.0, 1.0]},
+        "detector": {"policy": "required", "material": "G4_Si"},
+        "required_scoring": ["detector_crossings"]
       },
       "golden_required": true,
       "golden_metrics": {

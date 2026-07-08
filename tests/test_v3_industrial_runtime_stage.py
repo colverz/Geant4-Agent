@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime
-from tools.industrial_runtime_contract import compare_v3_candidate_runtime_contract
+from tools.industrial_runtime_contract import (
+    V3IndustrialCandidateRequirements,
+    compare_v3_candidate_runtime_contract,
+)
 from tools.run_v3_industrial_runtime_stage import _run_v3_case
 
 
@@ -17,6 +20,12 @@ BENCHMARK = ROOT / "docs" / "eval" / "industrial_runtime_benchmark.json"
 def _compiled_lead_case() -> tuple[dict[str, Any], dict[str, Any]]:
     benchmark = json.loads(BENCHMARK.read_text(encoding="utf-8"))
     case = next(item for item in benchmark["cases"] if item["id"] == "shielding_lead_gamma_transmission")
+    return case, compile_industrial_case_to_runtime(case, runtime_defaults=benchmark["runtime_defaults"])
+
+
+def _compiled_case(case_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    benchmark = json.loads(BENCHMARK.read_text(encoding="utf-8"))
+    case = next(item for item in benchmark["cases"] if item["id"] == case_id)
     return case, compile_industrial_case_to_runtime(case, runtime_defaults=benchmark["runtime_defaults"])
 
 
@@ -88,6 +97,62 @@ def test_semantic_contract_rejects_wrong_thickness_and_upstream_order() -> None:
     fields = {item["field"] for item in report["mismatches"]}
     assert "target.thickness_mm" in fields
     assert "source.upstream_position" in fields
+
+
+def test_semantic_contract_allows_optional_detector_for_neutron_case() -> None:
+    case, compiled = _compiled_case("shielding_polyethylene_neutron_moderation")
+    candidate = deepcopy(compiled["runtime_payload"])
+    candidate["detector"] = {
+        "enabled": True,
+        "material": "G4_Si",
+        "position_mm": [0.0, 0.0, 80.0],
+    }
+    candidate["scoring"]["detector_crossings"] = True
+    requirements = V3IndustrialCandidateRequirements.from_case(case, compiled["runtime_payload"])
+
+    report = compare_v3_candidate_runtime_contract(
+        candidate,
+        compiled["runtime_payload"],
+        requirements=requirements,
+    )
+
+    assert report["ok"] is True
+
+
+def test_semantic_contract_accepts_detector_material_as_primary_when_material_set_is_complete() -> None:
+    case, compiled = _compiled_case("detector_silicon_gamma_response")
+    candidate = deepcopy(compiled["runtime_payload"])
+    candidate["geometry"]["material"] = "G4_Si"
+    candidate["geometry"]["volumes"] = [
+        {"name": "AirGap", "material": "G4_AIR"},
+        {"name": "SiliconSensor", "material": "G4_Si"},
+    ]
+    requirements = V3IndustrialCandidateRequirements.from_case(case, compiled["runtime_payload"])
+
+    report = compare_v3_candidate_runtime_contract(
+        candidate,
+        compiled["runtime_payload"],
+        requirements=requirements,
+    )
+
+    assert report["ok"] is True
+
+
+def test_semantic_contract_rejects_declared_but_unmaterialized_depth_bins() -> None:
+    case, compiled = _compiled_case("medical_proton_water_depth_dose")
+    candidate = deepcopy(compiled["runtime_payload"])
+    candidate["geometry"]["volumes"] = candidate["geometry"]["volumes"][:1]
+    candidate["scoring"]["volume_roles"] = {"target": ["WaterPhantom"]}
+    requirements = V3IndustrialCandidateRequirements.from_case(case, compiled["runtime_payload"])
+
+    report = compare_v3_candidate_runtime_contract(
+        candidate,
+        compiled["runtime_payload"],
+        requirements=requirements,
+    )
+
+    assert report["ok"] is False
+    assert "scoring.depth_bins.executable" in {item["field"] for item in report["mismatches"]}
 
 
 def test_contract_mismatch_never_reaches_preflight_or_confirmation(tmp_path: Path) -> None:

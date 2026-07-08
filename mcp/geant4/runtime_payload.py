@@ -148,6 +148,7 @@ def build_runtime_payload(config: dict[str, Any] | SimulationSpec) -> dict[str, 
         "geometry": {
             "structure": spec.geometry.structure,
             "material": spec.geometry.material,
+            "world_material": spec.geometry.world_material,
             "root_volume_name": spec.geometry.root_volume_name,
             "size_x_mm": spec.geometry.size_x_mm,
             "size_y_mm": spec.geometry.size_y_mm,

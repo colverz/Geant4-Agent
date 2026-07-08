@@ -111,3 +111,53 @@ records `comparison_scope=semantic_contract_and_real_runtime`.
 4. Keep canonical golden regression and free-design semantic evaluation as two
    named report scopes.
 5. After the live gate is usable, continue with user-visible result-driven advice.
+
+## 2026-07-08 Semantic Coverage Round
+
+The v3 live gate now accepts physically equivalent designs without requiring the
+LLM to reproduce the compiler's exact object names and dimensions. Detector use
+is represented as `required`, `optional`, or `forbidden`, and material checks use
+the complete runtime material set instead of assuming the first volume is always
+the physical target.
+
+Depth-dose requests now create real child volumes with a `depth_bin` scoring
+role when the LLM supplies only a box phantom. Existing LLM-authored depth-bin
+volumes are reused. A declared `depth_bins` object without named runtime volumes
+fails the semantic contract and cannot reach execution.
+
+Real DeepSeek candidates and local-process Geant4 passed all three new
+representative paths:
+
+```text
+polyethylene + 5 MeV neutron:
+  plane_crossing_count = 0
+  target_edep_total_mev = 18896.7
+
+water + 150 MeV proton depth dose:
+  target_edep_total_mev = 86737.9
+  peak_depth_mm = 7.5
+  depth_bin_edep_hash = 29358659200314
+
+silicon + 1 MeV gamma:
+  detector_crossing_count = 9997
+  detector_edep_total_mev = 105.576
+```
+
+Verification: `954 passed, 3 skipped, 103 subtests passed`. Running unscoped
+`pytest` still collects `tools/test_multiturn_ui.py`, whose import-time server
+startup times out; `pytest tests` is the valid suite until that legacy script is
+converted into a normal test.
+
+### Review
+
+These changes are necessary because the earlier gate rejected valid detector
+choices and could report depth-bin support without producing depth-bin data.
+They remain reasonably scoped: the LLM chooses the physical design, typed
+requirements define what the task needs, and deterministic code only validates
+or materializes the runtime representation. No case-specific prompt dictionary
+or automatic run authority was added.
+
+The next functional step is a harness adapter for this exact v3 turn contract,
+followed by broader live-case sampling. Paired optimization and sweep execution
+remain separate work because they need a typed multi-run plan and one immutable
+confirmation boundary.

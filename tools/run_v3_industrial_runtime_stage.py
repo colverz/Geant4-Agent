@@ -21,7 +21,11 @@ from tools.evaluate_industrial_runtime_benchmark import (
     validate_industrial_benchmark_shape,
 )
 from tools.industrial_runtime_compiler import compile_industrial_case_to_runtime
-from tools.industrial_runtime_contract import compare_candidate_runtime_contract, compare_v3_candidate_runtime_contract
+from tools.industrial_runtime_contract import (
+    V3IndustrialCandidateRequirements,
+    compare_candidate_runtime_contract,
+    compare_v3_candidate_runtime_contract,
+)
 from tools.industrial_runtime_executor import compare_industrial_metrics, extract_industrial_metrics
 
 
@@ -225,7 +229,12 @@ def _run_v3_case(
             trajectory=trajectory,
         )
 
-    contract = compare_v3_candidate_runtime_contract(candidate_payload, expected_payload)
+    requirements = V3IndustrialCandidateRequirements.from_case(case, expected_payload)
+    contract = compare_v3_candidate_runtime_contract(
+        candidate_payload,
+        expected_payload,
+        requirements=requirements,
+    )
     canonical_alignment = compare_candidate_runtime_contract(candidate_payload, expected_payload)
     if not contract["ok"]:
         return _failed(

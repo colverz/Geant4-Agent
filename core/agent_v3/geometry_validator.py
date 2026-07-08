@@ -120,13 +120,26 @@ def _normalize_volume(vol: dict[str, Any], index: int) -> tuple[dict[str, Any], 
     else:
         pos = [0.0, 0.0, 0.0]
 
-    return {
+    normalized = {
         "name": name,
         "shape": shape,
         "material": material,
         "dimensions": normalized_dims,
         "position_mm": pos,
-    }, w
+    }
+    role = str(vol.get("role") or "").strip().lower()
+    if role:
+        normalized["role"] = role
+    parent = str(vol.get("parent") or "").strip()
+    if parent:
+        normalized["parent"] = parent
+    if vol.get("copy_no") is not None:
+        try:
+            normalized["copy_no"] = int(vol["copy_no"])
+        except (TypeError, ValueError):
+            w.append(f"volume '{name}': invalid copy_no={vol['copy_no']}, using 0")
+            normalized["copy_no"] = 0
+    return normalized, w
 
 
 def _volume_extent(vol: dict[str, Any]) -> float:

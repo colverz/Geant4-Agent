@@ -179,6 +179,28 @@ def validate_industrial_benchmark_shape(path: Path = DEFAULT_INDUSTRIAL_BENCHMAR
             failures.append({"id": case_id, "error": "raw_dialogue_must_be_non_empty_list"})
         if not isinstance(case.get("scenario_spec"), dict):
             failures.append({"id": case_id, "error": "scenario_spec_not_object"})
+        semantic = case.get("semantic_requirements")
+        if semantic is not None:
+            if not isinstance(semantic, dict):
+                failures.append({"id": case_id, "error": "semantic_requirements_not_object"})
+            else:
+                target = semantic.get("target")
+                source = semantic.get("source")
+                detector = semantic.get("detector")
+                materials = semantic.get("required_materials")
+                scoring = semantic.get("required_scoring")
+                if not isinstance(target, dict):
+                    failures.append({"id": case_id, "error": "semantic_target_not_object"})
+                if not isinstance(source, dict):
+                    failures.append({"id": case_id, "error": "semantic_source_not_object"})
+                if not isinstance(detector, dict):
+                    failures.append({"id": case_id, "error": "semantic_detector_not_object"})
+                elif detector.get("policy") not in {"required", "optional", "forbidden"}:
+                    failures.append({"id": case_id, "error": "semantic_detector_policy_invalid"})
+                if not isinstance(materials, list) or not materials:
+                    failures.append({"id": case_id, "error": "semantic_required_materials_invalid"})
+                if not isinstance(scoring, list) or not scoring:
+                    failures.append({"id": case_id, "error": "semantic_required_scoring_invalid"})
         if case.get("golden_required") is True:
             if case.get("required_runtime") != "real_geant4":
                 failures.append({"id": case_id, "error": "official_case_must_require_real_geant4"})

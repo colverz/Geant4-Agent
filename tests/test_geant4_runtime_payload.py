@@ -34,6 +34,7 @@ class Geant4RuntimePayloadTest(unittest.TestCase):
         )
         self.assertEqual(payload["structure"], "single_box")
         self.assertEqual(payload["material"], "G4_Cu")
+        self.assertEqual(payload["geometry"]["world_material"], "G4_AIR")
         self.assertEqual(payload["particle"], "gamma")
         self.assertEqual(payload["physics_list"], "FTFP_BERT")
         self.assertEqual(payload["run"]["seed"], 31415)

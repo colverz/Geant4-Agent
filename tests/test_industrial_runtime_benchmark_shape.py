@@ -76,6 +76,18 @@ class IndustrialRuntimeBenchmarkShapeTest(unittest.TestCase):
         self.assertGreaterEqual(report["total"], 20)
         self.assertIn("industrial_ndt", report["domain_counts"])
 
+    def test_semantic_requirements_use_typed_detector_policy(self) -> None:
+        benchmark = json.loads(BENCHMARK_PATH.read_text(encoding="utf-8"))
+        semantic_cases = [case for case in benchmark["cases"] if "semantic_requirements" in case]
+
+        self.assertGreaterEqual(len(semantic_cases), 4)
+        for case in semantic_cases:
+            with self.subTest(case=case["id"]):
+                semantic = case["semantic_requirements"]
+                self.assertIn(semantic["detector"]["policy"], {"required", "optional", "forbidden"})
+                self.assertTrue(semantic["required_materials"])
+                self.assertTrue(semantic["required_scoring"])
+
     def test_official_evaluator_refuses_to_pass_without_real_runtime(self) -> None:
         report = evaluate_industrial_runtime_benchmark(BENCHMARK_PATH, env={})
 

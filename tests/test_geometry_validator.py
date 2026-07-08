@@ -79,3 +79,22 @@ class GeometryValidatorTest(unittest.TestCase):
     def test_normalize_volume_defaults_position_to_origin(self):
         vol, w = _normalize_volume({"name": "t", "shape": "box"}, 0)
         self.assertEqual(vol["position_mm"], [0.0, 0.0, 0.0])
+
+    def test_normalize_volume_preserves_runtime_role_and_parent(self):
+        vol, warnings = _normalize_volume(
+            {
+                "name": "DepthBin00",
+                "shape": "box",
+                "material": "G4_WATER",
+                "role": "depth_bin",
+                "parent": "WaterPhantom",
+                "copy_no": 3,
+                "dimensions": {"size_x_mm": 10, "size_y_mm": 10, "size_z_mm": 5},
+            },
+            0,
+        )
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(vol["role"], "depth_bin")
+        self.assertEqual(vol["parent"], "WaterPhantom")
+        self.assertEqual(vol["copy_no"], 3)
