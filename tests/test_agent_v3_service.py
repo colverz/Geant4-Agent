@@ -132,6 +132,36 @@ class V3AgentTurnServiceTest(unittest.TestCase):
         self.assertTrue(result["summary"]["has_payload"])
         self.assertEqual(result["context"]["latest_payload"]["source_energy_mev"], 2.0)
 
+    def test_do_not_run_constraint_does_not_overwrite_llm_understanding_as_cancellation(self) -> None:
+        service = self._make_service()
+        understanding = V3TurnUnderstanding(
+            dialogue_act="ask",
+            user_goal="design a proton depth-dose simulation without running it",
+            referenced_state="none",
+            confirmation="not_applicable",
+            risk_intent="draft_only",
+            confidence=0.94,
+            reason="user requested a design and explicitly prohibited execution",
+            source="llm",
+        )
+
+        with patch("core.agent_v3.service.LLMTurnUnderstandingProvider.understand", return_value=understanding):
+            result = service.run_turn(
+                {
+                    "session_id": "design-no-run-llm-evidence",
+                    "text": "Design a 150 MeV proton water phantom. Do not run it.",
+                    "llm_config_path": "fake.json",
+                    "llm_design_enabled": False,
+                    "lang": "en",
+                }
+            )
+
+        recorded = result["state"]["metadata"]["turn_understanding"]
+        self.assertEqual(recorded["source"], "llm")
+        self.assertEqual(recorded["risk_intent"], "draft_only")
+        self.assertEqual(recorded["confirmation"], "not_applicable")
+        self.assertFalse(result["summary"]["has_runtime_result"])
+
     def test_current_configuration_question_answers_design_not_runtime_result(self) -> None:
         service = self._make_service()
         service.run_turn(

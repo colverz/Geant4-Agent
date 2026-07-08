@@ -623,3 +623,27 @@ v3 pytest subset
 ### 下一步
 
 继续推进 `V3RuntimePolicy`，把 `allow_in_memory` 从普通 metadata 开关收进明确结构里。
+
+## 2026-07-08 - v3 trial adapter vertical slice
+
+这一轮把 v3 主链路接入了独立的 command-only trial adapter。它接收一个任务，
+调用真实 `V3AgentTurnService`，然后只输出安全轨迹；任务里的预期答案和判分规则
+不会传给 agent，也不会影响 adapter 是否完成。
+
+新增内容：
+
+- `eval/v3/adapters/v3_turn_adapter.py`：typed task/turn/options 输入和单 JSON 输出。
+- `eval/v3/README.md`：adapter 协议、运行方式和权限边界。
+- `tests/test_v3_turn_trial_adapter.py`：多轮确认、权限不可升级、CLI 单输出和 LLM
+  配置要求测试。
+- 修复 “Design ..., do not run” 被轨迹误记成取消操作的问题。现在只有存在待确认
+  动作，或用户单独发出取消命令时，才记录 cancellation fallback。
+
+真实 DeepSeek trial 已完成：设计工具成功，未生成 payload，未执行 runtime，配置与
+密钥未进入输出。turn understanding 返回 `llm_uncertain`，明确记录为模型置信度低于
+阈值，而不是伪装成确定理解。下一步是在 adapter 外增加 grader 和 baseline compare。
+
+验证结果：`960 passed, 3 skipped, 103 subtests passed`。代码审查认为改动必要且
+边界合理：adapter 不判分、不读取预期答案、不改变确认权限；service 修复只纠正轨迹
+标签，不放宽执行条件。当前主要限制是 live turn understanding 仍可能因低置信度进入
+保守 fallback，这应由后续 grader 按 slice 统计，而不是通过关键词补丁隐藏。

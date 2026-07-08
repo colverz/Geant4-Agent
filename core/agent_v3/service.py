@@ -158,7 +158,8 @@ class V3AgentTurnService:
                 "reason": "free-text confirmation compatibility fallback",
                 "source": "text_fallback",
             }
-        if is_rejected and understanding.confirmation != "rejected":
+        should_record_rejection = pending_action is not None or _looks_like_standalone_cancellation(turn.user_text)
+        if is_rejected and understanding.confirmation != "rejected" and should_record_rejection:
             turn.metadata["turn_understanding"] = {
                 **turn.metadata["turn_understanding"],
                 "dialogue_act": "reject",
