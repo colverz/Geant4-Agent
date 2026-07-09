@@ -4,6 +4,8 @@ This directory keeps the current architecture docs small and navigable.
 
 ## Current Mainline
 
+- `GEANT4_AGENT_V3_ARCHITECTURE_REPORT_2026-07-09.md`: full post-merge
+  architecture report, verification snapshot, current risks, and next route.
 - `ARCHITECTURE.md`: current v3-first architecture overview.
 - `GEANT4_AGENT_REBUILD_PROGRESS_2026-05-21.md`: detailed implementation log
   for the v3 rebuild.

@@ -1,5 +1,17 @@
 # Geant4 Agent v3 Update Log
 
+## 2026-07-09 - Beta Fast-Forwarded To Local Main And Architecture Docs Refreshed
+
+- Fast-forward merged local `beta` into local `main` at commit `34c5c06`.
+- Ran current gates: `pytest -q`, v3 behavior safety suite, grader calibration,
+  and advisory live DeepSeek design-only eval.
+- Result: 973 tests passed, v3 safety 9/9 tasks and 14/14 trials passed,
+  calibration 4/4 matched, live LLM 1/1 passed.
+- Updated root `README.md` so a new developer sees v3 as the default path.
+- Added `GEANT4_AGENT_V3_ARCHITECTURE_REPORT_2026-07-09.md` as the current
+  architecture report and next-route reference.
+- No remote push was performed.
+
 ## 2026-06-11 Round 11 - Typed Runtime Result Facts
 
 ### What Changed
